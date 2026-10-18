@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light" />
+    <meta name="description" content="سامانه مدیریت لیگ کلاسی، امتیاز، تیم و ابزارهای آموزشی" />
+    <title>لیگ جامع دانش‌آموزی</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='48' font-size='48'%3E%F0%9F%8F%86%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/css/vazirmatn.css" />
+    <link rel="stylesheet" href="/css/base.css" />
+    <link rel="stylesheet" href="/css/components.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#view">پرش به محتوای اصلی</a>
+
+    <header class="topbar" id="topbar" hidden>
+      <button class="icon-btn" id="menu-btn" type="button" aria-label="باز کردن منو" aria-expanded="false" aria-controls="drawer">
+        <span aria-hidden="true">☰</span>
+      </button>
+      <span class="topbar__title" id="topbar-title">لیگ جامع دانش‌آموزی</span>
+      <span class="spacer"></span>
+      <button class="pill" id="league-pill" type="button" hidden>لیگ</button>
+      <span class="pill pill--user" id="user-pill" hidden>کاربر</span>
+    </header>
+
+    <div class="scrim" id="scrim" hidden></div>
+
+    <aside class="drawer" id="drawer" aria-hidden="true" aria-label="منوی اصلی">
+      <div class="drawer__head">
+        <strong id="drawer-title">منو</strong>
+        <button class="icon-btn" id="drawer-close" type="button" aria-label="بستن منو">✕</button>
+      </div>
+      <nav class="drawer__nav" id="drawer-nav"></nav>
+      <div class="drawer__foot" id="drawer-foot"></div>
+    </aside>
+
+    <main class="view" id="view" tabindex="-1"></main>
+
+    <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+    <div id="modal-root"></div>
+
+    <script src="/vendor/chart.umd.js" defer></script>
+    <script type="module" src="/js/main.js"></script>
+  </body>
+</html>

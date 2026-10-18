@@ -1,0 +1,304 @@
+/* Design tokens, reset and layout shell. All colours come from CSS variables. */
+:root {
+  --brand: #7c3aed;
+  --brand-2: #a855f7;
+  --pink: #ec4899;
+  --amber: #f59e0b;
+  --ink: #1e1b4b;
+  --ink-soft: #4c4675;
+  --muted: #7c7aa3;
+  --line: #ece7fb;
+  --surface: #ffffff;
+  --surface-2: #faf7ff;
+  --ok: #16a34a;
+  --bad: #dc2626;
+  --warn: #f59e0b;
+  --radius-sm: 12px;
+  --radius: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --shadow-sm: 0 4px 14px rgba(124, 58, 237, 0.08);
+  --shadow: 0 10px 30px rgba(124, 58, 237, 0.14);
+  --shadow-lg: 0 24px 60px rgba(76, 29, 149, 0.22);
+  --focus: 0 0 0 3px rgba(168, 85, 247, 0.45);
+  --topbar-h: 60px;
+  --tap: 44px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100vh;
+  font-family: Vazirmatn, "Segoe UI", Tahoma, sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink);
+  background: linear-gradient(150deg, #faf5ff 0%, #fef3f7 100%);
+  background-attachment: fixed;
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0 0 0.4rem;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+h1 {
+  font-size: 1.5rem;
+}
+h2 {
+  font-size: 1.2rem;
+}
+h3 {
+  font-size: 1.02rem;
+}
+
+p {
+  margin: 0 0 0.6rem;
+}
+
+a {
+  color: var(--brand);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+  border-radius: 8px;
+}
+
+.skip-link {
+  position: absolute;
+  inset-inline-start: 50%;
+  transform: translateX(50%) translateY(-200%);
+  background: var(--brand);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 0 0 12px 12px;
+  z-index: 200;
+  transition: transform 0.2s ease;
+}
+.skip-link:focus {
+  transform: translateX(50%) translateY(0);
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* ---------------------------------------------------------------- topbar */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--topbar-h);
+  padding: 8px 14px;
+  color: #fff;
+  background: linear-gradient(90deg, var(--brand) 0%, var(--brand-2) 55%, var(--pink) 100%);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.35);
+}
+
+.topbar__title {
+  font-weight: 700;
+  font-size: 1.02rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 46vw;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+  max-width: 40vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pill--user {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.18);
+  color: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.topbar .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ---------------------------------------------------------------- drawer */
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(30, 27, 75, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 70;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  /* Physical `right` on purpose: the app is RTL, so the hamburger lives on the
+     right edge and `translateX` must not be flipped by the writing direction. */
+  right: 0;
+  width: min(320px, 86vw);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(105%);
+  transition: transform 0.25s ease;
+  overflow-y: auto;
+}
+.drawer.is-open {
+  transform: translateX(0);
+}
+.drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: linear-gradient(90deg, var(--brand), var(--brand-2));
+  color: #fff;
+  position: sticky;
+  top: 0;
+}
+.drawer__head .icon-btn {
+  background: rgba(255, 255, 255, 0.2);
+}
+.drawer__nav {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 4px;
+}
+.drawer__nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--ink);
+  font-weight: 600;
+}
+.drawer__nav a:hover,
+.drawer__nav a.is-active {
+  background: linear-gradient(90deg, rgba(124, 58, 237, 0.12), rgba(236, 72, 153, 0.1));
+  color: var(--brand);
+}
+.drawer__group {
+  font-size: 0.75rem;
+  color: var(--muted);
+  padding: 12px 12px 4px;
+  font-weight: 700;
+}
+.drawer__foot {
+  margin-top: auto;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+}
+
+/* ---------------------------------------------------------------- layout */
+.view {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px 14px 64px;
+}
+.view:focus {
+  outline: none;
+}
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.page-head h1 {
+  margin: 0;
+}
+.page-head .spacer {
+  min-width: 0;
+}
+
+.grid {
+  display: grid;
+  gap: 14px;
+}
+/* `min(<track>, 100%)` keeps every grid shrinkable on very narrow screens. */
+.grid--tiles {
+  grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr));
+}
+.grid--stats {
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+}
+.grid--two {
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 420px) {
+  .topbar__title {
+    max-width: 38vw;
+    font-size: 0.94rem;
+  }
+  .view {
+    padding: 12px 10px 56px;
+  }
+  .grid--tiles {
+    grid-template-columns: repeat(auto-fill, minmax(min(132px, 100%), 1fr));
+  }
+}

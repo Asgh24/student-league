@@ -1,0 +1,33 @@
+# Dependencies are installed inside the image from the lockfile.
+node_modules
+npm-debug.log*
+
+# Local state: never bake a database, uploads or backups into the image.
+data
+uploads
+backups
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets and local overrides.
+.env
+.env.*
+!.env.example
+
+# Tests, tooling and docs are not needed at runtime.
+tests
+coverage
+.vscode
+.idea
+.git
+.gitignore
+eslint.config.js
+vitest.config.js
+Dockerfile
+.dockerignore
+*.md
+*.log
+
+# Keep the vendored frontend assets (Chart.js + Vazirmatn fonts) in the image.
+!public/vendor/**

@@ -1,0 +1,81 @@
+/** Shared application state plus a tiny subscription hook for the shell. */
+
+const STORAGE_KEY = 'scl.leagueId';
+
+const listeners = new Set();
+
+export const state = {
+  meta: { appName: 'لیگ جامع دانش‌آموزی', version: '', likesPerDay: 10, maxUploadBytes: 0 },
+  user: null,
+  leagueId: null,
+  persianDigits: true,
+};
+
+export function subscribe(listener) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function emit() {
+  for (const listener of listeners) {
+    try {
+      listener(state);
+    } catch {
+      /* a broken listener must not break the shell */
+    }
+  }
+}
+
+export function setMeta(meta) {
+  state.meta = { ...state.meta, ...meta };
+  if (state.meta.appName && typeof document !== 'undefined') document.title = state.meta.appName;
+  emit();
+}
+
+export function setUser(user) {
+  state.user = user ?? null;
+  state.persianDigits = user ? user.persianDigits !== false : true;
+  emit();
+}
+
+export function setPersianDigits(value) {
+  state.persianDigits = Boolean(value);
+  if (state.user) state.user.persianDigits = state.persianDigits;
+  emit();
+}
+
+export function setLeagueId(value) {
+  const id = value === null || value === undefined || value === '' ? null : Number(value);
+  state.leagueId = Number.isFinite(id) ? id : null;
+  try {
+    if (state.leagueId === null) localStorage.removeItem(STORAGE_KEY);
+    else localStorage.setItem(STORAGE_KEY, String(state.leagueId));
+  } catch {
+    /* storage may be unavailable in private mode */
+  }
+  emit();
+}
+
+export function storedLeagueId() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? Number(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function isTeacher() {
+  return state.user?.role === 'teacher';
+}
+
+export function isStudent() {
+  return state.user?.role === 'student';
+}
+
+/** Landing route for the current session. */
+export function homePath() {
+  if (isTeacher()) return 'teacher';
+  if (isStudent()) return 'student';
+  return 'login';
+}

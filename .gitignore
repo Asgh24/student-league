@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Local configuration and secrets
+.env
+.env.local
+.env.*.local
+
+# Runtime data (SQLite database, uploads, backups)
+data/
+uploads/
+backups/
+*.db
+*.db-wal
+*.db-shm
+
+# Tooling output
+coverage/
+*.log
+npm-debug.log*
+.DS_Store
+.vscode/
+.idea/
+
+# NOTE: public/vendor/** is intentionally committed. The app must work with no
+# internet access (no CDNs), so Chart.js and the Vazirmatn woff2 files ship with
+# the source. Re-generate them with `npm run vendor`.

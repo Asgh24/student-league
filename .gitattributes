@@ -1,0 +1,13 @@
+# Keep every text file LF in the repository *and* in the working tree, so the
+# Linux/Docker deployment always sees exactly what CI tested on Windows.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending converted.
+*.woff2 binary
+*.woff binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
