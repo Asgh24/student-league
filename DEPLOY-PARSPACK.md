@@ -39,7 +39,7 @@ Decide one value before you start:
 | --- | --- | --- |
 | `DATA_DIR` | The mount path Parspack gives the persistent disk | `/data` or `/home/app/data` |
 | `SESSION_SECRET` | Generate it yourself (see below) | 64 hex characters |
-| Node version | Node.js **22** (see the `better-sqlite3` note) | `22` |
+| Node version | Node.js **22 or 24** (see the `better-sqlite3` note) | `22-ubi9` / `24-ubi9` |
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -61,15 +61,20 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
    | Domain | your domain, e.g. `league.example.com` |
    | Application port | the port the panel injects, or `3000` — the app reads `PORT` |
 
-4. **پارامترهای اختیاری:**
+4. **تنظیمات پارامترها و متغیرهای اپلیکیشن** — the dialog with three tabs:
+   **پارامترهای (اختیاری)** / **متغیر محیطی (اختیاری)** / **متغیرهای Build (اختیاری)**.
+   In the **پارامترهای** tab:
 
    | Field | Value | Why |
    | --- | --- | --- |
-   | **Context** | empty (repository root) | `package.json`, `server.js` and `public/` are at the root. The old draft's `backend/` + `frontend/` contexts do not exist here. |
-   | **Version (Node)** | `20` or `22` | See the `better-sqlite3` note below. |
-   | Install command | `npm ci` (or the default `npm install`) | The committed `package-lock.json` pins `better-sqlite3` 13.x, whose Node-API binary ships in the package — nothing compiles. |
-   | Start command | `node server.js` | Equivalent to `npm start`; it applies migrations on boot. |
-   | Version (Node) | `22` | `better-sqlite3` 13 declares `>=22`; on Node 20 npm reports `EBADENGINE`. |
+   | `nodejs_context_dir` | `/` (repository root) | `package.json`, `server.js` and `public/` sit at the root. The old draft's `backend/` + `frontend/` contexts do not exist here. |
+   | `Version of nodejs Image` | `24-ubi9`, or `22-ubi9` for exact parity with the Dockerfile | Both satisfy `better-sqlite3` 13's `engines.node >=22`. The images are glibc (`ubi9`), so the `linux-x64` prebuild that ships inside the npm package is used — nothing is compiled. |
+
+   The **متغیر محیطی** tab holds the variables from step 2. Leave **متغیرهای Build**
+   empty: there is no build step.
+
+   If the panel also asks for commands elsewhere: install `npm ci` (or the default
+   `npm install`), start `node server.js`, build empty.
 
 5. **تنظیمات منابع:** start with a small plan (512 MB RAM is plenty). **Replicas = 1.**
    SQLite has a single writer and the app assumes one process — do not scale the
@@ -84,7 +89,9 @@ ABI-stable, so there is **no `node-gyp`, no compiler and no download step** duri
 `npm ci` on either a Debian-based or an Alpine-based image.
 
 The only constraint is the declared engine: `better-sqlite3` 13 requires **Node 22 or
-newer** (`"engines": { "node": ">=22" }`). Pick Node **22** in the panel. On Node 20
+newer** (`"engines": { "node": ">=22" }`). Pick a **22-ubi9** or **24-ubi9** image in the
+panel; both work, and because the binaries are Node-API there is no per-version ABI
+matching to worry about. On Node 20 npm prints
 npm prints `EBADENGINE` for that dependency — that is the signal to move up, not a
 build problem.
 
@@ -360,7 +367,8 @@ refresh is never required for correctness.
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | Build fails in `better-sqlite3` (`node-gyp`, `g++: not found`) | An older major version was resolved, or a stale lockfile | Use the committed `package-lock.json` (`npm ci`); 13.x needs no compiler |
-| Install prints `EBADENGINE … better-sqlite3 … required {"node":">=22"}` | The panel runs Node 20, below the declared floor | Switch the app to Node 22 and redeploy |
+| Install prints `EBADENGINE … better-sqlite3 … required {"node":">=22"}` | The panel runs Node 20, below the declared floor | Switch the app to a `22-ubi9` or `24-ubi9` image and redeploy |
+| Install fails on a **dev** dependency (`vitest`, `jsdom`) with `EBADENGINE`, e.g. `required {"node":"^22.22.2"}` | The platform's npm runs with `engine-strict`, and dev dependencies have stricter floors than the runtime needs | Add `NPM_CONFIG_OMIT=dev` to the environment (or set the install command to `npm ci --omit=dev`). The app itself needs no dev dependency at runtime — tests only |
 | Login appears to succeed but the session does not stick | Cookies marked `Secure` while TLS is terminated at the proxy, or `TRUST_PROXY` is `false` | Enable the certificate and set `TRUST_PROXY=true` |
 | Every login fails with `INVALID_CSRF` / «توکن امنیتی نامعتبر است» | The app is being used over plain `http://` in production, so the `Secure` session cookie is never set | Open the `https://` address and keep `TRUST_PROXY=true` |
 | `502` right after deploy | The app binds a different port than the panel proxies | Leave `PORT` unset so the injected value is used; keep `HOST=0.0.0.0` |
@@ -377,7 +385,7 @@ refresh is never required for correctness.
 
 ## 9. Go-live checklist
 
-- [ ] App created from GitHub `main`, Node 22, start command `node server.js`.
+- [ ] App created from GitHub `main`, Node `22-ubi9`/`24-ubi9`, start command `node server.js`.
 - [ ] Persistent disk mounted at `DATA_DIR`.
 - [ ] `NODE_ENV=production`, `SESSION_SECRET`, `TRUST_PROXY=true` set (secrets as secret type).
 - [ ] `SEED_ENABLED=false`.
