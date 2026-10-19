@@ -80,6 +80,41 @@ export const config = {
       demoPassword: process.env.SEED_DEMO_PASS || 'student1234',
     };
   },
+  /**
+   * First teacher account for an empty production database. Development keeps
+   * using the demo seed instead, so this is opt-in there.
+   */
+  get bootstrap() {
+    return {
+      enabled: bool(process.env.BOOTSTRAP_TEACHER, this.isProd),
+      username: process.env.BOOTSTRAP_TEACHER_USER || process.env.SEED_TEACHER_USER || 'teacher',
+      password: process.env.BOOTSTRAP_TEACHER_PASS || process.env.SEED_TEACHER_PASS || '',
+      displayName: process.env.BOOTSTRAP_TEACHER_NAME || 'مدیر',
+      allowWeakPassword: bool(process.env.BOOTSTRAP_ALLOW_WEAK, false),
+    };
+  },
+  /**
+   * Off-site snapshots of the SQLite file pushed to a GitHub repository. This is
+   * the only durability layer on a PaaS whose container filesystem is recreated
+   * on redeploy, so it is disabled by default and configured entirely by env.
+   */
+  get githubBackup() {
+    return {
+      enabled: bool(process.env.BACKUP_GITHUB_ENABLED, false),
+      token: process.env.BACKUP_GITHUB_TOKEN || '',
+      repo: (process.env.BACKUP_GITHUB_REPO || '').trim(),
+      branch: process.env.BACKUP_GITHUB_BRANCH || 'main',
+      dir: (process.env.BACKUP_GITHUB_DIR || 'db-backups').replace(/^\/+|\/+$/g, ''),
+      filePrefix: process.env.BACKUP_GITHUB_FILE_PREFIX || 'league',
+      intervalMinutes: Math.max(5, int(process.env.BACKUP_GITHUB_INTERVAL_MINUTES, 1440)),
+      keep: Math.max(0, int(process.env.BACKUP_GITHUB_KEEP, 7)),
+      startDelayMs: Math.max(0, int(process.env.BACKUP_GITHUB_START_DELAY_MS, 60000)),
+      maxBytes: Math.max(1, int(process.env.BACKUP_GITHUB_MAX_MB, 50)) * 1024 * 1024,
+      restoreOnEmpty: bool(process.env.RESTORE_FROM_GITHUB_ON_EMPTY_LOCAL, true),
+      allowPublicRepo: bool(process.env.BACKUP_GITHUB_ALLOW_PUBLIC, false),
+      apiBaseUrl: process.env.BACKUP_GITHUB_API_URL || 'https://api.github.com',
+    };
+  },
   get limits() {
     return {
       loginPerWindow: int(process.env.LOGIN_RATE_LIMIT, 10),

@@ -25,6 +25,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 11. [Testing](#testing)
 12. [Manual verification checklist](#manual-verification-checklist)
 13. [Deployment](#deployment)
+    * [Parspack / Iranian PaaS walkthrough → `DEPLOY-PARSPACK.md`](DEPLOY-PARSPACK.md)
 14. [Backup and restore](#backup-and-restore)
 15. [Default credentials](#default-credentials)
 16. [Known limitations](#known-limitations)
@@ -57,6 +58,11 @@ the per-subject totals table + chart.
 The dashboard greets the student, shows points / rank / championships, and draws a
 points-over-time Chart.js line chart built from the append-only score history using
 Jalali date labels.
+
+**Operations** – one process, one SQLite file, migrations applied on boot, a first
+account bootstrapped into an empty production database, and scheduled off-site
+snapshots pushed to a **private GitHub repository**, restored automatically when a
+PaaS recreates the container filesystem (`DEPLOY-PARSPACK.md`).
 
 Other properties: multiple leagues per teacher (create, rename, complete → final
 ranking + titles, reactivate), per-league countdown timer, Persian-aware search
@@ -139,6 +145,11 @@ is only needed if you upgrade Chart.js or the Vazirmatn font package.
 | `SEED_ON_BOOT` | — | `false` disables automatic seeding on an empty dev database |
 | `SEED_TEACHER_USER` / `SEED_TEACHER_PASS` | `teacher` / `teacher1234` | Demo teacher created by `npm run seed` |
 | `SEED_DEMO_PASS` | `student1234` | Demo student password |
+| `BOOTSTRAP_TEACHER` | `true` in production | Creates the first teacher when the database has **no accounts at all** |
+| `BOOTSTRAP_TEACHER_USER` | `SEED_TEACHER_USER` or `teacher` | Username of that first account |
+| `BOOTSTRAP_TEACHER_PASS` | — | Required for the first account; short or demo-default values are refused |
+| `BOOTSTRAP_TEACHER_NAME` | `مدیر` | Display name of that first account |
+| `BOOTSTRAP_ALLOW_WEAK` | `false` | Allows a demo-default password (don't) |
 | `LOGIN_RATE_LIMIT` | `10` | Failed-login attempts per window per IP |
 | `API_RATE_LIMIT` | `1200` | API requests per window per IP |
 | `RATE_WINDOW_MS` | `900000` | Rate-limit window (15 minutes) |
@@ -147,6 +158,18 @@ is only needed if you upgrade Chart.js or the Vazirmatn font package.
 | `BODY_LIMIT` | `512kb` | JSON body limit |
 | `LOG_LEVEL` | `debug` | `debug` \| `info` \| `warn` \| `error` |
 | `BACKUP_DIR` | `$DATA_DIR/backups` | Output directory of `npm run backup` |
+| `BACKUP_GITHUB_ENABLED` | `false` | Uploads snapshots to GitHub on an interval |
+| `BACKUP_GITHUB_REPO` | — | `owner/name` of a **private** repository that holds the snapshots |
+| `BACKUP_GITHUB_TOKEN` | — | Fine-grained token with **Contents: read and write** on that repo |
+| `BACKUP_GITHUB_BRANCH` / `BACKUP_GITHUB_DIR` | `main` / `db-backups` | Where snapshots are stored |
+| `BACKUP_GITHUB_FILE_PREFIX` | `league` | Snapshot file prefix (`league-<stamp>.db`) |
+| `BACKUP_GITHUB_INTERVAL_MINUTES` | `1440` | How often a snapshot is uploaded (minimum 5) |
+| `BACKUP_GITHUB_KEEP` | `7` | Delete all but the newest N snapshots (`0` keeps everything) |
+| `BACKUP_GITHUB_START_DELAY_MS` | `60000` | Wait after boot before the first upload |
+| `BACKUP_GITHUB_MAX_MB` | `50` | Refuse snapshots above this size (GitHub rejects >100 MB) |
+| `BACKUP_GITHUB_ALLOW_PUBLIC` | `false` | Permit a public target repo (the snapshot holds student data) |
+| `BACKUP_GITHUB_API_URL` | `https://api.github.com` | For tests or GitHub Enterprise |
+| `RESTORE_FROM_GITHUB_ON_EMPTY_LOCAL` | `true` | Replace an **empty** local database with the newest snapshot on boot |
 
 Generate a secret:
 
@@ -164,8 +187,11 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 | `npm start` | Run the server (`node server.js`) |
 | `npm run dev` | Run with nodemon |
 | `npm run migrate` | Apply pending migrations and exit |
-| `npm run seed` | Insert idempotent demo data and exit |
+| `npm run seed` | Insert idempotent demo data and exit (refuses in production) |
+| `npm run bootstrap` | Create the first teacher account (or `-- --force` to reset its password) |
 | `npm run backup` | Consistent SQLite snapshot into `$DATA_DIR/backups` |
+| `npm run backup:github` | Upload a snapshot to the configured GitHub repository right now |
+| `npm run backup:status` | Show what is stored remotely (count, newest, checksum) |
 | `npm run vendor` | Re-copy Chart.js and the Vazirmatn woff2 files into `public/vendor` |
 | `npm test` | Run the full Vitest suite |
 | `npm run test:watch` | Vitest in watch mode |
@@ -196,25 +222,28 @@ on a fresh volume.
 │   │   ├── store.js            # shared session state
 │   │   └── ui.js               # toasts, modals, confirm/form dialogs
 │   └── vendor/                 # Chart.js bundle + Vazirmatn woff2 (committed)
-├── scripts/                    # migrate / seed / backup / vendor CLIs
+├── scripts/                    # migrate / seed / bootstrap / backup / vendor CLIs
 ├── src/
-│   ├── lib/                    # errors, http helpers, jalali, normalize, random, zod schemas
+│   ├── lib/                    # errors, http helpers, jalali, normalize, random, zod schemas, github API client
 │   ├── middleware/             # session, auth, ownership, csrf, rateLimit, errorHandler
 │   ├── migrations/             # versioned, auto-applied schema migrations
 │   ├── repositories/           # data access for users and leagues
 │   ├── routes/                 # one Express router per resource
-│   ├── services/               # scoring, attendance, teams, student portal logic
+│   ├── services/               # scoring, attendance, teams, student portal, off-site backups
 │   ├── app.js                  # Express app (helmet, session, routers, SPA fallback)
+│   ├── bootstrap.js            # first teacher account for an empty (production) database
 │   ├── config.js               # env parsing and lazy config getters
 │   ├── db.js                   # better-sqlite3 connection (WAL, foreign keys)
 │   ├── logger.js               # structured JSON logger
 │   ├── migrate.js              # migration runner
-│   └── seed.js                 # idempotent demo seed
+│   ├── seed.js                 # idempotent demo seed
+│   └── version.js              # version read from package.json
 ├── tests/                      # Vitest suites + helpers/fixtures
 ├── .env.example
+├── DEPLOY-PARSPACK.md          # step-by-step PaaS deployment + backup setup
 ├── Dockerfile                  # node:20-alpine, non-root, prod deps only
 ├── .dockerignore
-├── server.js                   # boot, graceful shutdown (SIGTERM/SIGINT)
+├── server.js                   # boot (restore → migrations → bootstrap → listen), graceful shutdown
 └── vitest.config.js
 ```
 
@@ -542,8 +571,8 @@ npm run lint    # eslint .
 Latest run on this machine (Windows, Node 26.3.0):
 
 ```
- Test Files  18 passed (18)
-      Tests  213 passed (213)
+ Test Files  20 passed (20)
+      Tests  242 passed (242)
 ```
 
 | Suite | Tests | Covers |
@@ -565,6 +594,8 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `frontend.test.js` | 33 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (12 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, modal focus/footer lifecycle |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 2 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not) |
+| `githubBackup.test.js` | 22 | Off-site backups against an in-memory GitHub Contents API: upload + manifest checksum, full push→restore round trip, retention/pruning, public-repo refusal, size limit, missing repo and 404 handling, checksum-mismatch safety, restore skipped for a non-empty database, scheduler due-time/retry/state handling with the real logger object |
+| `bootstrap.test.js` | 7 | First teacher account: creation, password verification, skip when accounts exist, `--force` reset, refusal of short/demo-default passwords, production-vs-development default |
 | `hardening.test.js` | 12 | Anonymous requests create no session row, logout clears the configured cookie, login performs a bcrypt comparison for unknown users, `/healthz` integrity scan is cached, expired sessions are swept, `TRUST_PROXY` fails closed |
 
 Backend suites use throwaway SQLite databases (`tests/helpers.js`), so `npm test`
@@ -599,6 +630,11 @@ Executed against a live server (`NODE_ENV=development`, fresh `DATA_DIR`, seeded
 | Drawer geometry (RTL) | ✅ open = flush to the right edge, closed = fully off-screen (`x ≥ viewport`) |
 | Horizontal overflow | ✅ `scrollWidth ≤ clientWidth` on every checked page; wide tables scroll inside their own card; verified at desktop width and at a 340 px column (≈360 px device) |
 | Upload hardening | ✅ `.exe` → `400 EXTENSION_BLOCKED`, `trav-../../evil.txt` stored as `evil.txt` with a UUID filename inside `DATA_DIR/uploads`, anonymous download → `401`, upload without CSRF → `403` |
+| GitHub backup upload | ✅ `npm run backup:github` against a wire-compatible API on `127.0.0.1` → `backup pushed to GitHub … bytes 417792`, manifest + snapshot stored, `npm run backup:status` reported `snapshots 1` |
+| Backup retention | ✅ four uploads with `BACKUP_GITHUB_KEEP=2` → `pruned old snapshot` twice, exactly 2 snapshots left, `latest.json` never deleted |
+| Restore on an empty container | ✅ deleted the volume, started with `NODE_ENV=production` → `database restored from GitHub` (sha256 matched the upload) and **no** migration line (the schema came with the snapshot); the restored file had 2 users, 22 students, league «لیگ نمونه», 301 history rows, and its `users` rows were byte-identical to the live database |
+| Scheduled backup in-process | ✅ production boot 2 s later → `backup pushed to GitHub` + `scheduled GitHub backup complete`, with a new snapshot pruned at the retention limit |
+| GitHub API client against production GitHub | ✅ read-only checks on `api.github.com`: `getRepo` → `private:false, default_branch:main`; `getContents` file → base64 decoded with a matching size; directory listing → array; missing path → `GithubError 404`; the token never appears in an error message |
 
 ---
 
@@ -654,17 +690,22 @@ WantedBy=multi-user.target
 
 ### Iranian PaaS (e.g. ParsPack / لیارا / ابرآروند)
 
-The app is a single process listening on `PORT`, which is exactly what these
-platforms expect.
+**Full walkthrough: [`DEPLOY-PARSPACK.md`](DEPLOY-PARSPACK.md)** — app creation, build
+settings, the `better-sqlite3` note, environment variables, the first login, the
+automatic GitHub backup and a troubleshooting table.
+
+The short version: this is **one** app. The same process serves the API and the
+frontend, so there is no separate frontend/backend deployment and no build step.
 
 1. **Create the app** and choose a Node.js runtime (20+), or deploy the
    `Dockerfile` if the platform supports container builds.
 2. **Set environment variables** in the panel:
    `NODE_ENV=production`, `SESSION_SECRET=<long random>`, `DATA_DIR=/data`
    (or the mount path the panel gives you), `TRUST_PROXY=true`,
-   `APP_NAME=لیگ جامع دانش‌آموزی`.
+   `APP_NAME=لیگ جامع دانش‌آموزی`,
+   `BOOTSTRAP_TEACHER_PASS=<the first teacher's password>`.
    Leave `PORT` to the platform if it injects one.
-3. **Attach a persistent volume** and mount it at `DATA_DIR`. Without this, the
+3. **Attach a persistent volume** and mount it at `DATA_DIR`. Without it, the
    SQLite database and uploads are lost on every redeploy.
 4. **Start command**: `node server.js` (dependencies are installed with
    `npm ci --omit=dev` during the build; `npm start` also works).
@@ -687,8 +728,14 @@ platforms expect.
    }
    ```
 
-8. **First boot** runs the migrations automatically. If you want demo data for a
-   trial, run `npm run seed` once (never on a real class database).
+8. **First boot** runs the migrations automatically. On an empty production
+   database the first teacher account is created from `BOOTSTRAP_TEACHER_PASS`
+   (production never inserts demo data). Change that password in **تنظیمات** after
+   the first login, then remove the variable. For a trial dataset use
+   `npm run seed` **outside** production only.
+9. **Turn on the off-site backup** (step 4 of the guide): a PaaS may recreate the
+   container filesystem, and a restored snapshot is the difference between an
+   outage and a lost term.
 
 Deploy notes specific to this app:
 
@@ -702,6 +749,8 @@ Deploy notes specific to this app:
 
 ## Backup and restore
 
+### Local snapshot
+
 ```bash
 npm run backup
 # → $DATA_DIR/backups/league-20261018-181500.db
@@ -711,7 +760,7 @@ npm run backup
 even while the server is running. Set `BACKUP_DIR` to write somewhere else (for
 example a mounted NAS or an off-site sync folder).
 
-Restore:
+Restore locally:
 
 ```bash
 # 1. stop the server (so nothing writes to the database)
@@ -726,9 +775,54 @@ rm -f "$DATA_DIR"/league.db-wal "$DATA_DIR"/league.db-shm
 npm start
 ```
 
+### Automatic off-site snapshots on GitHub
+
+On managed PaaS a local snapshot is not enough — the container filesystem can be
+recreated on any redeploy. With `BACKUP_GITHUB_ENABLED=true` the server snapshots
+itself on an interval, uploads the file to a **private** GitHub repository through
+the Contents API (`<dir>/league-<stamp>.db` plus a `latest.json` manifest holding
+the size, SHA-256, creation time, app version and schema migration count), and
+prunes older snapshots down to `BACKUP_GITHUB_KEEP`.
+
+The snapshot contains student data, so the uploader **refuses a public
+repository** unless `BACKUP_GITHUB_ALLOW_PUBLIC=true` is set deliberately.
+
+```bash
+npm run backup:github        # upload one snapshot now
+npm run backup:status        # count, newest snapshot, last checksum
+
+# example output
+{"msg":"backup pushed to GitHub","repo":"Asgh24/league-backups","file":"league-20261019T145242Z.db",
+ "bytes":417792,"sha256":"da39…0d49","pruned":["league-20261019T145158Z.db"]}
+```
+
+Automatic recovery: with `RESTORE_FROM_GITHUB_ON_EMPTY_LOCAL=true` (default) the
+server checks at boot whether the local database has **any** application table. If
+it has none — a fresh volume, a wiped container — the newest snapshot is
+downloaded, checksum-verified and put in place before the migrations run:
+
+```json
+{"msg":"database restored from GitHub","file":"league-20261019T145242Z.db","bytes":417792,"sha256":"da39…0d49"}
+```
+
+A database that already has data is never replaced, so an old snapshot cannot
+overwrite a live term. A failed download or a checksum mismatch leaves the local
+file untouched and only logs the error. To restore a specific older snapshot,
+download it from the repository and follow the local restore steps above.
+
+Retention and retention state: the newest 7 snapshots are kept by default
+(`BACKUP_GITHUB_KEEP`), the interval is `BACKUP_GITHUB_INTERVAL_MINUTES` (default
+1440 = once a day, minimum 5), a failed upload is retried after 15 minutes, and
+the last successful upload time is stored in `$DATA_DIR/backup-state.json` so a
+restart does not upload twice.
+
+### What is not in a snapshot
+
 Uploaded files live in `DATA_DIR/uploads` and are **not** part of the database
-snapshot — back that folder up too (it only contains UUID-named files, so a plain
-file copy is safe).
+snapshot — in local backups or in GitHub snapshots (they are UUID-named, so a plain
+file copy is safe). The database, scores, attendance, evaluations and report cards
+are fully covered. Copy `uploads/` separately if you need those files after a
+container reset.
 
 ---
 
@@ -746,11 +840,21 @@ other 21 exist as roster entries without credentials). Teachers create logins fo
 the rest from **لیگ انفرادی → add student** and can reset a password from a
 student's row at any time.
 
+In **production** the demo seed never runs. An empty production database gets its
+first account from `BOOTSTRAP_TEACHER_USER` / `BOOTSTRAP_TEACHER_PASS` on boot (see
+the environment table), or on demand:
+
+```bash
+npm run bootstrap                 # create the first teacher if there is none
+npm run bootstrap -- --force      # reset that account's password (forgotten login)
+```
+
 > **Change these before using the app with a real class.** Sign in as the teacher,
 > open **تنظیمات** (Settings) and change the password; student passwords can be
 > reset from a student's row in the individual league table. In production the
 > demo seed never runs automatically (`SEED_ENABLED=false` is the safest setting),
-> and `SEED_TEACHER_USER` / `SEED_TEACHER_PASS` let you seed your own teacher once.
+> and `BOOTSTRAP_TEACHER_PASS` (or `SEED_TEACHER_USER` / `SEED_TEACHER_PASS` for a
+> trial) is how the first account is created.
 
 ---
 
@@ -771,6 +875,10 @@ student's row at any time.
   there is no moderation queue or abuse reporting.
 * **Uploads are not virus-scanned.** Size, extension and MIME are validated and the
   bytes are never executed, but a scanner is up to your infrastructure.
+* **Backup snapshots cover the database, not `uploads/`.** Each snapshot is a full copy of
+  the database, so a long retention window fills the backup repository over time; Git also
+  keeps every uploaded version in history, so prune with `BACKUP_GITHUB_KEEP` rather than
+  expecting space to be freed.
 * **No email/SMS.** Password recovery is manual (teacher resets student passwords).
 * **No i18n framework.** The UI is Persian-only; `APP_NAME` is the single
   configurable brand string.

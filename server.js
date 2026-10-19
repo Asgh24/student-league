@@ -6,14 +6,32 @@ import { migrations } from './src/migrations/index.js';
 import { createApp, publicDir } from './src/app.js';
 import { createSessionStore, startSessionSweep } from './src/middleware/session.js';
 import { runSeed } from './src/seed.js';
+import { runBootstrap } from './src/bootstrap.js';
+import { APP_VERSION } from './src/version.js';
+import { createClientFor, isConfigured, pushBackup, restoreOnBoot } from './src/services/githubBackup.js';
+import { createBackupScheduler } from './src/services/backupScheduler.js';
 
-const VERSION = '1.0.0';
+const logBackup = (message, fields) => logger.info(message, fields);
 
-function boot() {
+async function boot() {
   ensureDirs();
-  const db = openDatabase();
+  let db = openDatabase();
+
+  // Recovery runs before the first migration writes to an empty file: a PaaS
+  // container can come back with a wiped filesystem, and the newest GitHub
+  // snapshot is then the only copy of the class data.
+  const recovery = await restoreOnBoot({ db, log: logBackup });
+  db = recovery.db;
+  if (recovery.reason === 'failed') logger.warn('continuing with an empty local database', { error: recovery.error });
+
   const applied = runMigrations(db, migrations);
   if (applied.ran.length > 0) logger.info('database ready', { applied: applied.ran });
+
+  // Production has no demo seed, so an empty database gets its first teacher here.
+  if (config.bootstrap.enabled) {
+    const result = runBootstrap(db, { log: logBackup });
+    if (result.reason === 'invalid-config') logger.warn('no teacher account exists yet', { reason: result.problem });
+  }
 
   // Demo data is generated automatically outside production when the DB is empty.
   const hasUsers = db.prepare('SELECT COUNT(*) AS n FROM users').get().n > 0;
@@ -24,16 +42,32 @@ function boot() {
   }
 
   const sessionStore = createSessionStore(db);
-  const app = createApp({ db, version: VERSION, sessionStore });
+  const app = createApp({ db, version: APP_VERSION, sessionStore });
   const sweepTimer = startSessionSweep(sessionStore, {
     onSweep: (removed) => logger.info('expired sessions removed', { removed }),
   });
+
+  const backupCfg = config.githubBackup;
+  const scheduler = createBackupScheduler({
+    cfg: backupCfg,
+    log: logger,
+    runBackup: () =>
+      pushBackup({ db, cfg: backupCfg, client: createClientFor(backupCfg), log: logBackup, appVersion: APP_VERSION }),
+  }).start();
+  if (backupCfg.enabled && !isConfigured(backupCfg)) {
+    logger.warn('GitHub backup is enabled but incomplete; set BACKUP_GITHUB_REPO and BACKUP_GITHUB_TOKEN', {
+      repo: backupCfg.repo || null,
+      hasToken: Boolean(backupCfg.token),
+    });
+  }
+
   const server = app.listen(config.port, config.host, () => {
     logger.info('server listening', {
       port: config.port,
       host: config.host,
       env: config.env,
       app: config.appName,
+      version: APP_VERSION,
       dataDir: config.dataDir,
       staticDir: publicDir,
     });
@@ -56,6 +90,7 @@ function boot() {
     force.unref();
     server.close(() => {
       clearInterval(sweepTimer);
+      scheduler.stop();
       closeDatabase(db);
       logger.info('shutdown complete');
       clearTimeout(force);
@@ -72,4 +107,7 @@ function boot() {
   return server;
 }
 
-boot();
+boot().catch((err) => {
+  logger.error('boot failed', { error: String(err?.message || err) });
+  process.exit(1);
+});

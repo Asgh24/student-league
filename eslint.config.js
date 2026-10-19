@@ -10,6 +10,7 @@ const NODE_GLOBALS = {
   clearInterval: 'readonly',
   setImmediate: 'readonly',
   fetch: 'readonly',
+  Response: 'readonly',
   AbortController: 'readonly',
   TextEncoder: 'readonly',
   TextDecoder: 'readonly',
