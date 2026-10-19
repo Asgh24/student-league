@@ -153,9 +153,9 @@ typing each variable — `.env` is git-ignored, so it never ends up in the repos
 Look for these lines in the app log:
 
 ```json
-{"msg":"database ready","applied":["001_init","002_...","003_evaluations"]}
+{"msg":"database ready","applied":["001_core","002_tools","003_evaluations"]}
 {"msg":"bootstrap: created the first teacher \"teacher\" — log in and change the password"}
-{"msg":"server listening","port":3000,"env":"production"}
+{"msg":"server listening","port":3000,"host":"0.0.0.0","env":"production","version":"1.0.0"}
 ```
 
 1. Open `https://<your-domain>/healthz` → `{"status":"ok", ...}`.
@@ -166,6 +166,18 @@ Look for these lines in the app log:
    database has no accounts, but the secret should not sit there unused.
 5. Create your real league, students and score columns. No demo data exists — that is
    intentional.
+
+### Logging in over plain HTTP cannot work (by design)
+
+In production the session cookie is sent with `Secure; HttpOnly; SameSite=Lax`. Verified on a
+real production boot:
+
+* Over `http://…` Express does not set the cookie at all, so **every** login answers
+  `INVALID_CSRF` («توکن امنیتی نامعتبر است. صفحه را دوباره بارگذاری کنید») even with the right
+  password. Do not test with the container's local port — test the `https://` address.
+* With the platform proxy in front, `TRUST_PROXY=true` is what makes Express see
+  `X-Forwarded-Proto: https`. Keep the certificate enabled *and* `TRUST_PROXY=true`; with both,
+  the cookie is set, `/api/v1/auth/login` returns 200 and `/api/v1/auth/me` returns the user.
 
 ### Forgotten password
 
@@ -350,6 +362,7 @@ refresh is never required for correctness.
 | Build fails in `better-sqlite3` (`node-gyp`, `g++: not found`) | An older major version was resolved, or a stale lockfile | Use the committed `package-lock.json` (`npm ci`); 13.x needs no compiler |
 | Install prints `EBADENGINE … better-sqlite3 … required {"node":">=22"}` | The panel runs Node 20, below the declared floor | Switch the app to Node 22 and redeploy |
 | Login appears to succeed but the session does not stick | Cookies marked `Secure` while TLS is terminated at the proxy, or `TRUST_PROXY` is `false` | Enable the certificate and set `TRUST_PROXY=true` |
+| Every login fails with `INVALID_CSRF` / «توکن امنیتی نامعتبر است» | The app is being used over plain `http://` in production, so the `Secure` session cookie is never set | Open the `https://` address and keep `TRUST_PROXY=true` |
 | `502` right after deploy | The app binds a different port than the panel proxies | Leave `PORT` unset so the injected value is used; keep `HOST=0.0.0.0` |
 | Data disappears after a redeploy | `DATA_DIR` is not on the persistent disk | Mount the volume and set `DATA_DIR` to that path |
 | `GitHub backup is enabled but not configured` | `BACKUP_GITHUB_REPO` and `BACKUP_GITHUB_TOKEN` are not both set | Set both, or set `BACKUP_GITHUB_ENABLED=false` |

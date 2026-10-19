@@ -714,7 +714,9 @@ frontend, so there is no separate frontend/backend deployment and no build step.
 5. **Health check path**: `/healthz` (returns 200 when the database is reachable).
 6. **HTTPS**: enable the platform's TLS and keep `TRUST_PROXY=true` so session
    cookies are marked `Secure` and client IPs (used by rate limiting) are read
-   from `X-Forwarded-For` instead of the proxy address.
+   from `X-Forwarded-For` instead of the proxy address. In production the cookie is
+   `Secure`, so logging in over plain `http://` is refused by design (the app answers
+   `INVALID_CSRF`) — always test the `https://` address.
 7. **Domain / reverse proxy**: the app serves the API and the static frontend from
    the same origin, so a simple proxy pass is enough:
 
