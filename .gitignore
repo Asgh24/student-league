@@ -2,9 +2,11 @@
 node_modules/
 
 # Local configuration and secrets
+# Any file that looks like an env file is ignored, except the documented template.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+*.env
 
 # Runtime data (SQLite database, uploads, backups)
 data/
