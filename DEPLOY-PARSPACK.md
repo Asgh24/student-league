@@ -109,6 +109,21 @@ Without it, every redeploy or container restart can start from a fresh filesyste
 | `league.db` and `DATA_DIR/uploads` are gone on redeploy | Data survives redeploys |
 | Recovery depends entirely on the GitHub snapshots (step 4) | Local file is authoritative, backups are a second copy |
 
+**How to verify it (from the app log, no guessing):** the `server listening` line prints
+the resolved directory:
+
+```json
+{"msg":"server listening","port":3000,"env":"production","dataDir":"/opt/app-root/src/data"}
+```
+
+`/opt/app-root/src/data` is the in-container default (`./data`) on these UBI9 images — that
+is **not** a persistent disk. Set `DATA_DIR` to the volume's mount path instead.
+
+**The symptom of a non-persistent database** (seen on a real deploy): every new deploy logs
+`migration applied` for `001_core`, `002_tools`, `003_evaluations` again and bootstraps the
+`teacher` account again. On a database that survived, an up-to-date deploy logs
+`{"msg":"database ready","applied":[]}` and no bootstrap line.
+
 ---
 
 ## 2. Environment variables
@@ -372,7 +387,7 @@ refresh is never required for correctness.
 | Login appears to succeed but the session does not stick | Cookies marked `Secure` while TLS is terminated at the proxy, or `TRUST_PROXY` is `false` | Enable the certificate and set `TRUST_PROXY=true` |
 | Every login fails with `INVALID_CSRF` / «توکن امنیتی نامعتبر است» | The app is being used over plain `http://` in production, so the `Secure` session cookie is never set | Open the `https://` address and keep `TRUST_PROXY=true` |
 | `502` right after deploy | The app binds a different port than the panel proxies | Leave `PORT` unset so the injected value is used; keep `HOST=0.0.0.0` |
-| Data disappears after a redeploy | `DATA_DIR` is not on the persistent disk | Mount the volume and set `DATA_DIR` to that path |
+| Data disappears after a redeploy | `DATA_DIR` is not on the persistent disk (signature: `migration applied` for `001_core`… and the bootstrap line repeat on every deploy; `dataDir` in the `server listening` line is `/opt/app-root/src/data`) | Mount the volume and set `DATA_DIR` to that path |
 | `GitHub backup is enabled but not configured` | `BACKUP_GITHUB_REPO` and `BACKUP_GITHUB_TOKEN` are not both set | Set both, or set `BACKUP_GITHUB_ENABLED=false` |
 | `refusing to back up to the public repository "…"` | The guard against publishing student data | Point `BACKUP_GITHUB_REPO` at a private repo (or set `BACKUP_GITHUB_ALLOW_PUBLIC=true` deliberately) |
 | `GitHub repository "…" was not found` | Wrong `owner/name`, or the token lacks `Contents` access | Check the name and the token's repository selection |
