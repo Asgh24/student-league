@@ -78,7 +78,7 @@ per-endpoint authorization.
 
 | Layer | Choice |
 | --- | --- |
-| Runtime | Node.js **20+** (tested on 26), ES modules |
+| Runtime | Node.js **22+** (tested on 26), ES modules |
 | HTTP | Express 5 |
 | Database | SQLite via **better-sqlite3** (WAL, `foreign_keys = ON`, transactions) |
 | Sessions | `express-session` + a small custom SQLite store |
@@ -92,7 +92,8 @@ per-endpoint authorization.
 
 ## Requirements
 
-* Node.js 20 or newer (`node -v`)
+* Node.js 22 or newer (`node -v`) — `better-sqlite3` 13 declares `>=22`, and no
+  compiler is needed because its prebuilt binary ships inside the npm package
 * npm 10+
 * No database server, no Docker requirement, no internet access at runtime
 
@@ -241,7 +242,7 @@ on a fresh volume.
 ├── tests/                      # Vitest suites + helpers/fixtures
 ├── .env.example
 ├── DEPLOY-PARSPACK.md          # step-by-step PaaS deployment + backup setup
-├── Dockerfile                  # node:20-alpine, non-root, prod deps only
+├── Dockerfile                  # node:22-alpine, non-root, prod deps only
 ├── .dockerignore
 ├── server.js                   # boot (restore → migrations → bootstrap → listen), graceful shutdown
 └── vitest.config.js
@@ -697,8 +698,9 @@ automatic GitHub backup and a troubleshooting table.
 The short version: this is **one** app. The same process serves the API and the
 frontend, so there is no separate frontend/backend deployment and no build step.
 
-1. **Create the app** and choose a Node.js runtime (20+), or deploy the
-   `Dockerfile` if the platform supports container builds.
+1. **Create the app** and choose a Node.js runtime (**22** — see the
+   `better-sqlite3` note below), or deploy the `Dockerfile` if the platform
+   supports container builds.
 2. **Set environment variables** in the panel:
    `NODE_ENV=production`, `SESSION_SECRET=<long random>`, `DATA_DIR=/data`
    (or the mount path the panel gives you), `TRUST_PROXY=true`,
@@ -739,6 +741,10 @@ frontend, so there is no separate frontend/backend deployment and no build step.
 
 Deploy notes specific to this app:
 
+* `better-sqlite3` 13 is a **Node-API** addon and ships its compiled binary for
+  `linux-x64` (glibc) **and** `linuxmusl-x64` (Alpine) inside the npm package, so
+  the server install needs no compiler, no `python3`/`make`/`g++` and no network
+  download. Its `engines` field requires Node **22+**.
 * No build step for the frontend — `public/` is served as committed.
 * Everything (`Chart.js`, fonts) is served from your own domain, so the app works
   even where external CDNs are blocked.

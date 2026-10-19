@@ -39,7 +39,7 @@ Decide one value before you start:
 | --- | --- | --- |
 | `DATA_DIR` | The mount path Parspack gives the persistent disk | `/data` or `/home/app/data` |
 | `SESSION_SECRET` | Generate it yourself (see below) | 64 hex characters |
-| Node version | Node.js **20 or 22 LTS** (see the `better-sqlite3` note) | `20` / `22` |
+| Node version | Node.js **22** (see the `better-sqlite3` note) | `22` |
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -67,25 +67,30 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
    | --- | --- | --- |
    | **Context** | empty (repository root) | `package.json`, `server.js` and `public/` are at the root. The old draft's `backend/` + `frontend/` contexts do not exist here. |
    | **Version (Node)** | `20` or `22` | See the `better-sqlite3` note below. |
-   | Install command | `npm ci` (or the default `npm install`) | `better-sqlite3` compiles on install unless a prebuilt binary matches. |
+   | Install command | `npm ci` (or the default `npm install`) | The committed `package-lock.json` pins `better-sqlite3` 13.x, whose Node-API binary ships in the package — nothing compiles. |
    | Start command | `node server.js` | Equivalent to `npm start`; it applies migrations on boot. |
+   | Version (Node) | `22` | `better-sqlite3` 13 declares `>=22`; on Node 20 npm reports `EBADENGINE`. |
 
 5. **تنظیمات منابع:** start with a small plan (512 MB RAM is plenty). **Replicas = 1.**
    SQLite has a single writer and the app assumes one process — do not scale the
    backend horizontally.
 
-### `better-sqlite3` (the only native dependency)
+### `better-sqlite3` (the only native dependency) — nothing to compile
 
-`better-sqlite3` ships prebuilt binaries for glibc Linux. On a Debian/Ubuntu-based
-image nothing is compiled and the install is fast. On **musl** (Alpine) images there is
-no prebuilt binary and `node-gyp` needs a toolchain (`python3`, `make`, `g++`).
+`better-sqlite3` 13 is a **Node-API** addon: the compiled binary is committed inside
+the npm package itself (`prebuilds/linux-x64.node` for glibc,
+`prebuilds/linuxmusl-x64.node` for Alpine/musl, plus arm64/macOS/Windows). Node-API is
+ABI-stable, so there is **no `node-gyp`, no compiler and no download step** during
+`npm ci` on either a Debian-based or an Alpine-based image.
 
-- If the build log shows `node-gyp` and fails with `g++: not found`, either
-  switch the app to a Debian-based image, add those packages to the build step, or
-  deploy the committed `Dockerfile`, which installs the toolchain in its build stage
-  and drops it from the runtime image.
-- If the install fails with an ABI/`NODE_MODULE_VERSION` error, the Node version in
-  the panel does not match the prebuilt binary — change the Node version and redeploy.
+The only constraint is the declared engine: `better-sqlite3` 13 requires **Node 22 or
+newer** (`"engines": { "node": ">=22" }`). Pick Node **22** in the panel. On Node 20
+npm prints `EBADENGINE` for that dependency — that is the signal to move up, not a
+build problem.
+
+If the install log shows `node-gyp` or `g++`, you are installing something else (for
+example `better-sqlite3` was resolved to an older major version through a stale
+`package-lock.json`) — run `npm ci` from the committed lockfile, which pins 13.x.
 
 ### Persistent disk (do not skip)
 
@@ -342,8 +347,8 @@ refresh is never required for correctness.
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Build fails in `better-sqlite3` (`node-gyp`, `g++: not found`) | musl/Alpine image without a toolchain | Use a Debian-based image, install `python3 make g++` in the build step, or deploy the `Dockerfile` |
-| Build fails with `NODE_MODULE_VERSION` | Node version without a matching prebuilt binary | Set Node 20 or 22 in the panel, redeploy |
+| Build fails in `better-sqlite3` (`node-gyp`, `g++: not found`) | An older major version was resolved, or a stale lockfile | Use the committed `package-lock.json` (`npm ci`); 13.x needs no compiler |
+| Install prints `EBADENGINE … better-sqlite3 … required {"node":">=22"}` | The panel runs Node 20, below the declared floor | Switch the app to Node 22 and redeploy |
 | Login appears to succeed but the session does not stick | Cookies marked `Secure` while TLS is terminated at the proxy, or `TRUST_PROXY` is `false` | Enable the certificate and set `TRUST_PROXY=true` |
 | `502` right after deploy | The app binds a different port than the panel proxies | Leave `PORT` unset so the injected value is used; keep `HOST=0.0.0.0` |
 | Data disappears after a redeploy | `DATA_DIR` is not on the persistent disk | Mount the volume and set `DATA_DIR` to that path |
@@ -359,7 +364,7 @@ refresh is never required for correctness.
 
 ## 9. Go-live checklist
 
-- [ ] App created from GitHub `main`, Node 20/22, start command `node server.js`.
+- [ ] App created from GitHub `main`, Node 22, start command `node server.js`.
 - [ ] Persistent disk mounted at `DATA_DIR`.
 - [ ] `NODE_ENV=production`, `SESSION_SECRET`, `TRUST_PROXY=true` set (secrets as secret type).
 - [ ] `SEED_ENABLED=false`.

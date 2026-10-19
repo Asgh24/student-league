@@ -2,21 +2,21 @@
 # ---------------------------------------------------------------------------
 # Student Comprehensive League - production image
 #
-# Stage 1 installs production dependencies. better-sqlite3 ships prebuilt
-# binaries for glibc, so on Alpine (musl) it is compiled from source and the
-# build stage therefore needs a small toolchain.
+# Stage 1 installs production dependencies. better-sqlite3 13 is a Node-API
+# addon that ships its compiled binaries inside the npm package, for glibc
+# (linux-x64) and musl (linuxmusl-x64) alike, so nothing is compiled here and
+# no toolchain is required. Node 22 is the floor its `engines` field declares.
 # ---------------------------------------------------------------------------
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 
 WORKDIR /app
-RUN apk add --no-cache python3 make g++
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 # ---------------------------------------------------------------------------
-# Stage 2 is the running image: no compilers, no dev dependencies, non-root.
+# Stage 2 is the running image: no dev dependencies, non-root.
 # ---------------------------------------------------------------------------
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 
 LABEL org.opencontainers.image.title="Student Comprehensive League" \
       org.opencontainers.image.description="Persian RTL classroom gamification platform" \

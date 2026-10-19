@@ -5,7 +5,7 @@
   "description": "Persian RTL classroom gamification platform (students league, teams, attendance, classroom tools)",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "start": "node server.js",
