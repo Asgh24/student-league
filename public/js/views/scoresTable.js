@@ -16,6 +16,7 @@ import {
   askCustomDelta,
   deleteColumn,
   editColumn,
+  quickAddStudent,
   showProfile,
 } from './scoresActions.js';
 
@@ -153,11 +154,14 @@ export function createScoresTable({ leagueId, columns, students, reload }) {
     const rows = visibleRows();
     tbody.replaceChildren();
     if (rows.length === 0) {
+      const message = students.length === 0
+        ? 'هنوز دانش‌آموزی اضافه نشده؛ نام را در کادر بالا بنویسید و «افزودن» را بزنید.'
+        : 'دانش‌آموزی یافت نشد';
       tbody.appendChild(el('tr', {}, [
         el('td', { colspan: String(columns.length + 4) }, [
           el('div.empty', {}, [
-            el('span.empty__icon', { text: '🔍', 'aria-hidden': 'true' }),
-            el('p', { text: 'دانش‌آموزی یافت نشد' }),
+            el('span.empty__icon', { text: students.length === 0 ? '🧑‍🎓' : '🔍', 'aria-hidden': 'true' }),
+            el('p', { text: message }),
           ]),
         ]),
       ]));
@@ -195,9 +199,31 @@ export function createScoresTable({ leagueId, columns, students, reload }) {
   ]));
   table.appendChild(tbody);
 
+  const newStudentInput = el('input', {
+    type: 'text',
+    placeholder: 'نام دانش‌آموز جدید…',
+    'aria-label': 'نام دانش‌آموز جدید',
+    autocomplete: 'off',
+  });
+
+  async function submitNewStudent() {
+    const added = await quickAddStudent(leagueId, newStudentInput.value, reload);
+    if (added) newStudentInput.value = '';
+  }
+
+  newStudentInput.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    void submitNewStudent();
+  });
+
   const toolbar = el('div.row', { style: { marginBottom: '10px' } }, [
-    el('div', { style: { flex: '1 1 220px' } }, [searchInput]),
-    button('افزودن دانش‌آموز', { kind: 'soft', icon: '➕', onClick: () => addStudent(leagueId, reload) }),
+    el('div', { style: { flex: '1 1 200px' } }, [searchInput]),
+    el('div.quick-add', {}, [
+      newStudentInput,
+      button('افزودن', { kind: 'soft', icon: '➕', onClick: () => void submitNewStudent() }),
+    ]),
+    button('افزودن با حساب کاربری', { kind: 'ghost', icon: '👤', onClick: () => addStudent(leagueId, reload) }),
     button('افزودن ستون', { kind: 'soft', icon: '📋', onClick: () => addColumn(leagueId, reload) }),
   ]);
 

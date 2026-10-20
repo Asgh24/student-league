@@ -200,11 +200,7 @@ export async function renderLeague({ params }) {
       ]),
       rankingCard(league),
       card({ title: 'جدول امتیازها', icon: '📋' }, [
-        students.length === 0
-          ? el('div', {}, [
-            emptyState({ icon: '🧑‍🎓', title: 'هنوز دانش‌آموزی اضافه نشده', hint: 'از دکمه «افزودن دانش‌آموز» شروع کنید.' }),
-          ])
-          : createScoresTable({ leagueId, columns, students, reload: load }),
+        createScoresTable({ leagueId, columns, students, reload: load }),
       ]),
     );
   }

@@ -205,23 +205,154 @@ describe('course evaluations (teacher)', () => {
     expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM evaluation_scores WHERE evaluation_id = ?').get(evaluationId).n).toBe(0);
   });
 
-  it('never moves marks into league points', async () => {
-    await teacher.post(`/api/v1/leagues/${fixture.leagueA.id}/scores/commit`, {
-      studentId: fixture.studentsA[0].id,
-      changes: [{ columnId: fixture.columnsA[0].id, delta: 50 }],
-      reason: 'قبل از ارزشیابی',
-    });
-    const before = (await student.get('/api/v1/student/report-card')).body.total;
-    const historyBefore = ctx.db.prepare('SELECT COUNT(*) AS n FROM score_history').get().n;
-
+  it('adds the mapped points to the linked column and only the difference on re-save', async () => {
     const created = await createEvaluation();
-    await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${created.body.evaluation.id}/scores`, {
-      scores: [{ studentId: fixture.studentsA[0].id, score: 20 }],
-    });
+    const evaluationId = created.body.evaluation.id;
+    const columnId = fixture.columnsA[0].id;
+    const studentId = fixture.studentsA[0].id;
+    const valueOf = () => ctx.db.prepare('SELECT value FROM scores WHERE student_id = ? AND column_id = ?')
+      .get(studentId, columnId)?.value ?? 0;
 
-    const after = (await student.get('/api/v1/student/report-card')).body.total;
-    expect(after).toBe(before);
-    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM score_history').get().n).toBe(historyBefore);
+    await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${evaluationId}/scores`, {
+      scores: [{ studentId, score: 20 }],
+    });
+    expect(valueOf()).toBe(100);
+    expect(ctx.db.prepare('SELECT awarded_points AS p FROM evaluation_scores WHERE evaluation_id = ? AND student_id = ?')
+      .get(evaluationId, studentId).p).toBe(100);
+
+    // Re-saving the same mark must not add the points twice.
+    await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${evaluationId}/scores`, {
+      scores: [{ studentId, score: 20 }],
+    });
+    expect(valueOf()).toBe(100);
+
+    // 9.99/20 is «نیاز به تلاش» → the award becomes -50 (100 - 50 - 100 = -50 delta).
+    await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${evaluationId}/scores`, {
+      scores: [{ studentId, score: 9.99 }],
+    });
+    expect(valueOf()).toBe(-50);
+  });
+
+  it('reverses the awarded points when scoring is disabled or the mark is cleared', async () => {
+    const created = await createEvaluation();
+    const evaluationId = created.body.evaluation.id;
+    const columnId = fixture.columnsA[0].id;
+    const studentId = fixture.studentsA[0].id;
+    const valueOf = () => ctx.db.prepare('SELECT value FROM scores WHERE student_id = ? AND column_id = ?')
+      .get(studentId, columnId)?.value ?? 0;
+
+    await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${evaluationId}/scores`, {
+      scores: [{ studentId, score: 15 }],
+    });
+    expect(valueOf()).toBe(25);
+
+    const disabled = await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/scoring`, {
+      enabled: false,
+      excellent: 100,
+      good: 25,
+      fair: -25,
+      needsWork: -50,
+    });
+    expect(disabled.status).toBe(200);
+    expect(disabled.body.scoring.enabled).toBe(false);
+    expect(valueOf()).toBe(0);
+
+    // With scoring off new marks stay out of the league.
+    await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${evaluationId}/scores`, {
+      scores: [{ studentId, score: 20 }],
+    });
+    expect(valueOf()).toBe(0);
+
+    // Turning it back on re-applies the current mark (20 → 100).
+    await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/scoring`, {
+      enabled: true,
+      excellent: 100,
+      good: 25,
+      fair: -25,
+      needsWork: -50,
+    });
+    expect(valueOf()).toBe(100);
+
+    // Clearing the mark removes the points again.
+    await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${evaluationId}/scores`, {
+      scores: [{ studentId, score: null }],
+    });
+    expect(valueOf()).toBe(0);
+  });
+
+  it('reverses the awarded points when the evaluation is deleted', async () => {
+    const created = await createEvaluation();
+    const evaluationId = created.body.evaluation.id;
+    const columnId = fixture.columnsA[0].id;
+    const studentId = fixture.studentsA[0].id;
+
+    await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${evaluationId}/scores`, {
+      scores: [{ studentId, score: 15 }],
+    });
+    const valueOf = () => ctx.db.prepare('SELECT value FROM scores WHERE student_id = ? AND column_id = ?')
+      .get(studentId, columnId)?.value ?? 0;
+    expect(valueOf()).toBe(25);
+
+    await teacher.del(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${evaluationId}`);
+    expect(valueOf()).toBe(0);
+  });
+
+  it('moves the points when the subject relinks to another column', async () => {
+    const created = await createEvaluation();
+    const evaluationId = created.body.evaluation.id;
+    const studentId = fixture.studentsA[0].id;
+
+    await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${evaluationId}/scores`, {
+      scores: [{ studentId, score: 18 }],
+    });
+    const valueIn = (columnId) => ctx.db.prepare('SELECT value FROM scores WHERE student_id = ? AND column_id = ?')
+      .get(studentId, columnId)?.value ?? 0;
+    expect(valueIn(fixture.columnsA[0].id)).toBe(100);
+
+    await teacher.patch(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${evaluationId}`, { subject: 'علوم' });
+    expect(valueIn(fixture.columnsA[0].id)).toBe(0);
+    expect(valueIn(fixture.columnsA[2].id)).toBe(100);
+  });
+
+  it('maps descriptive levels to their point values', async () => {
+    const created = await createEvaluation({ kind: 'descriptive' });
+    const evaluationId = created.body.evaluation.id;
+    const columnId = fixture.columnsA[0].id;
+    const studentId = fixture.studentsA[0].id;
+    const valueOf = () => ctx.db.prepare('SELECT value FROM scores WHERE student_id = ? AND column_id = ?')
+      .get(studentId, columnId)?.value ?? 0;
+
+    await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${evaluationId}/scores`, {
+      scores: [{ studentId, label: 'excellent' }],
+    });
+    expect(valueOf()).toBe(100);
+
+    await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${evaluationId}/scores`, {
+      scores: [{ studentId, label: 'needs-work' }],
+    });
+    expect(valueOf()).toBe(-50);
+
+    await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${evaluationId}/scores`, {
+      scores: [{ studentId, label: '' }],
+    });
+    expect(valueOf()).toBe(0);
+  });
+
+  it('validates the scoring payload and exposes it in the list', async () => {
+    const bad = await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/scoring`, { enabled: true });
+    expect(bad.status).toBe(400);
+
+    const foreign = await rival.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/scoring`, {
+      enabled: true,
+      excellent: 1,
+      good: 1,
+      fair: 1,
+      needsWork: 1,
+    });
+    expect(foreign.status).toBe(403);
+
+    const list = await teacher.get(`/api/v1/leagues/${fixture.leagueA.id}/evaluations`);
+    expect(list.body.scoring).toEqual({ enabled: true, excellent: 100, good: 25, fair: -25, needsWork: -50 });
   });
 
   it('updates and deletes an evaluation', async () => {

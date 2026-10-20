@@ -115,6 +115,15 @@ export const schemas = {
     note: z.string().trim().max(500).default(''),
   }).refine((value) => value.scaleMax > value.scaleMin, { message: 'بازهٔ نمره نامعتبر است', path: ['scaleMax'] }),
 
+  /** Mapping of marks to league points (the «تنظیمات امتیازدهی» panel). */
+  evaluationScoring: z.object({
+    enabled: z.boolean(),
+    excellent: z.coerce.number().int().min(-100000).max(100000),
+    good: z.coerce.number().int().min(-100000).max(100000),
+    fair: z.coerce.number().int().min(-100000).max(100000),
+    needsWork: z.coerce.number().int().min(-100000).max(100000),
+  }),
+
   evaluationUpdate: z.object({
     subject: z.string().trim().min(1).max(60).optional(),
     title: z.string().trim().min(1).max(120).optional(),

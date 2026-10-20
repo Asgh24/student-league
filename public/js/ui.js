@@ -1,4 +1,5 @@
 import { clear, el, mount } from './dom.js';
+import { jalaliDateInput } from './jalaliDate.js';
 
 /* ------------------------------------------------------------------ toasts */
 
@@ -157,7 +158,9 @@ export function confirmDialog({ title = 'تأیید عملیات', message, conf
 
 /**
  * Small form dialog. `fields` is a list of `{ name, label, type, value, options,
- * required, placeholder, min, max }`; resolves with the collected values or null.
+ * required, placeholder, min, max, hint }`; resolves with the collected values or
+ * null. `type: 'jalali-date'` renders the Shamsi picker and still collects an ISO
+ * `YYYY-MM-DD` value; pass `persianDigits: false` for Latin digits.
  */
 export function formDialog({ title, fields = [], submitLabel = 'ذخیره', cancelLabel = 'انصراف', description = '' }) {
   return new Promise((resolve) => {
@@ -178,6 +181,13 @@ export function formDialog({ title, fields = [], submitLabel = 'ذخیره', can
         }
       } else if (field.type === 'textarea') {
         input = el('textarea', { id, name: field.name, placeholder: field.placeholder ?? '', value: field.value ?? '' });
+      } else if (field.type === 'jalali-date') {
+        input = jalaliDateInput({
+          id,
+          value: field.value ?? '',
+          allowEmpty: field.allowEmpty === true,
+          persianDigits: field.persianDigits !== false,
+        });
       } else {
         input = el('input', {
           id,

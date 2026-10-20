@@ -122,7 +122,7 @@ export function gradingCard({ leagueId, detail, onSaved, onClose }) {
       chip(`📅 ${faDate(evaluation.heldOn)}`, 'muted'),
       chip(descriptive ? '📝 توصیفی' : `⚖️ مقیاس ${fa(evaluation.scaleMin)} تا ${fa(evaluation.scaleMax)}`),
       chip(`ثبت‌شده ${fa(marked)} از ${fa(students.length)}`, marked === students.length ? 'ok' : 'amber'),
-      chip('بدون اثر روی امتیاز لیگ', 'muted'),
+      chip(detail.scoring?.enabled && evaluation.columnId ? '🔗 طبق تنظیمات به امتیاز لیگ منتقل می‌شود' : 'بدون اثر روی امتیاز لیگ', detail.scoring?.enabled && evaluation.columnId ? 'ok' : 'muted'),
     ]),
     el('div.row', { style: { gap: '6px', flexWrap: 'wrap', margin: '10px 0' } }, bulk),
     students.length ? table : el('p.muted.small', { text: 'دانش‌آموزی در این لیگ ثبت نشده است.' }),

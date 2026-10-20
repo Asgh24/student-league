@@ -47,7 +47,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | گردونه شانس | Canvas lucky wheel with teacher-editable segments |
 | سوال و پاسخ | Teacher questions, student answers, award points |
 | تکالیف | Homework with due dates and per-student done/not-done |
-| ارزشیابی دروس | Course evaluations: مقطع + پایه, exam title, numeric marks (۰–۲۰) or descriptive levels, per-student mark sheet with quick-fill. Marks are recorded only — they are never converted into league points automatically |
+| ارزشیابی دروس | Course evaluations: مقطع + پایه, exam title, numeric marks (۰–۲۰) or descriptive levels, per-student mark sheet with quick-fill, and an optional «تنظیمات امتیازدهی» mapping that turns marks into league points |
 | برنامه هفتگی | Saturday→Friday weekly schedule grid |
 | ارسال فایل | Uploaded files shared with the class, downloaded safely |
 
@@ -272,9 +272,9 @@ Created and upgraded by versioned migrations on boot (`src/migrations/`).
 | `files` | Upload metadata; bytes live in `DATA_DIR/uploads` under random names |
 | `raffle_history` | Who was picked, when, and the reason |
 | `likes` | Per-day student-to-student likes (quota enforced) |
-| `league_settings` | `individualAffectsTeam`, late/absent penalties, `grade` (نام پایه نمایش‌داده‌شده روی کارنامه) |
-| `evaluations` | Course evaluations: subject, exam title, `level` (مقطع), `grade` (پایه), `kind` (`numeric`/`descriptive`), scale, `held_on`, optional link to a score column (reference only) |
-| `evaluation_scores` | One row per student × evaluation: `score` (numeric) or `label` (descriptive level); a cleared mark deletes the row |
+| `league_settings` | `individualAffectsTeam`, late/absent penalties, `grade` (نام پایه نمایش‌داده‌شده روی کارنامه) and the evaluation scoring keys (`evalPointsEnabled` + four point values) |
+| `evaluations` | Course evaluations: subject, exam title, `level` (مقطع), `grade` (پایه), `kind` (`numeric`/`descriptive`), scale, `held_on`, optional link to a score column that receives the mapped points |
+| `evaluation_scores` | One row per student × evaluation: `score` (numeric) or `label` (descriptive level), plus `awarded_points` / `awarded_column_id` (what was last added to the league); a cleared mark deletes the row |
 | `timers` | League countdown end timestamp |
 | `sessions` | Session store (also created by a migration) |
 
@@ -320,11 +320,19 @@ Numeric marks are banded with the usual Iranian convention (ratio to the maximum
 The student's ارزشیابی tab shows only its own mark, the class average and its rank —
 never another student.
 
-**Marks never touch the league.** The module writes only to `evaluations` and
-`evaluation_scores`; awarding league points stays a separate, manual action in
-پیگیری امتیازها. When a subject name matches a score column exactly, the evaluation
-stores a *reference* to that column so the two views can be correlated, but no
-automatic transfer happens (covered by the `never moves marks into league points` test).
+**Mark → league points (optional).** The «تنظیمات امتیازدهی» card on the same page
+maps each qualitative level to a fixed number of league points (defaults: خیلی خوب
+۱۰۰، خوب ۲۵، قابل قبول ۲۵−، نیاز به تلاش ۵۰−) and has a small ۰–۲۰ calculator
+(۹.۹۹ → ۵۰−). It can be switched off; while off, marks stay out of the league.
+
+When it is on and the subject matches a score column, saving a mark writes the
+difference to that column through the same `applyScoreDelta` path as manual
+scoring, with a history reason like «ارزشیابی «آزمون فصل ۲»». The applied value is
+stored per mark (`evaluation_scores.awarded_points` / `awarded_column_id`), so a
+re-save never double-counts and clearing a mark, disabling scoring, changing the
+mapping, relinking the subject to another column or deleting the evaluation
+reverses the previously awarded points. All of it runs in the same transaction as
+the change that triggered it.
 
 ---
 
@@ -488,17 +496,18 @@ pool only after everyone has been picked.
 
 | Method | Path | Body / query | Response |
 | --- | --- | --- | --- |
-| GET | `/leagues/:id/evaluations` | `?subject=&from=&to=&page=&limit=` (Gregorian dates) | `{ league{ id, name, grade }, items[{ id, subject, title, level, grade, kind, scaleMin, scaleMax, heldOn, note, columnId, gradedCount, studentCount, average, minScore, maxScore }], total, stats{ count, subjectCount, studentCount, gradedCount, average }, subjects, titles, columns[], options{ levels, grades, gradesByLevel, kinds, descriptive } }` |
-| POST | `/leagues/:id/evaluations` | `{ subject, title, level?, grade?, kind?, scaleMin?, scaleMax?, heldOn, note? }` | `201 { evaluation }` (a subject equal to a score column name is linked as a reference) |
-| GET | `/leagues/:id/evaluations/:evaluationId` | — | `{ evaluation, students[{ studentId, name, score, label, note }] }` |
-| PATCH | `/leagues/:id/evaluations/:evaluationId` | any create field | `{ evaluation }` |
-| DELETE | `/leagues/:id/evaluations/:evaluationId` | — | `{ ok: true }` (marks cascade) |
-| PUT | `/leagues/:id/evaluations/:evaluationId/scores` | `{ scores: [{ studentId, score?, label?, note? }] }` | `{ evaluation, students }` — one transaction; an empty score **and** label clears the mark |
+| GET | `/leagues/:id/evaluations` | `?subject=&from=&to=&page=&limit=` (Gregorian dates) | `{ league{ id, name, grade }, items[...], total, stats{...}, subjects, titles, columns[], scoring{ enabled, excellent, good, fair, needsWork }, options{ levels, grades, gradesByLevel, kinds, descriptive } }` |
+| POST | `/leagues/:id/evaluations` | `{ subject, title, level?, grade?, kind?, scaleMin?, scaleMax?, heldOn, note? }` | `201 { evaluation }` (a subject equal to a score column name is linked for points) |
+| PUT | `/leagues/:id/evaluations/scoring` | `{ enabled, excellent, good, fair, needsWork }` | `{ scoring }` — re-applies the points of every existing evaluation |
+| GET | `/leagues/:id/evaluations/:evaluationId` | — | `{ evaluation, students[{ studentId, name, score, label, note }], scoring }` |
+| PATCH | `/leagues/:id/evaluations/:evaluationId` | any create field | `{ evaluation }` — relinks the column and moves the awarded points |
+| DELETE | `/leagues/:id/evaluations/:evaluationId` | — | `{ ok: true }` (marks cascade, awarded points are reversed) |
+| PUT | `/leagues/:id/evaluations/:evaluationId/scores` | `{ scores: [{ studentId, score?, label?, note? }] }` | `{ evaluation, students }` — one transaction; an empty score **and** label clears the mark and its points |
 
 Numerical marks must fall inside the evaluation's `[scaleMin, scaleMax]`, descriptive
 marks must be one of `excellent`, `good`, `fair`, `needs-work`, and students from
-another league are ignored. Nothing in this module writes to `scores` or
-`score_history`: **an evaluation never changes league points** (asserted by a test).
+another league are ignored. League points are written only through the scoring
+mapping described above (and only when it is enabled).
 
 ### Student portal
 

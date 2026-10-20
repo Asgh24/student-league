@@ -14,6 +14,7 @@ import * as serverJalali from '../src/lib/jalali.js';
 import * as clientEvalMeta from '../public/js/evaluationMeta.js';
 import * as serverEval from '../src/services/evaluations.js';
 import * as browserJalali from '../public/js/jalali.js';
+import { jalaliDateInput } from '../public/js/jalaliDate.js';
 import { number as formatNumber, rating } from '../public/js/format.js';
 import { matches, normalizeFa } from '../public/js/normalize.js';
 import { buildPointsChartConfig } from '../public/js/charts.js';
@@ -137,6 +138,76 @@ describe('Jalali parity between client and server', () => {
     expect(browserJalali.formatJalaliDate('2026-03-21')).toBe('۱۴۰۵/۰۱/۰۱');
     expect(browserJalali.formatJalaliDate('2026-08-01', { persianDigits: false })).toBe('1405/05/10');
     expect(browserJalali.jalaliWeekdayName('2026-08-01')).toBe('شنبه');
+  });
+});
+
+describe('Jalali date field', () => {
+  it('shows the Shamsi date and exposes the ISO value the API expects', () => {
+    const field = jalaliDateInput({ id: 'held-on', value: '2026-10-20' });
+    const selects = [...field.querySelectorAll('select')];
+
+    expect(field.id).toBe('held-on');
+    expect(field.className).toContain('jalali-date');
+    expect(selects).toHaveLength(3);
+    expect(selects.map((select) => select.value)).toEqual(['1405', '7', '28']);
+    expect(field.querySelector('.jalali-date__month').selectedOptions[0].textContent).toBe('مهر');
+    expect(field.value).toBe('2026-10-20');
+  });
+
+  it('defaults required dates to today and lets optional filters stay empty', () => {
+    expect(jalaliDateInput({ value: '' }).value).toBe(browserJalali.todayIso(210));
+
+    const filter = jalaliDateInput({ value: '', allowEmpty: true });
+    expect(filter.value).toBe('');
+    expect([...filter.querySelectorAll('select')].every((select) => select.value === '')).toBe(true);
+  });
+
+  it('completes an optional date only when all three parts are picked', () => {
+    const filter = jalaliDateInput({ value: '', allowEmpty: true });
+    const [year, month, day] = filter.querySelectorAll('select');
+
+    year.value = '1405';
+    year.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(filter.value).toBe('');
+
+    month.value = '7';
+    month.dispatchEvent(new window.Event('change', { bubbles: true }));
+    day.value = '28';
+    day.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(filter.value).toBe('2026-10-20');
+
+    day.value = '';
+    day.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(filter.value).toBe('');
+  });
+
+  it('clamps the day when the chosen month is shorter', () => {
+    const field = jalaliDateInput({ value: browserJalali.jalaliToIso(1403, 12, 30) }); // leap Esfand: 30 days
+    const [year, , day] = field.querySelectorAll('select');
+    expect(day.value).toBe('30');
+
+    year.value = '1404'; // Esfand has 29 days
+    year.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(day.value).toBe('29');
+    expect(field.value).toBe(browserJalali.jalaliToIso(1404, 12, 29));
+  });
+
+  it('accepts a value assignment and reports changes as ISO dates', () => {
+    const seen = [];
+    const field = jalaliDateInput({ value: '2026-10-20', onChange: (iso) => seen.push(iso) });
+    const [, month, day] = field.querySelectorAll('select');
+
+    month.value = '12';
+    month.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(seen.at(-1)).toBe(browserJalali.jalaliToIso(1405, 12, 28));
+
+    day.value = '1';
+    day.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(field.value).toBe(browserJalali.jalaliToIso(1405, 12, 1));
+
+    field.value = '2026-03-20'; // 1404/12/29
+    expect(field.value).toBe('2026-03-20');
+    expect(day.value).toBe('29');
   });
 });
 
@@ -311,6 +382,45 @@ describe('staged score editing', () => {
     expect(staged).not.toBeNull();
     expect(staged.textContent).toBe('۵۰');
     expect(staged.dataset.delta).toBe('+۲۵');
+  });
+});
+
+describe('inline add student', () => {
+  const emptyTable = (reload) => {
+    const node = createScoresTable({ leagueId: 3, columns: [], students: [], reload });
+    const host = el('div');
+    mount(host, [node]);
+    return host;
+  };
+
+  it('shows the add row even when the league has no students yet', () => {
+    const host = emptyTable(vi.fn());
+    expect(host.querySelector('[aria-label="نام دانش‌آموز جدید"]')).not.toBeNull();
+    expect(host.textContent).toContain('هنوز دانش‌آموزی اضافه نشده');
+  });
+
+  it('adds a student by name and clears the field', async () => {
+    api.post.mockResolvedValue({ student: { id: 9, name: 'سارا تازه' } });
+    const reload = vi.fn();
+    const host = emptyTable(reload);
+
+    const input = host.querySelector('[aria-label="نام دانش‌آموز جدید"]');
+    input.value = '  سارا تازه  ';
+    input.nextElementSibling.click(); // the inline «افزودن» button
+
+    await vi.waitFor(() => expect(input.value).toBe(''));
+    expect(api.post).toHaveBeenCalledWith('/leagues/3/students', { name: 'سارا تازه' });
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores an empty name', () => {
+    const reload = vi.fn();
+    const host = emptyTable(reload);
+    const input = host.querySelector('[aria-label="نام دانش‌آموز جدید"]');
+    input.value = '   ';
+    input.nextElementSibling.click();
+    expect(api.post).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
   });
 });
 
@@ -546,6 +656,7 @@ describe('course evaluations (teacher view)', () => {
     subjects: ['ریاضی', 'هدیه'],
     titles: ['آزمون فصل ۲'],
     columns: [{ id: 1, name: 'ریاضی', step: 25 }],
+    scoring: { enabled: true, excellent: 100, good: 25, fair: -25, needsWork: -50 },
     options: {
       levels: serverEval.SCHOOL_LEVELS,
       grades: serverEval.GRADES,
@@ -578,16 +689,54 @@ describe('course evaluations (teacher view)', () => {
     // the form pre-selects the level/grade configured for the league
     expect(view.querySelector('#ev-level').value).toBe('ابتدایی');
     expect(view.querySelector('#ev-grade').value).toBe('ششم');
-    expect(view.querySelector('#ev-date').value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // the date field is a Shamsi picker whose value stays an ISO date for the API
+    const dateField = view.querySelector('#ev-date');
+    expect(dateField.querySelectorAll('select')).toHaveLength(3);
+    expect(dateField.value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(view.textContent).toContain('تاریخ (شمسی)');
+    expect(view.querySelector('#ev-filter-from').value).toBe('');
     expect(view.querySelector('#ev-max').value).toBe('20');
     expect(api.get).toHaveBeenCalledWith('/leagues/3/evaluations');
 
-    // a subject matching a league column is announced as a reference only
+    // a subject matching a league column is announced with the scoring behaviour
     const subject = view.querySelector('#ev-subject');
     subject.value = 'ریاضی';
     subject.dispatchEvent(new window.Event('input', { bubbles: true }));
     expect(view.textContent).toContain('به ستون «ریاضی»');
-    expect(view.textContent).toContain('بدون انتقال خودکار امتیاز');
+    expect(view.textContent).toContain('به ستون «ریاضی» لیگ اضافه می‌شوند');
+  });
+
+  it('previews the mark-to-points mapping and saves the scoring settings', async () => {
+    api.get.mockResolvedValue(listPayload);
+    api.put.mockResolvedValue({ scoring: listPayload.scoring });
+    await renderEvaluations({ params: { id: '3' } });
+
+    const view = document.querySelector('#view');
+    const sample = view.querySelector('#ev-points-sample');
+    expect(view.querySelector('#ev-points-enabled').checked).toBe(true);
+    expect(sample.value).toBe('9.99');
+    expect(view.textContent).toContain('نیاز به تلاش ← -۵۰');
+
+    // 15/20 is «خوب» and the preview follows the edited point values
+    sample.value = '15';
+    sample.dispatchEvent(new window.Event('input', { bubbles: true }));
+    expect(view.textContent).toContain('خوب ← ۲۵');
+
+    const good = view.querySelector('#ev-points-good');
+    good.value = '40';
+    good.dispatchEvent(new window.Event('input', { bubbles: true }));
+    expect(view.textContent).toContain('خوب ← ۴۰');
+
+    view.querySelector('#ev-points-enabled').checked = false;
+    [...view.querySelectorAll('button')].find((node) => node.textContent.includes('ذخیره تنظیمات امتیازدهی')).click();
+
+    await vi.waitFor(() => expect(api.put).toHaveBeenCalledWith('/leagues/3/evaluations/scoring', {
+      enabled: false,
+      excellent: 100,
+      good: 40,
+      fair: -25,
+      needsWork: -50,
+    }));
   });
 
   it('creates a new evaluation from the inline form', async () => {

@@ -28,6 +28,27 @@ export async function askCustomDelta(column) {
   return Math.trunc(delta);
 }
 
+/**
+ * One-field quick add used by the inline «نام دانش‌آموز جدید…» row above the
+ * scores table. Resolves to `true` when the student was created.
+ */
+export async function quickAddStudent(leagueId, name, reload) {
+  const trimmed = String(name ?? '').trim();
+  if (!trimmed) {
+    notify.error('نام دانش‌آموز را وارد کنید');
+    return false;
+  }
+  try {
+    await api.post(`/leagues/${leagueId}/students`, { name: trimmed });
+    notify.ok(`«${trimmed}» افزوده شد`);
+    reload();
+    return true;
+  } catch (error) {
+    notify.error(errorMessage(error));
+    return false;
+  }
+}
+
 export async function addStudent(leagueId, reload) {
   const values = await formDialog({
     title: 'افزودن دانش‌آموز',

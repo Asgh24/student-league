@@ -3,7 +3,8 @@ export const id = '003_evaluations';
 /**
  * Course evaluation: a teacher records an exam / weekly assessment with either a
  * numeric mark (0-20 by default) or a descriptive level, per student. Marks are
- * kept separate from league points (no automatic transfer).
+ * kept separate from league points; the optional «تنظیمات امتیازدهی» mapping
+ * (migration 004) converts them when the teacher enables it.
  */
 export function up(db) {
   db.exec(`

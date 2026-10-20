@@ -7,7 +7,8 @@ import { api } from '../api.js';
 import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
 import { todayIso } from '../jalali.js';
-import { EVALUATION_KINDS, GRADES, gradesForLevel, SCHOOL_LEVELS } from '../evaluationMeta.js';
+import { jalaliDateInput } from '../jalaliDate.js';
+import { EVALUATION_KINDS, GRADES, gradesForLevel, DESCRIPTIVE_LEVELS, numericBand, SCHOOL_LEVELS } from '../evaluationMeta.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId, state } from '../store.js';
 import { confirmDialog, emptyState, formDialog, notify } from '../ui.js';
@@ -35,7 +36,12 @@ function formCard({ leagueId, payload, onCreated }) {
   const gradeInput = el('select', { id: 'ev-grade' });
   const subjectInput = el('input', { id: 'ev-subject', type: 'text', list: 'ev-subject-options', placeholder: 'مثلاً ریاضی', autocomplete: 'off' });
   const titleInput = el('input', { id: 'ev-title', type: 'text', list: 'ev-title-options', placeholder: 'مثلاً آزمون فصل ۲', autocomplete: 'off' });
-  const dateInput = el('input', { id: 'ev-date', type: 'date', value: today() });
+  const dateInput = jalaliDateInput({
+    id: 'ev-date',
+    value: today(),
+    persianDigits: state.persianDigits,
+    tzOffsetMinutes: state.meta?.timezoneOffsetMinutes ?? 210,
+  });
   const kindInput = el('select', { id: 'ev-kind' }, (options.kinds ?? EVALUATION_KINDS).map((kind) => el('option', { value: kind.key, text: kind.label })));
   const maxInput = el('input', { id: 'ev-max', type: 'number', min: 1, max: 100, value: 20, 'aria-label': 'حداکثر نمره' });
   const noteInput = el('textarea', { id: 'ev-note', placeholder: 'توضیح اختیاری برای دانش‌آموزان' });
@@ -59,9 +65,13 @@ function formCard({ leagueId, payload, onCreated }) {
   function syncHint() {
     const name = subjectInput.value.trim();
     const column = (payload.columns ?? []).find((item) => item.name === name);
-    linkHint.textContent = column
-      ? `🔗 به ستون «${column.name}» لیگ ارجاع داده می‌شود (فقط ارجاع، بدون انتقال خودکار امتیاز).`
-      : 'نمره‌ها فقط در کارنامهٔ ارزشیابی ثبت می‌شوند؛ بدون انتقال خودکار امتیاز به لیگ.';
+    if (!column) {
+      linkHint.textContent = 'نمره‌ها فقط در کارنامهٔ ارزشیابی ثبت می‌شوند؛ برای انتقال به لیگ، نام درس را با یک ستون لیگ یکسان کنید.';
+      return;
+    }
+    linkHint.textContent = payload.scoring?.enabled === false
+      ? `🔗 به ستون «${column.name}» لیگ ارجاع داده می‌شود (امتیازدهی ارزشیابی خاموش است).`
+      : `🔗 نمره‌ها طبق «تنظیمات امتیازدهی» به ستون «${column.name}» لیگ اضافه می‌شوند.`;
   }
 
   levelInput.addEventListener('change', syncGrades);
@@ -101,13 +111,107 @@ function formCard({ leagueId, payload, onCreated }) {
       el('div.field', {}, [el('label', { for: 'ev-grade', text: 'پایه' }), gradeInput]),
       el('div.field', {}, [el('label', { for: 'ev-subject', text: 'نام درس' }), subjectInput]),
       el('div.field', {}, [el('label', { for: 'ev-title', text: 'عنوان امتحان / ارزشیابی' }), titleInput]),
-      el('div.field', {}, [el('label', { for: 'ev-date', text: 'تاریخ (میلادی)' }), dateInput]),
+      el('div.field', {}, [el('label', { for: 'ev-date', text: 'تاریخ (شمسی)' }), dateInput]),
       el('div.field', {}, [el('label', { for: 'ev-kind', text: 'نوع' }), kindInput]),
       el('div.field', {}, [el('label', { for: 'ev-max', text: 'حداکثر نمره' }), maxInput]),
     ]),
     el('div.field', {}, [el('label', { for: 'ev-note', text: 'توضیح (اختیاری)' }), noteInput]),
     el('p', {}, [linkHint]),
     el('div.row', {}, [button('ثبت ارزشیابی', { kind: 'soft', icon: '💾', onClick: submit })]),
+  ]);
+}
+
+/**
+ * «تنظیمات امتیازدهی»: each qualitative level is worth a fixed number of league
+ * points; the marks of an evaluation are added to the linked column. The small
+ * calculator previews the mapping for a numeric mark (9.99 → -50 by default).
+ */
+function scoringCard({ leagueId, scoring, reload }) {
+  const current = scoring ?? { enabled: true, excellent: 100, good: 25, fair: -25, needsWork: -50 };
+  const enabled = el('input', { id: 'ev-points-enabled', type: 'checkbox' });
+  enabled.checked = Boolean(current.enabled);
+
+  const inputs = new Map();
+  const levelFields = DESCRIPTIVE_LEVELS.map((level) => {
+    const settingKey = level.key === 'needs-work' ? 'needsWork' : level.key;
+    const input = el('input', {
+      id: `ev-points-${level.key}`,
+      type: 'number',
+      step: 1,
+      min: -100000,
+      max: 100000,
+      value: String(current[settingKey] ?? 0),
+      'aria-label': `امتیاز ${level.label}`,
+    });
+    inputs.set(level.key, input);
+    return el('div.field', {}, [
+      el('label', { for: `ev-points-${level.key}`, text: `${level.icon} ${level.label}` }),
+      input,
+    ]);
+  });
+
+  const sample = el('input', {
+    id: 'ev-points-sample',
+    type: 'number',
+    min: 0,
+    max: 20,
+    step: '0.01',
+    value: '9.99',
+    'aria-label': 'نمونه نمره برای پیش‌نمایش',
+  });
+  const preview = el('strong', { 'aria-live': 'polite' });
+
+  function pointsFor(bandKey) {
+    const input = inputs.get(bandKey === 'very-good' ? 'excellent' : bandKey);
+    return Number(input?.value) || 0;
+  }
+
+  function syncPreview() {
+    const band = sample.value === '' ? null : numericBand(Number(sample.value), 20);
+    preview.textContent = band ? `${band.icon} ${band.label} ← ${fa(pointsFor(band.key))} امتیاز لیگ` : '—';
+  }
+
+  for (const input of inputs.values()) input.addEventListener('input', syncPreview);
+  sample.addEventListener('input', syncPreview);
+  syncPreview();
+
+  async function save() {
+    const body = {
+      enabled: enabled.checked,
+      excellent: Number(inputs.get('excellent').value) || 0,
+      good: Number(inputs.get('good').value) || 0,
+      fair: Number(inputs.get('fair').value) || 0,
+      needsWork: Number(inputs.get('needs-work').value) || 0,
+    };
+    try {
+      await api.put(`/leagues/${leagueId}/evaluations/scoring`, body);
+      notify.ok(body.enabled ? 'تنظیمات امتیازدهی ذخیره شد' : 'امتیازدهی ارزشیابی خاموش شد');
+      reload();
+    } catch (error) {
+      notify.error(errorMessage(error));
+    }
+  }
+
+  return card({ title: 'تنظیمات امتیازدهی', icon: '⚙️' }, [
+    el('label.checkbox', { for: 'ev-points-enabled' }, [
+      enabled,
+      el('span', { text: 'نمره‌های هر ارزشیابی به ستون هم‌نام درس در لیگ اضافه شوند' }),
+    ]),
+    el('p.small.muted', { text: 'هر سطح، مقدار ثابتی امتیاز لیگ می‌گیرد. اگر گزینهٔ بالا خاموش باشد، نمره‌ها فقط در کارنامه می‌مانند.' }),
+    el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', marginTop: '10px' } }, levelFields),
+    el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginTop: '10px' } }, [
+      el('div.field', {}, [
+        el('label', { for: 'ev-points-sample', text: 'پیش‌نمایش با نمرهٔ ۰ تا ۲۰' }),
+        sample,
+      ]),
+      el('div.field', {}, [
+        el('span.muted.small', { text: 'نتیجهٔ امتیاز' }),
+        preview,
+      ]),
+    ]),
+    el('div.row', { style: { marginTop: '10px' } }, [
+      button('ذخیره تنظیمات امتیازدهی', { kind: 'soft', icon: '💾', onClick: save }),
+    ]),
   ]);
 }
 
@@ -152,7 +256,7 @@ async function editEvaluation(item, reload) {
       { name: 'title', label: 'عنوان', type: 'text', value: item.title, required: true },
       { name: 'level', label: 'مقطع', type: 'select', value: item.level, options: [{ value: '', label: 'انتخاب کنید' }, ...SCHOOL_LEVELS.map((level) => ({ value: level, label: level }))] },
       { name: 'grade', label: 'پایه', type: 'select', value: item.grade, options: [{ value: '', label: 'انتخاب کنید' }, ...GRADES.map((grade) => ({ value: grade, label: grade }))] },
-      { name: 'heldOn', label: 'تاریخ (میلادی)', type: 'date', value: item.heldOn, required: true },
+      { name: 'heldOn', label: 'تاریخ (شمسی)', type: 'jalali-date', value: item.heldOn, required: true, persianDigits: state.persianDigits },
       { name: 'scaleMax', label: 'حداکثر نمره', type: 'number', value: item.scaleMax, min: 1, max: 100 },
       { name: 'note', label: 'توضیح', type: 'textarea', value: item.note ?? '' },
     ],
@@ -233,8 +337,18 @@ export async function renderEvaluations({ params }) {
       ...optionNodes(payload.subjects ?? [], filters.subject),
     ]);
     subject.value = filters.subject;
-    const from = el('input', { id: 'ev-filter-from', type: 'date', value: filters.from });
-    const to = el('input', { id: 'ev-filter-to', type: 'date', value: filters.to });
+    const from = jalaliDateInput({
+      id: 'ev-filter-from',
+      value: filters.from,
+      allowEmpty: true,
+      persianDigits: state.persianDigits,
+    });
+    const to = jalaliDateInput({
+      id: 'ev-filter-to',
+      value: filters.to,
+      allowEmpty: true,
+      persianDigits: state.persianDigits,
+    });
 
     function apply(next) {
       filters = next;
@@ -243,8 +357,8 @@ export async function renderEvaluations({ params }) {
 
     return el('div.filter-bar', {}, [
       el('div.field', {}, [el('label', { for: 'ev-filter-subject', text: 'درس' }), subject]),
-      el('div.field', {}, [el('label', { for: 'ev-filter-from', text: 'از تاریخ' }), from]),
-      el('div.field', {}, [el('label', { for: 'ev-filter-to', text: 'تا تاریخ' }), to]),
+      el('div.field', {}, [el('label', { for: 'ev-filter-from', text: 'از تاریخ (شمسی)' }), from]),
+      el('div.field', {}, [el('label', { for: 'ev-filter-to', text: 'تا تاریخ (شمسی)' }), to]),
       el('div.field', {}, [
         el('span.muted.small', { text: 'برای بازهٔ باز، یک طرف را خالی بگذارید.' }),
         el('div.row', {}, [
@@ -276,6 +390,7 @@ export async function renderEvaluations({ params }) {
         statCard({ label: 'ارزشیابی', value: fa(stats.count), icon: '📝' }),
       ]),
       formCard({ leagueId, payload, onCreated: () => load() }),
+      scoringCard({ leagueId, scoring: payload.scoring, reload: () => load() }),
       card({ title: `ارزشیابی‌های ثبت‌شده (${fa(payload.total ?? 0)})`, icon: '📋' }, [
         filterBar(),
         el('div', { style: { marginTop: '10px' } }, [listRows(payload, openGrading, () => load())]),

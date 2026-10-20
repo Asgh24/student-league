@@ -10,6 +10,7 @@ import {
   requireEvaluation,
   saveScores,
   updateForTeacher,
+  updateScoringForLeague,
 } from '../services/evaluations.js';
 
 function evaluationIdOf(req) {
@@ -20,7 +21,8 @@ function evaluationIdOf(req) {
 
 /**
  * Teacher routes for the course-evaluation module. Everything is scoped to a
- * league the teacher owns; marks never touch league points.
+ * league the teacher owns. Marks are converted to league points only through the
+ * league's «تنظیمات امتیازدهی» (see `PUT /scoring`).
  */
 export function createLeagueEvaluationsRouter({ db }) {
   const router = Router({ mergeParams: true });
@@ -36,6 +38,11 @@ export function createLeagueEvaluationsRouter({ db }) {
     res.status(201).json({ evaluation });
   });
 
+  /** «تنظیمات امتیازدهی»: mapping of marks to league points for the whole league. */
+  router.put('/scoring', validate({ body: schemas.evaluationScoring }), (req, res) => {
+    res.json({ scoring: updateScoringForLeague(db, req.league.id, req.body, req.user) });
+  });
+
   router.get('/:evaluationId', (req, res) => {
     res.json(detailForTeacher(db, evaluationIdOf(req), req.league.id));
   });
@@ -43,18 +50,18 @@ export function createLeagueEvaluationsRouter({ db }) {
   router.patch('/:evaluationId', validate({ body: schemas.evaluationUpdate }), (req, res) => {
     const evaluationId = evaluationIdOf(req);
     requireEvaluation(db, evaluationId, req.league.id);
-    res.json({ evaluation: updateForTeacher(db, req.league.id, evaluationId, req.body) });
+    res.json({ evaluation: updateForTeacher(db, req.league.id, evaluationId, req.body, req.user) });
   });
 
   router.delete('/:evaluationId', (req, res) => {
     const evaluationId = evaluationIdOf(req);
     requireEvaluation(db, evaluationId, req.league.id);
-    res.json(removeForTeacher(db, evaluationId));
+    res.json(removeForTeacher(db, evaluationId, req.user));
   });
 
   /** Replaces the marks of one evaluation in a single transaction. */
   router.put('/:evaluationId/scores', validate({ body: schemas.evaluationScores }), (req, res) => {
-    res.json(saveScores(db, evaluationIdOf(req), req.league.id, req.body.scores));
+    res.json(saveScores(db, evaluationIdOf(req), req.league.id, req.body.scores, req.user));
   });
 
   return router;

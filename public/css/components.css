@@ -203,6 +203,34 @@ select:focus,
 textarea:focus {
   border-color: var(--brand-2);
 }
+
+/* Shamsi date field: three selects (year / month / day) that behave like one
+   date input. The wrapper's `.value` stays an ISO string for the API. */
+.jalali-date {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 0.8fr);
+  gap: 6px;
+  direction: rtl;
+}
+.jalali-date select {
+  min-width: 0;
+  padding: 8px 6px;
+  font-size: 0.86rem;
+  text-align: center;
+  text-align-last: center;
+}
+
+/* Inline “add student” row above the scores table */
+.quick-add {
+  display: flex;
+  flex: 1 1 240px;
+  gap: 8px;
+  align-items: center;
+}
+.quick-add input {
+  flex: 1 1 140px;
+  min-width: 0;
+}
 .checkbox {
   display: inline-flex;
   align-items: center;

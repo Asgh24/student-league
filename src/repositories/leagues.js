@@ -10,13 +10,33 @@ export const SETTINGS_DEFAULTS = {
   latePenalty: 0,
   absentPenalty: 0,
   grade: '',
+  // Mapping of an evaluation mark to league points (see the evaluations page).
+  evalPointsEnabled: true,
+  evalPointsExcellent: 100,
+  evalPointsGood: 25,
+  evalPointsFair: -25,
+  evalPointsNeedsWork: -50,
 };
+
+/** Point values are whole numbers; the guard keeps accidental typos bounded. */
+export const MAX_EVALUATION_POINTS = 100000;
+
+function encodePoints(value) {
+  const number = Number.parseInt(value, 10);
+  const safe = Number.isFinite(number) ? number : 0;
+  return String(Math.max(-MAX_EVALUATION_POINTS, Math.min(MAX_EVALUATION_POINTS, safe)));
+}
 
 const SETTING_KEYS = {
   individualAffectsTeam: (v) => (v ? '1' : '0'),
   latePenalty: (v) => String(Number.parseInt(v, 10) || 0),
   absentPenalty: (v) => String(Number.parseInt(v, 10) || 0),
   grade: (v) => String(v ?? '').trim().slice(0, 40),
+  evalPointsEnabled: (v) => (v ? '1' : '0'),
+  evalPointsExcellent: encodePoints,
+  evalPointsGood: encodePoints,
+  evalPointsFair: encodePoints,
+  evalPointsNeedsWork: encodePoints,
 };
 
 export function readSettings(db, leagueId) {
@@ -28,6 +48,10 @@ export function readSettings(db, leagueId) {
       settings[row.key] = Number.parseInt(row.value, 10) || 0;
     } else if (row.key === 'grade') {
       settings.grade = row.value;
+    } else if (row.key === 'evalPointsEnabled') {
+      settings.evalPointsEnabled = row.value === '1';
+    } else if (row.key.startsWith('evalPoints')) {
+      settings[row.key] = Number.parseInt(row.value, 10) || 0;
     }
   }
   return settings;
