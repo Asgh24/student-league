@@ -34,7 +34,7 @@ vi.mock('../public/js/api.js', () => {
   };
 });
 
-const { api, register } = await import('../public/js/api.js');
+const { api, login, register } = await import('../public/js/api.js');
 const { renderLogin } = await import('../public/js/views/login.js');
 const { renderSubscription } = await import('../public/js/views/subscription.js');
 const { renderAdminDashboard } = await import('../public/js/views/admin/dashboard.js');
@@ -96,6 +96,33 @@ describe('credits footer', () => {
   });
 });
 
+describe('login form', () => {
+  it('keeps the login inputs visible and submits them', async () => {
+    login.mockResolvedValueOnce({
+      user: { id: 1, role: 'teacher', username: 'teacher', displayName: 'معلم نمونه', subscription: { status: 'active' } },
+      csrfToken: 'csrf-test',
+    });
+    const navigate = vi.fn();
+    renderLogin({ navigate });
+
+    const username = document.getElementById('login-username');
+    const password = document.getElementById('login-password');
+    // Regression: the login and signup panels used to share the same nodes,
+    // which moved them into the hidden signup panel and left the inputs invisible.
+    expect(username).toBeTruthy();
+    expect(password).toBeTruthy();
+    expect(username.closest('[hidden]')).toBeNull();
+    expect(password.closest('[hidden]')).toBeNull();
+
+    username.value = 'teacher';
+    password.value = 'teacher1234';
+    document.querySelector('form.login-card').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => expect(login).toHaveBeenCalledWith('teacher', 'teacher1234'));
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('teacher'));
+  });
+});
+
 describe('teacher signup', () => {
   it('shows the 14-day demo notice and starts a session after registration', async () => {
     register.mockResolvedValueOnce({
@@ -108,12 +135,12 @@ describe('teacher signup', () => {
 
     const tabs = [...document.querySelectorAll('.tab')];
     tabs.find((tab) => tab.textContent.includes('ثبت‌نام معلم')).click();
-    expect(document.getElementById('login-display-name').required).toBe(true);
+    expect(document.getElementById('signup-display-name').required).toBe(true);
 
-    document.getElementById('login-display-name').value = 'خانم جدید';
-    document.getElementById('login-username').value = 'new-teacher';
-    document.getElementById('login-password').value = 'new-password-1';
-    document.getElementById('login-confirm').value = 'new-password-1';
+    document.getElementById('signup-display-name').value = 'خانم جدید';
+    document.getElementById('signup-username').value = 'new-teacher';
+    document.getElementById('signup-password').value = 'new-password-1';
+    document.getElementById('signup-confirm').value = 'new-password-1';
     document.querySelector('form.login-card').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
     await vi.waitFor(() => expect(register).toHaveBeenCalledWith('خانم جدید', 'new-teacher', 'new-password-1'));

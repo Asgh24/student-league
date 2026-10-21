@@ -15,14 +15,10 @@ export function renderLogin({ navigate }) {
   const trialDaysText = number(trialDays, true);
   const errorBox = el('p.small', { style: { color: '#dc2626', minHeight: '1.2em' }, role: 'alert' });
 
-  const displayName = el('input', {
-    id: 'login-display-name',
-    name: 'displayName',
-    type: 'text',
-    autocomplete: 'name',
-    placeholder: 'مثلاً خانم احمدی',
-  });
-  const username = el('input', {
+  // Login and signup get their own controls. A DOM node can only live in one
+  // parent, so sharing one input between both panels silently moved it into the
+  // hidden signup panel and left the login form with labels but no inputs.
+  const loginUsername = el('input', {
     id: 'login-username',
     name: 'username',
     type: 'text',
@@ -30,7 +26,7 @@ export function renderLogin({ navigate }) {
     autocomplete: 'username',
     placeholder: 'نام کاربری',
   });
-  const password = el('input', {
+  const loginPassword = el('input', {
     id: 'login-password',
     name: 'password',
     type: 'password',
@@ -38,8 +34,30 @@ export function renderLogin({ navigate }) {
     autocomplete: 'current-password',
     placeholder: 'گذرواژه',
   });
+
+  const displayName = el('input', {
+    id: 'signup-display-name',
+    name: 'displayName',
+    type: 'text',
+    autocomplete: 'name',
+    placeholder: 'مثلاً خانم احمدی',
+  });
+  const signupUsername = el('input', {
+    id: 'signup-username',
+    name: 'username',
+    type: 'text',
+    autocomplete: 'username',
+    placeholder: 'نام کاربری',
+  });
+  const signupPassword = el('input', {
+    id: 'signup-password',
+    name: 'password',
+    type: 'password',
+    autocomplete: 'new-password',
+    placeholder: 'گذرواژه',
+  });
   const confirm = el('input', {
-    id: 'login-confirm',
+    id: 'signup-confirm',
     name: 'confirm',
     type: 'password',
     autocomplete: 'new-password',
@@ -55,8 +73,8 @@ export function renderLogin({ navigate }) {
   const signupTab = el('button.tab', { type: 'button', text: 'ثبت‌نام معلم' });
 
   const loginFields = el('div', {}, [
-    el('div.field', {}, [el('label', { for: 'login-username', text: 'نام کاربری' }), username]),
-    el('div.field', {}, [el('label', { for: 'login-password', text: 'گذرواژه' }), password]),
+    el('div.field', {}, [el('label', { for: 'login-username', text: 'نام کاربری' }), loginUsername]),
+    el('div.field', {}, [el('label', { for: 'login-password', text: 'گذرواژه' }), loginPassword]),
   ]);
 
   const signupFields = el('div', { hidden: true }, [
@@ -64,10 +82,10 @@ export function renderLogin({ navigate }) {
       el('strong', { text: `🎁 ${trialDaysText} روز استفادهٔ آزمایشی رایگان` }),
       el('p.small', { text: 'همهٔ ابزارهای معلم بدون محدودیت باز می‌شوند. پس از پایان دوره می‌توانید اشتراک بخرید.' }),
     ]),
-    el('div.field', {}, [el('label', { for: 'login-display-name', text: 'نام و نام خانوادگی' }), displayName]),
-    el('div.field', {}, [el('label', { for: 'login-username', text: 'نام کاربری' }), username]),
-    el('div.field', {}, [el('label', { for: 'login-password', text: 'گذرواژه' }), password]),
-    el('div.field', {}, [el('label', { for: 'login-confirm', text: 'تکرار گذرواژه' }), confirm]),
+    el('div.field', {}, [el('label', { for: 'signup-display-name', text: 'نام و نام خانوادگی' }), displayName]),
+    el('div.field', {}, [el('label', { for: 'signup-username', text: 'نام کاربری' }), signupUsername]),
+    el('div.field', {}, [el('label', { for: 'signup-password', text: 'گذرواژه' }), signupPassword]),
+    el('div.field', {}, [el('label', { for: 'signup-confirm', text: 'تکرار گذرواژه' }), confirm]),
   ]);
 
   function setMode(next) {
@@ -78,12 +96,13 @@ export function renderLogin({ navigate }) {
     loginFields.hidden = isSignup;
     signupFields.hidden = !isSignup;
     displayName.required = isSignup;
+    signupUsername.required = isSignup;
+    signupPassword.required = isSignup;
     confirm.required = isSignup;
-    password.autocomplete = isSignup ? 'new-password' : 'current-password';
     submit.lastChild.textContent = isSignup ? 'ساخت حساب و شروع دورهٔ آزمایشی' : 'ورود به سامانه';
     submit.firstChild.textContent = isSignup ? '✨' : '🔓';
     errorBox.textContent = '';
-    (isSignup ? displayName : username).focus();
+    (isSignup ? displayName : loginUsername).focus();
   }
 
   loginTab.addEventListener('click', () => setMode('login'));
@@ -106,8 +125,10 @@ export function renderLogin({ navigate }) {
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     errorBox.textContent = '';
-    const user = username.value.trim();
-    const pass = password.value;
+    const formUsername = mode === 'signup' ? signupUsername : loginUsername;
+    const formPassword = mode === 'signup' ? signupPassword : loginPassword;
+    const user = formUsername.value.trim();
+    const pass = formPassword.value;
     if (!user || !pass) {
       errorBox.textContent = 'نام کاربری و گذرواژه را وارد کنید';
       return;
@@ -148,7 +169,7 @@ export function renderLogin({ navigate }) {
   });
 
   renderView(el('div.login-shell', {}, [form]));
-  username.focus();
+  loginUsername.focus();
 
   // Warm up a token bound to the current session (it may have been rotated by a
   // logout or an expired cookie). Submitting stays possible meanwhile, and the

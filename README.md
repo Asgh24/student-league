@@ -696,7 +696,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 
 ```
  Test Files  27 passed (27)
-      Tests  325 passed (325)
+      Tests  326 passed (326)
 ```
 
 | Suite | Tests | Covers |
@@ -722,7 +722,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `messages.test.js` | 12 | Teacher↔student threads, unread/read receipts, replies, ownership isolation, no-login students, empty body, unique conversations, contacts, admin exclusion |
 | `smsAdmin.test.js` | 4 | Admin SMS config, queued test messages without credentials, normalized bulk send, credit, invalid numbers and outbox retry |
 | `frontend.test.js` | 54 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (12 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, modal focus/footer lifecycle |
-| `frontendPlatform.test.js` | 7 | Credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, shared inbox thread/composer, admin settings label |
+| `frontendPlatform.test.js` | 8 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, shared inbox thread/composer, admin settings label |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 2 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not) |
 | `githubBackup.test.js` | 22 | Off-site backups against an in-memory GitHub Contents API: upload + manifest checksum, full push→restore round trip, retention/pruning, public-repo refusal, size limit, missing repo and 404 handling, checksum-mismatch safety, restore skipped for a non-empty database, scheduler due-time/retry/state handling with the real logger object |
