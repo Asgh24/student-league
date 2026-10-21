@@ -304,6 +304,17 @@ export const schemas = {
     })).min(1, 'حداقل یک سؤال لازم است').max(100),
   }),
 
+  /** «جای‌گیری»: the classroom grid and where every student sits. */
+  seatingSave: z.object({
+    rows: z.coerce.number().int().min(1).max(20),
+    cols: z.coerce.number().int().min(1).max(20),
+    seats: z.array(z.object({
+      row: z.coerce.number().int().min(0).max(19),
+      col: z.coerce.number().int().min(0).max(19),
+      studentId: z.coerce.number().int().positive(),
+    })).max(400),
+  }),
+
   scheduleSave: z.object({
     slots: z.array(z.object({
       dayIndex: z.coerce.number().int().min(0).max(6),

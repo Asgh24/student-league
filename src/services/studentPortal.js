@@ -13,6 +13,7 @@ import {
   titleForPoints,
 } from './scoring.js';
 import { studentTeam } from './teams.js';
+import { seatForStudent } from './seating.js';
 
 /** Resolves the student row (and league) for a logged in student account. */
 export function studentContext(db, userId) {
@@ -78,6 +79,7 @@ export function dashboard(db, student) {
     bestChampionship: medals[0]?.title ?? null,
     medals: medals.slice(0, 6),
     team: team ? { id: team.id, name: team.name, rank: team.rank, members: team.members.length } : null,
+    seat: seatForStudent(db, student.id),
     series: { start, points },
   };
 }

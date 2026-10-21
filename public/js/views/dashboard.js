@@ -21,6 +21,7 @@ const TOOLS = [
   { suffix: 'homework', icon: '📚', label: 'تکالیف' },
   { suffix: 'schedule', icon: '🗂️', label: 'برنامه هفتگی' },
   { suffix: 'files', icon: '📎', label: 'ارسال فایل' },
+  { suffix: 'seating', icon: '🪑', label: 'جای‌گیری' },
 ];
 
 async function createLeague() {

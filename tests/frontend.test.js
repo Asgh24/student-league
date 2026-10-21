@@ -52,6 +52,7 @@ const { renderStudentDashboard } = await import('../public/js/views/student/dash
 const { renderReportCard } = await import('../public/js/views/student/reportcard.js');
 const { renderEvaluations } = await import('../public/js/views/evaluations.js');
 const { renderQa } = await import('../public/js/views/qa.js');
+const { renderSeating } = await import('../public/js/views/seating.js');
 const { renderStudentEvaluations } = await import('../public/js/views/student/evaluations.js');
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -300,10 +301,11 @@ describe('teacher dashboard', () => {
     await renderTeacherDashboard();
 
     const tiles = document.querySelectorAll('#view .tile');
-    expect(tiles).toHaveLength(12);
+    expect(tiles).toHaveLength(13);
     expect(document.querySelector('#view').textContent).toContain('کلاس ششم الف');
     expect(document.querySelector('#view').textContent).toContain('لیگ انفرادی');
     expect(document.querySelector('#view').textContent).toContain('ارزشیابی دروس');
+    expect(document.querySelector('#view').textContent).toContain('جای‌گیری');
     expect(state.leagueId).toBe(3);
   });
 });
@@ -901,6 +903,72 @@ describe('Q&A presentation mode', () => {
     expect(view.textContent).toContain('آرش آزمون');
     expect(view.textContent).toContain('۷ از ۱۰');
     expect(view.textContent).toContain('۱۴۰ امتیاز');
+  });
+});
+
+describe('classroom seating', () => {
+  const students = [
+    { id: 11, name: 'آرش آزمون' },
+    { id: 12, name: 'بهار بنفش' },
+  ];
+
+  function seatingPayload(seats = []) {
+    const seated = new Set(seats.map((seat) => seat.studentId));
+    return {
+      layout: { rows: 2, cols: 3 },
+      seats,
+      students,
+      unassigned: students.filter((student) => !seated.has(student.id)),
+    };
+  }
+
+  function mockSeating(seats = []) {
+    api.get.mockImplementation((url) => {
+      if (url === '/leagues/1/seating') return Promise.resolve(seatingPayload(seats));
+      if (url === '/leagues/1') return Promise.resolve({ league: { id: 1, name: 'لیگ تست' } });
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+  }
+
+  it('shows the classroom grid and seats a student by hand', async () => {
+    mockSeating();
+    api.put.mockImplementation((url, payload) => {
+      expect(url).toBe('/leagues/1/seating');
+      return Promise.resolve(seatingPayload(payload.seats.map((seat) => ({ ...seat, name: students.find((s) => s.id === seat.studentId).name }))));
+    });
+
+    await renderSeating({ params: { id: '1' } });
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('جای‌گیری دانش‌آموزان');
+    expect(view.querySelectorAll('.seat')).toHaveLength(6);
+    expect(view.querySelector('#seat-rows').value).toBe('2');
+    expect(view.querySelector('#seat-cols').value).toBe('3');
+    expect(view.textContent).toContain('آرش آزمون');
+
+    // pick a student, then click an empty seat
+    const chip = [...view.querySelectorAll('.seating__list .chip--button')].find((node) => node.textContent === 'آرش آزمون');
+    chip.click();
+    document.querySelector('.seat[data-row="0"][data-col="1"]').click();
+
+    await vi.waitFor(() => expect(api.put).toHaveBeenCalled());
+    expect(api.put).toHaveBeenCalledWith('/leagues/1/seating', {
+      rows: 2,
+      cols: 3,
+      seats: [{ row: 0, col: 1, studentId: 11 }],
+    });
+    await vi.waitFor(() => expect(document.querySelector('.seat[data-row="0"][data-col="1"]').textContent).toContain('آرش آزمون'));
+  });
+
+  it('shuffles the class with one click', async () => {
+    mockSeating();
+    api.post.mockResolvedValue(seatingPayload([{ row: 1, col: 2, studentId: 11, name: 'آرش آزمون' }]));
+
+    await renderSeating({ params: { id: '1' } });
+    [...document.querySelectorAll('#view button')].find((node) => node.textContent.includes('چیدمان تصادفی')).click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalled());
+    expect(api.post).toHaveBeenCalledWith('/leagues/1/seating/shuffle', {});
+    await vi.waitFor(() => expect(document.querySelector('.seat[data-row="1"][data-col="2"]').textContent).toContain('آرش آزمون'));
   });
 });
 

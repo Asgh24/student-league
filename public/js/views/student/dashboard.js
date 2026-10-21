@@ -74,6 +74,12 @@ export async function renderStudentDashboard() {
             el('span', { text: `${data.team.name} (رتبه ${fa(data.team.rank)} · ${fa(data.team.members)} عضو)` }),
           ])
           : el('p.muted.small', { text: 'هنوز در تیمی قرار نگرفته‌اید.' }),
+        data.seat
+          ? el('p', {}, [
+            el('strong', { text: '🪑 جای شما در کلاس: ' }),
+            el('span', { text: `ردیف ${fa(data.seat.row + 1)}، صندلی ${fa(data.seat.col + 1)}` }),
+          ])
+          : el('p.muted.small', { text: 'هنوز جایی برای شما در چیدمان کلاس ثبت نشده است.' }),
         el('p.small.muted', { text: `آخرین امتیاز ثبت‌شده را می‌توانید در بخش تاریخچه ببینید.` }),
       ]),
       medalsSection(data),

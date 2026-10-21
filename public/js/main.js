@@ -28,6 +28,7 @@ import { renderLogin } from './views/login.js';
 import { renderQa } from './views/qa.js';
 import { renderRaffle } from './views/raffle.js';
 import { renderSchedule } from './views/schedule.js';
+import { renderSeating } from './views/seating.js';
 import { renderSettings } from './views/settings.js';
 import { renderTeams } from './views/teams.js';
 import { renderTimerTools } from './views/timer.js';
@@ -58,6 +59,7 @@ function leagueNavItems() {
     ['homework', '📚', 'تکالیف'],
     ['schedule', '🗂️', 'برنامه هفتگی'],
     ['files', '📎', 'ارسال فایل'],
+    ['seating', '🪑', 'جای‌گیری'],
   ];
   return entries.map(([suffix, icon, label]) => {
     const href = suffix ? `${base}/${suffix}` : base;
@@ -158,6 +160,7 @@ const routes = [
   { path: 'teacher/league/:id/qa', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderQa(ctx) },
   { path: 'teacher/league/:id/schedule', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSchedule(ctx) },
   { path: 'teacher/league/:id/files', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderFiles(ctx) },
+  { path: 'teacher/league/:id/seating', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSeating(ctx) },
   { path: 'student', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentDashboard(ctx) },
   { path: 'student/report-card', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderReportCard(ctx) },
   { path: 'student/evaluations', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentEvaluations(ctx) },

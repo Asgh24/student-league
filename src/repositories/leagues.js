@@ -16,6 +16,9 @@ export const SETTINGS_DEFAULTS = {
   evalPointsGood: 25,
   evalPointsFair: -25,
   evalPointsNeedsWork: -50,
+  // Size of the classroom seating grid (see the seating page).
+  seatingRows: 4,
+  seatingCols: 6,
 };
 
 /** Point values are whole numbers; the guard keeps accidental typos bounded. */
@@ -25,6 +28,13 @@ function encodePoints(value) {
   const number = Number.parseInt(value, 10);
   const safe = Number.isFinite(number) ? number : 0;
   return String(Math.max(-MAX_EVALUATION_POINTS, Math.min(MAX_EVALUATION_POINTS, safe)));
+}
+
+/** Rows and columns of the seating grid stay between 1 and 20. */
+function encodeGridSize(value) {
+  const number = Number.parseInt(value, 10);
+  if (!Number.isFinite(number)) return '1';
+  return String(Math.max(1, Math.min(20, number)));
 }
 
 const SETTING_KEYS = {
@@ -37,6 +47,8 @@ const SETTING_KEYS = {
   evalPointsGood: encodePoints,
   evalPointsFair: encodePoints,
   evalPointsNeedsWork: encodePoints,
+  seatingRows: encodeGridSize,
+  seatingCols: encodeGridSize,
 };
 
 export function readSettings(db, leagueId) {
@@ -48,6 +60,8 @@ export function readSettings(db, leagueId) {
       settings[row.key] = Number.parseInt(row.value, 10) || 0;
     } else if (row.key === 'grade') {
       settings.grade = row.value;
+    } else if (row.key === 'seatingRows' || row.key === 'seatingCols') {
+      settings[row.key] = Number.parseInt(row.value, 10) || SETTINGS_DEFAULTS[row.key];
     } else if (row.key === 'evalPointsEnabled') {
       settings.evalPointsEnabled = row.value === '1';
     } else if (row.key.startsWith('evalPoints')) {
