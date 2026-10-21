@@ -404,6 +404,7 @@ td.delta-cell.is-negative {
 .score-value {
   min-width: 26px;
   padding: 0 2px;
+  direction: ltr;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
@@ -1362,4 +1363,236 @@ body.quiz-open {
     height: 20px;
   }
 }
+
+/* Score table becomes one card per student on phones: every subject stays
+   visible without a sideways scroll, and the row's commit action sits at the
+   bottom of its card. */
+@media (max-width: 700px) {
+  .score-table-wrap {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  table.grid-table.score-table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    font-size: 0.9rem;
+  }
+  .score-table thead {
+    display: none;
+  }
+  .score-table tbody {
+    display: block;
+  }
+  .score-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+  }
+  table.grid-table.score-table tbody tr > td {
+    position: static;
+    left: auto;
+    right: auto;
+    display: block;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: start;
+    white-space: normal;
+  }
+  table.grid-table.score-table tr > td[colspan] {
+    grid-column: 1 / -1;
+  }
+  table.grid-table.score-table td.col-rank {
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+    align-items: center;
+    justify-content: center;
+    align-self: start;
+    min-height: 38px;
+    padding: 0 6px;
+    border-radius: 12px;
+    background: var(--surface-2);
+    color: var(--brand);
+    font-size: 1rem;
+    font-weight: 800;
+  }
+  table.grid-table.score-table tr.rank-1 td.col-rank {
+    background: #fdf5e8;
+  }
+  table.grid-table.score-table tr.rank-2 td.col-rank {
+    background: #f6f7fb;
+  }
+  table.grid-table.score-table tr.rank-3 td.col-rank {
+    background: #fbf3ec;
+  }
+  table.grid-table.score-table td.name-cell {
+    grid-column: 2 / -1;
+    grid-row: 1;
+    align-self: center;
+  }
+  table.grid-table.score-table td.name-cell .row {
+    margin-top: 4px;
+  }
+  table.grid-table.score-table td.score-td {
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-2);
+  }
+  table.grid-table.score-table td.score-td::before {
+    content: attr(data-label);
+    display: block;
+    overflow: hidden;
+    margin-bottom: 2px;
+    padding: 0 2px;
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.5;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .score-table .score-cell {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .score-table .score-value {
+    flex: 1;
+    min-width: 34px;
+  }
+  table.grid-table.score-table td.total-cell {
+    display: flex;
+    grid-column: 1;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: var(--surface-2);
+    font-weight: 800;
+    color: var(--brand);
+  }
+  table.grid-table.score-table td.total-cell::before {
+    content: 'مجموع';
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  table.grid-table.score-table td.actions-td {
+    display: flex;
+    grid-column: 2;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0;
+  }
+  table.grid-table.score-table td.actions-td .row {
+    width: 100%;
+    justify-content: flex-end !important;
+    gap: 6px !important;
+  }
+  .score-table tr.rank-1 {
+    border-color: #f0d9b5;
+  }
+  .score-table tr.rank-2 {
+    border-color: #d9dce6;
+  }
+  .score-table tr.rank-3 {
+    border-color: #ead9cc;
+  }
+}
+
+/* Daily report rows also become cards on phones. */
+@media (max-width: 560px) {
+  table.grid-table.report-table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+  .report-table thead {
+    display: none;
+  }
+  .report-table tbody {
+    display: block;
+  }
+  .report-table tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px 8px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .report-table tr:last-child {
+    border-bottom: 0;
+  }
+  .report-table tr.is-selected {
+    padding: 10px 8px;
+    border-radius: 12px;
+    background: var(--surface-2);
+  }
+  table.grid-table.report-table tbody tr > td {
+    position: static;
+    left: auto;
+    right: auto;
+    display: block;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: start;
+    white-space: normal;
+  }
+  table.grid-table.report-table td:nth-child(1) {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  table.grid-table.report-table td.name-cell {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+  }
+  table.grid-table.report-table td:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+  table.grid-table.report-table td:nth-child(4) {
+    grid-column: 1;
+  }
+  table.grid-table.report-table td:nth-child(5) {
+    grid-column: 2;
+  }
+  table.grid-table.report-table td:nth-child(3)::before,
+  table.grid-table.report-table td:nth-child(4)::before,
+  table.grid-table.report-table td:nth-child(5)::before {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--muted);
+    font-size: 0.72rem;
+  }
+  table.grid-table.report-table td:nth-child(3)::before {
+    content: 'تغییرات امروز';
+  }
+  table.grid-table.report-table td:nth-child(4)::before {
+    content: 'جمع';
+  }
+  table.grid-table.report-table td:nth-child(5)::before {
+    content: 'شماره والد';
+  }
+  table.grid-table.report-table tr > td[colspan] {
+    grid-column: 1 / -1;
+  }
+}
+
 

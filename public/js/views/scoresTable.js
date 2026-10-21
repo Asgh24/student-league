@@ -83,7 +83,7 @@ export function createScoresTable({ leagueId, columns, students, reload }) {
     const title = delta
       ? `${column.name}: ${fa(base)} → ${fa(value)} (${sign}${fa(Math.abs(delta))})`
       : `ثبت مقدار دلخواه ${column.name}`;
-    return el('td.score-td', {}, [
+    return el('td.score-td', { dataset: { label: `${column.name} · گام ${fa(column.step)}` } }, [
       el('span.score-cell', {}, [
         iconButton('−', { label: `کاهش ${column.name}`, size: 'xs', onClick: () => stage(row.id, column.id, -column.step) }),
         el(`button.score-value${delta ? '.is-staged' : ''}`, {
@@ -133,7 +133,7 @@ export function createScoresTable({ leagueId, columns, students, reload }) {
       ]),
     ];
     for (const column of columns) cells.push(scoreCell(row, column));
-    cells.push(el('td.total-cell', {}, [
+    cells.push(el('td.total-cell', { dataset: { label: 'مجموع' } }, [
       el('span', { text: fa(total) }),
       stagedTotal
         ? el('span.chip.chip--amber', { text: `${stagedTotal > 0 ? '+' : '−'}${fa(Math.abs(stagedTotal))}` })
@@ -187,7 +187,7 @@ export function createScoresTable({ leagueId, columns, students, reload }) {
     },
   });
 
-  const table = el('table.grid-table');
+  const table = el('table.grid-table.score-table');
   table.appendChild(el('thead', {}, [
     el('tr', {}, [
       el('th.col-rank', { text: '#' }),
@@ -231,7 +231,7 @@ export function createScoresTable({ leagueId, columns, students, reload }) {
 
   return el('div', {}, [
     toolbar,
-    el('div.table-wrap', {}, [table]),
+    el('div.table-wrap.score-table-wrap', {}, [table]),
     footer,
     el('p.small.muted', { style: { marginTop: '6px' }, text: 'برای ثبت مقدار دلخواه روی عدد امتیاز بزنید.' }),
   ]);
