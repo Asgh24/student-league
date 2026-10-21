@@ -179,6 +179,10 @@ export async function renderTeacherDashboard() {
     const payload = await api.get('/leagues');
     leagues = payload?.items ?? [];
   } catch (error) {
+    if (error?.code === 'SUBSCRIPTION_REQUIRED') {
+      window.location.hash = '#/teacher/subscription';
+      return undefined;
+    }
     body.textContent = '';
     body.appendChild(emptyState({ icon: '⚠️', title: 'دریافت لیست لیگ‌ها ناموفق بود', hint: errorMessage(error) }));
     return undefined;
@@ -210,6 +214,10 @@ export async function renderTeacherDashboard() {
     const payload = await api.get(`/leagues/${active.id}`);
     detail = payload;
   } catch (error) {
+    if (error?.code === 'SUBSCRIPTION_REQUIRED') {
+      window.location.hash = '#/teacher/subscription';
+      return undefined;
+    }
     body.textContent = '';
     body.appendChild(emptyState({ icon: '⚠️', title: 'دریافت اطلاعات لیگ ناموفق بود', hint: errorMessage(error) }));
     return undefined;

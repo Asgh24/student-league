@@ -12,6 +12,8 @@ export function createMetaRouter({ version = '1.0.0' }) {
       timezoneOffsetMinutes: config.tzOffsetMinutes,
       likesPerDay: config.limits.likesPerDay,
       maxUploadBytes: config.limits.maxUploadBytes,
+      trialDays: config.trialDays,
+      paymentProvider: config.payments.provider,
     });
   });
 

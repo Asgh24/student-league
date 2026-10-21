@@ -58,6 +58,10 @@ export function publicUser(row) {
     role: row.role,
     displayName: row.display_name ?? row.displayName,
     persianDigits: (row.persian_digits ?? 1) === 1,
+    trialEndsAt: row.trial_ends_at ?? null,
+    subscriptionEndsAt: row.subscription_ends_at ?? null,
+    subscriptionPlanId: row.subscription_plan_id ?? null,
+    subscriptionNote: row.subscription_note ?? '',
   };
 }
 
@@ -69,10 +73,36 @@ export function findById(db, id) {
   return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
 }
 
-export function createUser(db, { username, password, role, displayName, persianDigits = true }) {
+export function createUser(db, {
+  username,
+  password,
+  role,
+  displayName,
+  persianDigits = true,
+  trialEndsAt = null,
+  subscriptionEndsAt = null,
+  subscriptionPlanId = null,
+  subscriptionNote = '',
+}) {
   const info = db
-    .prepare('INSERT INTO users (username, password_hash, role, display_name, persian_digits, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(String(username).trim(), hashPassword(password), role, String(displayName).trim(), persianDigits ? 1 : 0, new Date().toISOString());
+    .prepare(`
+      INSERT INTO users (
+        username, password_hash, role, display_name, persian_digits, created_at,
+        trial_ends_at, subscription_ends_at, subscription_plan_id, subscription_note
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(
+      String(username).trim(),
+      hashPassword(password),
+      role,
+      String(displayName).trim(),
+      persianDigits ? 1 : 0,
+      new Date().toISOString(),
+      trialEndsAt,
+      subscriptionEndsAt,
+      subscriptionPlanId,
+      String(subscriptionNote ?? ''),
+    );
   return findById(db, info.lastInsertRowid);
 }
 

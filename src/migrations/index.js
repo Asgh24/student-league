@@ -5,6 +5,7 @@ import * as evaluationPoints from './004_evaluation_points.js';
 import * as quizSessions from './005_quiz_sessions.js';
 import * as seating from './006_seating.js';
 import * as contactsReports from './007_contacts_reports.js';
+import * as platform from './008_platform.js';
 
 /** Ordered list of migrations applied automatically on boot. */
-export const migrations = [core, tools, evaluations, evaluationPoints, quizSessions, seating, contactsReports];
+export const migrations = [core, tools, evaluations, evaluationPoints, quizSessions, seating, contactsReports, platform];

@@ -34,7 +34,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 
 ## Highlights
 
-**Teacher area** – dashboard «میزکار معلم» with 12 always-unlocked tools:
+**Teacher area** – dashboard «میزکار معلم» with 12 tools included in every plan:
 
 | Tool | What it does |
 | --- | --- |
@@ -51,7 +51,18 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | برنامه هفتگی | Saturday→Friday weekly schedule grid |
 | ارسال فایل | Uploaded files shared with the class, downloaded safely |
 
-**Student area** – tabs: میزکار, کارنامه, ارزشیابی, حضور و غیاب, تیم من, تاریخچه, رده‌بندی, لایک, تنظیمات.
+**Platform area** – multi-teacher SaaS features built into the same process:
+
+| Area | What it does |
+| --- | --- |
+| ثبت‌نام معلم | Self-service signup on the login screen; every new teacher starts a configurable **14-day trial** with all tools unlocked |
+| اشتراک من | Trial/subscription banner, remaining days, admin-editable plans, Zarinpal checkout and payment history; an expired teacher is redirected here instead of seeing a broken dashboard |
+| پنل مدیر | Separate site-owner login: teacher search/filter, manual subscription grants, plan CRUD, revenue and payment ledger, inbox/SMS health |
+| پیام‌ها | Ticket-like teacher↔student inbox with threads, unread counters, read receipts and polling; both sides can reply from the same shared view |
+| پنل پیامک | sms.ir credit/lines, test and bulk sends, league-report outbox and admin campaign retry; without credentials everything stays queued instead of being lost |
+| پرداخت‌ها | Zarinpal v4 request/verify (Rial conversion, sandbox support) and a local `mock` gateway for development before a merchant ID exists |
+
+**Student area** – tabs: میزکار, کارنامه, ارزشیابی, حضور و غیاب, تیم من, تاریخچه, رده‌بندی, لایک, پیام‌ها, تنظیمات.
 The کارنامه tab carries a profile band, subject + date-range filters, one line per
 recorded score session (subject, teacher topic, date, points, derived quality) and
 the per-subject totals table + chart.
@@ -136,6 +147,17 @@ is only needed if you upgrade Chart.js or the Vazirmatn font package.
 | `PORT` | `3000` | Some PaaS providers inject their own value — do not override it there |
 | `HOST` | `0.0.0.0` | Bind address |
 | `APP_NAME` | `لیگ جامع دانش‌آموزی` | Brand shown in the topbar, page title and `/meta` |
+| `APP_BASE_URL` | `http://localhost:$PORT` | Public origin used for payment callbacks and post-payment redirects. **Must match the real public URL in production** |
+| `TRIAL_DAYS` | `14` | Free full-access days granted to every self-registered teacher (1–365) |
+| `ADMIN_ENABLED` | `true` | Creates/uses the site-owner account from the `ADMIN_*` variables |
+| `ADMIN_USERNAME` | `admin` | Site-owner login name |
+| `ADMIN_PASSWORD` | `admin1234` in development only | **Required in production** before the admin account is created |
+| `ADMIN_NAME` | `مدیر سامانه` | Display name in the owner panel |
+| `PAYMENT_PROVIDER` | `mock` in development, `zarinpal` in production | `mock` renders a local no-money checkout; `zarinpal` calls the official v4 API |
+| `ZARINPAL_MERCHANT_ID` | — | Merchant ID from the Zarinpal panel; required for real payments |
+| `ZARINPAL_SANDBOX` | `false` | Use `sandbox.zarinpal.com` for testing |
+| `ZARINPAL_BASE_URL` | auto | Override `payment.zarinpal.com` / `sandbox.zarinpal.com` |
+| `ZARINPAL_TIMEOUT_MS` | `15000` | Timeout of one Zarinpal request |
 | `DATA_DIR` | `./data` | **Must be a persistent volume.** Holds the database, `uploads/` and `backups/` |
 | `SESSION_SECRET` | — | **Required in production**, at least 16 characters |
 | `SESSION_COOKIE_NAME` | `scl.sid` | Session cookie name |
@@ -215,6 +237,7 @@ on a fresh volume.
 │   ├── css/                    # base.css (layout/RTL), components.css (UI kit)
 │   ├── js/
 │   │   ├── views/              # teacher + student screens, one module per screen
+│   │   │   ├── admin/          # owner panel: dashboard, teachers, plans, payments, SMS
 │   │   │   └── student/        # student portal screens
 │   │   ├── api.js              # fetch wrapper, CSRF handling, error mapping
 │   │   ├── charts.js           # Chart.js helpers (points-over-time line chart)
@@ -233,9 +256,9 @@ on a fresh volume.
 │   ├── lib/                    # errors, http helpers, jalali, normalize, random, zod schemas, github API client
 │   ├── middleware/             # session, auth, ownership, csrf, rateLimit, errorHandler
 │   ├── migrations/             # versioned, auto-applied schema migrations
-│   ├── repositories/           # data access for users and leagues
-│   ├── routes/                 # one Express router per resource
-│   ├── services/               # scoring, attendance, teams, student portal, off-site backups
+│   ├── repositories/           # data access for users, admins and leagues
+│   ├── routes/                 # one Express router per resource (admin, payments, messages…)
+│   ├── services/               # scoring, attendance, teams, subscriptions, payments, SMS, off-site backups
 │   ├── app.js                  # Express app (helmet, session, routers, SPA fallback)
 │   ├── bootstrap.js            # first teacher account for an empty (production) database
 │   ├── config.js               # env parsing and lazy config getters
@@ -261,7 +284,13 @@ Created and upgraded by versioned migrations on boot (`src/migrations/`).
 
 | Table | Purpose |
 | --- | --- |
-| `users` | Teachers and students; bcrypt hash, role, display name, persian-digits flag |
+| `users` | Teachers and students; bcrypt hash, role, display name, persian-digits flag, trial/subscription window and plan reference |
+| `admins` | Site-owner accounts stored separately so `/admin/*` can never be reached by a teacher or student session |
+| `subscription_plans` | Admin-editable plans: name, days, Toman price, description, active flag, sort order |
+| `payments` | Subscription ledger: teacher, plan snapshot, amount/days, status, provider, authority/ref id, timestamps and admin note |
+| `conversations` | One teacher↔student thread (`UNIQUE(teacher_id, student_id)`) with subject and last-message time |
+| `messages` | Thread messages with sender role and `read_at` for unread counts |
+| `sms_campaigns` | Admin test/bulk SMS rows (queued/sent/failed), kept separately from league-report outbox rows |
 | `leagues` | One or more per teacher; status `active`/`completed`, final ranking JSON |
 | `students` | League members, optional link to a `users` row for login |
 | `columns` | Dynamic score columns per league (name, step, position) |
@@ -365,7 +394,7 @@ Pagination: list endpoints accept `?page=1&limit=50` and answer
 | Method | Path | Role | Body / query | Response |
 | --- | --- | --- | --- | --- |
 | GET | `/healthz` | public | — | `{ status, app, version, env, database{ ok, integrity }, uptimeSeconds, time }` |
-| GET | `/meta` | public | — | `{ appName, version, timezoneOffsetMinutes, likesPerDay, maxUploadBytes }` |
+| GET | `/meta` | public | — | `{ appName, version, timezoneOffsetMinutes, likesPerDay, maxUploadBytes, trialDays, paymentProvider }` |
 
 ### Authentication
 
@@ -373,9 +402,10 @@ Pagination: list endpoints accept `?page=1&limit=50` and answer
 | --- | --- | --- | --- | --- |
 | GET | `/auth/csrf` | public | — | `{ csrfToken }` |
 | GET | `/auth/me` | public | — | `{ user \| null, csrfToken }` |
-| POST | `/auth/login` | public | `{ username, password }` | `{ user, csrfToken }` |
+| POST | `/auth/login` | public | `{ username, password }` | `{ user, csrfToken }` — also accepts the site owner |
+| POST | `/auth/register` | public | `{ displayName, username, password }` | `201 { user, csrfToken, trialDays }` — teacher self-signup with a trial |
 | POST | `/auth/logout` | auth | — | `{ ok: true }` |
-| POST | `/auth/password` | auth | `{ currentPassword, newPassword }` | `{ ok: true }` |
+| POST | `/auth/password` | auth | `{ currentPassword, newPassword }` | `{ ok: true }` — works for teachers and the owner |
 
 ### Leagues (teacher)
 
@@ -541,6 +571,85 @@ mapping described above (and only when it is enabled).
 A student only ever reaches its **own** records: the portal is scoped by the
 session's student row, and there is no endpoint that accepts another student id.
 
+### Subscriptions and payments (teacher)
+
+All subscription routes require a teacher session. An expired teacher receives
+HTTP `402` with code `SUBSCRIPTION_REQUIRED` from the teaching APIs, and the SPA
+redirects to `#/teacher/subscription`. The subscription page itself stays
+accessible so the teacher can renew.
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| GET | `/subscription/status` | — | `{ subscription{ status, active, daysLeft, endsAt, source }, plans[], payments[], paymentProvider{ provider, configured, label, sandbox }, trialDays }` |
+| POST | `/subscription/checkout` | `{ planId }` | `201 { payment, provider, redirectUrl }` — `mock` local page or Zarinpal `StartPay` URL |
+| GET | `/subscription/payments/:id` | — | `{ payment }` (only the caller's payment) |
+
+Public callbacks live **outside** `/api/v1` and do not use CSRF or JSON:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/payments/zarinpal/callback` | Zarinpal returns `Authority` + `Status`; the server verifies with the v4 API and activates the plan exactly once |
+| GET | `/payments/mock/:id` | Local mock checkout page (development only) |
+| GET | `/payments/mock/:id/success` \| `/cancel` | Complete or cancel a mock payment |
+| GET | `/payments/status` | Diagnostic: active provider, configured flag and callback URL |
+
+Amounts are stored and displayed in **Toman**, but Zarinpal receives Rial
+(Toman × 10). Verify success codes are `100` and `101` (already verified).
+
+### Messaging (teacher and student)
+
+The same API is used by both roles; ownership is enforced on every route and
+admins are deliberately excluded.
+
+| Method | Path | Body / query | Response |
+| --- | --- | --- | --- |
+| GET | `/messages/threads` | — | `{ items[{ id, participantName, subject, unread, lastMessage }], unreadTotal }` |
+| GET | `/messages/threads/:id` | `?limit=&before=` | `{ thread, messages[], unreadTotal }` — marks incoming messages as read |
+| POST | `/messages/threads` | teacher `{ studentId }`, student `{}` | `201 { thread, created }` (existing thread returns `200`) |
+| POST | `/messages/threads/:id/messages` | `{ body }` | `201 { message, thread }` |
+| POST | `/messages/threads/:id/read` | — | `{ ok, unreadTotal }` |
+| GET | `/messages/unread` | — | `{ count }` |
+| GET | `/messages/contacts` | — | `{ items, role }` — students with logins for a teacher, or the student's teacher |
+
+Conversations are unique per `(teacher_id, student_id)`. Messages are capped at
+4000 characters, store `read_at`, and the inbox polls every 10 seconds while
+preserving a typed draft.
+
+### Admin panel (site owner)
+
+A separate `admins` table backs `/admin/*`; these routes never accept a teacher or
+student session.
+
+| Method | Path | Body / query | Response |
+| --- | --- | --- | --- |
+| GET | `/admin/dashboard` | — | teacher counts, revenue, pending payments, leagues/students/messages/SMS health, recent payments |
+| GET | `/admin/teachers` | `?search=&status=active\|trial\|expired&page=&limit=` | `{ items, total, counts }` |
+| GET | `/admin/teachers/:id` | — | `{ teacher }` |
+| POST | `/admin/teachers` | `{ displayName, username, password, trialDays }` | `201 { teacher }` (`trialDays: 0` creates without a trial) |
+| POST | `/admin/teachers/:id/subscription` | `{ days, note? }` | `{ subscription, payment, teacher }` — manual paid grant, appended to the ledger |
+| GET | `/admin/plans` | — | `{ items }` (including inactive plans) |
+| POST | `/admin/plans` | `{ name, days, price, description?, active?, sortOrder? }` | `201 { item }` |
+| PATCH | `/admin/plans/:id` | any plan field | `{ item }` |
+| DELETE | `/admin/plans/:id` | — | `{ ok: true }` — soft delete (`active = 0`) |
+| GET | `/admin/payments` | `?search=&status=&page=&limit=` | `{ items, total, page, limit, pages }` |
+
+### SMS console (site owner)
+
+| Method | Path | Body / query | Response |
+| --- | --- | --- | --- |
+| GET | `/admin/sms` | `?status=&limit=` | `{ config, counts{ outbox, campaigns }, outbox[], campaigns[] }` |
+| GET | `/admin/sms/messages` \| `/campaigns` | `?status=&limit=` | `{ items }` |
+| GET | `/admin/sms/credit` | — | `{ ok, credit }` or `{ ok:false, message }` |
+| GET | `/admin/sms/lines` | — | `{ ok, lines }` or `{ ok:false, message }` |
+| POST | `/admin/sms/test` | `{ mobile, message }` | `201 { item, delivery }` |
+| POST | `/admin/sms/bulk` | `{ mobiles[], message }` | `201 { count, status: queued\|sent\|failed, delivery }` |
+| POST | `/admin/sms/messages/:id/retry` | — | retry a league-report outbox row |
+| POST | `/admin/sms/campaigns/:id/retry` | — | retry an admin test/bulk campaign row |
+
+Bulk numbers are normalized to `09xxxxxxxxx`, duplicates are removed, and at
+most 100 numbers are accepted. When sms.ir is not configured, rows remain
+`queued`; nothing is silently dropped.
+
 ---
 
 ## Security
@@ -586,13 +695,13 @@ npm run lint    # eslint .
 Latest run on this machine (Windows, Node 26.3.0):
 
 ```
- Test Files  20 passed (20)
-      Tests  242 passed (242)
+ Test Files  27 passed (27)
+      Tests  325 passed (325)
 ```
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
-| `auth.test.js` | 12 | Login success/failure, wrong password, unknown user, rate limiting, role separation, logout, password change, missing and stale CSRF tokens |
+| `auth.test.js` | 15 | Login success/failure, wrong password, unknown user, rate limiting, role separation, logout, password change, session lifetime, missing and stale CSRF tokens |
 | `authorization.test.js` | 12 | Teacher A cannot read/write teacher B's league; students blocked from teacher endpoints |
 | `validation.test.js` | 11 | zod rejections with `VALIDATION_ERROR` + `details`, bad ids, out-of-range values |
 | `scores.test.js` | 10 | Transactional commit with several deltas, totals, history rows, zero-delta rejection, matrix shape |
@@ -603,10 +712,17 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `jalali.test.js` | 16 | Gregorian↔Jalali round-trips, leap years (1399/1403 vs 1400), month lengths, reference dates |
 | `uploads.test.js` | 11 | Allowed/blocked extensions, MIME and size checks, filename sanitization, authorization on download |
 | `raffle.test.js` | 11 | Randomness, exclude-previous, pool cycling, history, reset |
-| `tools.test.js` | 13 | Wheel segments, shuffle, timer set/adjust/clear, live board payload |
+| `tools.test.js` | 16 | Wheel segments, shuffle, timer, live board, homework, Q&A/presentation quiz, schedule, league lifecycle |
 | `student.test.js` | 20 | Dashboard series/medals, report card totals + session lines with derived quality and subject/date filters, grade setting, own attendance/history, likes quota, self-like rejection, settings |
-| `evaluations.test.js` | 18 | Evaluation CRUD + column reference, numeric/descriptive marks, scale and label validation, clearing a mark, subject/date filters, no transfer into league points, foreign-teacher and student isolation, own-marks student payload |
-| `frontend.test.js` | 33 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (12 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, modal focus/footer lifecycle |
+| `evaluations.test.js` | 23 | Evaluation CRUD + column reference, numeric/descriptive marks, scale and label validation, clearing a mark, subject/date filters, no transfer into league points, foreign-teacher and student isolation, own-marks student payload |
+| `reports.test.js` | 7 | Daily parent report grouping, message trimming, authorization and SMS queue/delivery paths |
+| `contacts.test.js` | 5 | Parent/student phone normalization, validation, clearing and teacher isolation |
+| `seating.test.js` | 6 | Seating plan persistence, random reshuffle, clearing, teacher-only access |
+| `platform.test.js` | 10 | Teacher signup + 14-day trial, expired access + admin grant, admin/teacher/student separation, teacher create/search/filter, plan CRUD, mock checkout and renewal, Zarinpal request/verify (Rial, codes 100/101) |
+| `messages.test.js` | 12 | Teacher↔student threads, unread/read receipts, replies, ownership isolation, no-login students, empty body, unique conversations, contacts, admin exclusion |
+| `smsAdmin.test.js` | 4 | Admin SMS config, queued test messages without credentials, normalized bulk send, credit, invalid numbers and outbox retry |
+| `frontend.test.js` | 54 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (12 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, modal focus/footer lifecycle |
+| `frontendPlatform.test.js` | 7 | Credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, shared inbox thread/composer, admin settings label |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 2 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not) |
 | `githubBackup.test.js` | 22 | Off-site backups against an in-memory GitHub Contents API: upload + manifest checksum, full push→restore round trip, retention/pruning, public-repo refusal, size limit, missing repo and 404 handling, checksum-mismatch safety, restore skipped for a non-empty database, scheduler due-time/retry/state handling with the real logger object |
@@ -640,7 +756,13 @@ Executed against a live server (`NODE_ENV=development`, fresh `DATA_DIR`, seeded
 | Evaluation filters | ✅ subject filter `هدیه` → 1 row, «پاک کردن» → 2 rows |
 | No transfer into league points | ✅ امتیاز کل stayed `۳۳۳` (رتبه `۱۱`) across both evaluations and `score_history` gained no rows |
 | Student ارزشیابی tab | ✅ own mark `۱۸` with `💎 خیلی خوب`, `میانگین کلاس ۱۹.۹۱`, `رتبهٔ ۲۲ از ۲۲`; the descriptive row shows `👍 خوب`; class aggregates only, no classmate named |
-| All 9 student tabs | ✅ render with no errors and no horizontal scroll |
+| All 10 student tabs | ✅ render with no errors and no horizontal scroll |
+| Teacher self-signup | ✅ `ثبت‌نام معلم` shows «۱۴ روز استفادهٔ آزمایشی رایگان», creates the account, logs in and opens an empty workbench |
+| Admin login | ✅ owner opens `#/admin`; dashboard shows teacher/trial/expired/student/league/message totals and the SMS warning when unconfigured |
+| Admin teachers / plans / payments / SMS | ✅ all four views render from the live API with no console errors; plans show the three seeded prices, payments filter and SMS console are usable |
+| Mock subscription purchase | ✅ plan card → local gateway → «پرداخت موفق» → banner switches to «اشتراک فعال», 30 days added, `MOCK-1` appears in the history |
+| Teacher → student message | ✅ teacher creates a thread, sends a message; student sees unread `۱`, opens it, replies, and the message is stored with the thread |
+| Footer credits | ✅ every page shows «تهیه‌کنندگان: محمدجواد ابراهیمی - علی طاهری» and the copyright line with the current Jalali year |
 | Privacy probes from a student session | ✅ `/leagues`, `/leagues/1/scores`, `/leagues/1/attendance`, `/leagues/1/evaluations` → `403 FORBIDDEN`; another student's data unreachable |
 | Drawer geometry (RTL) | ✅ open = flush to the right edge, closed = fully off-screen (`x ≥ viewport`) |
 | Horizontal overflow | ✅ `scrollWidth ≤ clientWidth` on every checked page; wide tables scroll inside their own card; verified at desktop width and at a 340 px column (≈360 px device) |
@@ -854,8 +976,13 @@ container reset.
 
 | Role | Username | Password |
 | --- | --- | --- |
+| Site owner (admin panel) | `admin` | `admin1234` (development only) |
 | Teacher | `teacher` | `teacher1234` |
 | Student | `student1` | `student1234` |
+
+A teacher account can also be created from **ثبت‌نام معلم** on the login page.
+The admin account lives in a separate table and opens `#/admin`; set
+`ADMIN_PASSWORD` before the first production boot.
 
 Only the first demo student gets a login (the seeded class has 22 students; the
 other 21 exist as roster entries without credentials). Teachers create logins for
@@ -885,8 +1012,12 @@ npm run bootstrap -- --force      # reset that account's password (forgotten log
 * **Single process, single volume.** SQLite (WAL) handles a classroom of users
   comfortably, but the app is not designed to run as multiple replicas against one
   file. Use one instance, or one volume per instance.
-* **Polling, not push.** The live board and the league timer refresh on an
-  interval; there is no WebSocket/SSE channel.
+* **Polling, not push.** The live board, the league timer and the message inbox
+  refresh on an interval; there is no WebSocket/SSE channel. Each open inbox polls
+  every 10 seconds.
+* **Payment setup is external.** `mock` works offline, but real Zarinpal payments
+  need `ZARINPAL_MERCHANT_ID`, a public HTTPS domain in `APP_BASE_URL`, and a
+  merchant account. Sandbox mode is available (`ZARINPAL_SANDBOX=true`).
 * **Timer-driven tools are client-side.** The countdown/stopwatch tools use the
   browser clock and `requestAnimationFrame`, so a background tab may show a stale
   value until it is focused again.
@@ -902,10 +1033,13 @@ npm run bootstrap -- --force      # reset that account's password (forgotten log
   keeps every uploaded version in history, so prune with `BACKUP_GITHUB_KEEP` rather than
   expecting space to be freed.
 * **No email.** Password recovery is manual (teacher resets student passwords).
-* **SMS requires sms.ir credentials.** The daily parent report is always stored in the
-  `sms_messages` outbox first; without `SMSIR_API_KEY` and `SMSIR_LINE_NUMBER` it stays
-  `queued` instead of failing, and no background job retries it automatically — resend
-  from «گزارش روزانه» after configuring the provider.
+* **SMS requires sms.ir credentials.** Daily reports and admin test/bulk messages are
+  stored in the outbox first; without `SMSIR_API_KEY` and `SMSIR_LINE_NUMBER` they stay
+  `queued` instead of failing. There is no automatic retry worker — after configuring
+  the provider, use «تلاش دوباره» in the admin SMS panel or resend from «گزارش روزانه».
+* **No self-service billing portal beyond subscriptions.** There are no invoices,
+  refunds or proration; the owner can grant days manually and the payment ledger keeps
+  the audit trail.
 * **No i18n framework.** The UI is Persian-only; `APP_NAME` is the single
   configurable brand string.
 * **Rate limiting is in-memory per process.** Restarting the server resets the

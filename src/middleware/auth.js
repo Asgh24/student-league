@@ -1,9 +1,34 @@
-import { forbidden, notFound, unauthorized } from '../lib/errors.js';
+import { AppError, forbidden, notFound, unauthorized } from '../lib/errors.js';
+import { findAdminById } from '../repositories/admins.js';
+import { teacherAccess } from '../services/subscription.js';
 
-/** Loads `req.user` from the session when present. */
+/** Loads `req.user` from the session when present (teacher, student or admin). */
 export function attachUser(db) {
-  const findUser = db.prepare('SELECT id, username, role, display_name, persian_digits FROM users WHERE id = ?');
+  const findUser = db.prepare(`
+    SELECT id, username, role, display_name, persian_digits, trial_ends_at, subscription_ends_at,
+           subscription_plan_id, subscription_note
+    FROM users WHERE id = ?
+  `);
   return function attachUserMiddleware(req, _res, next) {
+    // Admin sessions use a separate id so an admin and a teacher with the same
+    // numeric id can never be confused.
+    if (req.session?.adminId) {
+      const admin = findAdminById(db, req.session.adminId);
+      if (admin) {
+        req.user = {
+          id: admin.id,
+          username: admin.username,
+          role: 'admin',
+          displayName: admin.display_name,
+          persianDigits: true,
+          isAdmin: true,
+        };
+      } else {
+        delete req.session.adminId;
+      }
+      return next();
+    }
+
     const userId = req.session?.userId;
     if (userId) {
       const user = findUser.get(userId);
@@ -14,12 +39,16 @@ export function attachUser(db) {
           role: user.role,
           displayName: user.display_name,
           persianDigits: user.persian_digits === 1,
+          trialEndsAt: user.trial_ends_at,
+          subscriptionEndsAt: user.subscription_ends_at,
+          subscriptionPlanId: user.subscription_plan_id,
+          subscriptionNote: user.subscription_note,
         };
       } else {
         delete req.session.userId;
       }
     }
-    next();
+    return next();
   };
 }
 
@@ -28,9 +57,33 @@ export function requireAuth(req, _res, next) {
   return next();
 }
 
+export function requireAdmin(req, _res, next) {
+  if (!req.user) return next(unauthorized());
+  if (req.user.role !== 'admin') return next(forbidden('این بخش فقط برای مدیر سامانه است'));
+  return next();
+}
+
+/** Role check only; used by the subscription/renewal endpoints so an expired
+ * teacher can still pay and recover access. */
+export function requireTeacherAccount(req, _res, next) {
+  if (!req.user) return next(unauthorized());
+  if (req.user.role !== 'teacher') return next(forbidden('این بخش فقط برای معلم است'));
+  return next();
+}
+
+/** Teacher role plus an unexpired trial/subscription. */
 export function requireTeacher(req, _res, next) {
   if (!req.user) return next(unauthorized());
   if (req.user.role !== 'teacher') return next(forbidden('این بخش فقط برای معلم است'));
+  const access = teacherAccess(req.user);
+  if (!access.active) {
+    return next(new AppError(
+      402,
+      'SUBSCRIPTION_REQUIRED',
+      'دورهٔ آزمایشی یا اشتراک شما به پایان رسیده است. برای ادامه، اشتراک خود را تمدید کنید',
+      access,
+    ));
+  }
   return next();
 }
 

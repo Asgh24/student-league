@@ -121,4 +121,7 @@ export const api = {
 export const meta = () => request('GET', '/meta');
 export const me = () => request('GET', '/auth/me');
 export const login = (username, password) => request('POST', '/auth/login', { body: { username, password } });
+export const register = (displayName, username, password) => request('POST', '/auth/register', {
+  body: { displayName, username, password },
+});
 export const logout = () => request('POST', '/auth/logout', { body: {} });

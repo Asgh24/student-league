@@ -130,6 +130,46 @@ export const config = {
   get logLevel() {
     return process.env.LOG_LEVEL || (this.isProd ? 'info' : 'debug');
   },
+  /** Public origin used to build payment callbacks and redirects. */
+  get appBaseUrl() {
+    return (process.env.APP_BASE_URL || `http://localhost:${this.port}`).replace(/\/+$/, '');
+  },
+  /** Days of free access given to every self-registered teacher. */
+  get trialDays() {
+    return Math.max(1, Math.min(365, int(process.env.TRIAL_DAYS, 14)));
+  },
+  /**
+   * Site-owner account. It lives in its own table because `users.role` only
+   * allows teacher/student. Development gets a known default so the panel is
+   * usable immediately; production requires ADMIN_PASSWORD before an account is
+   * created.
+   */
+  get admin() {
+    return {
+      enabled: bool(process.env.ADMIN_ENABLED, true),
+      username: (process.env.ADMIN_USERNAME || 'admin').trim(),
+      password: process.env.ADMIN_PASSWORD || (this.isProd ? '' : 'admin1234'),
+      displayName: (process.env.ADMIN_NAME || 'مدیر سامانه').trim(),
+    };
+  },
+  /**
+   * Payment gateway. Zarinpal is the production default because its v4
+   * request/verify API needs no SDK. `mock` renders a local checkout page so the
+   * entire subscription flow can be exercised before a merchant ID exists.
+   */
+  get payments() {
+    const provider = String(process.env.PAYMENT_PROVIDER || (this.isProd ? 'zarinpal' : 'mock')).toLowerCase();
+    const sandbox = bool(process.env.ZARINPAL_SANDBOX, false);
+    return {
+      provider: provider === 'zarinpal' ? 'zarinpal' : 'mock',
+      zarinpal: {
+        merchantId: (process.env.ZARINPAL_MERCHANT_ID || '').trim(),
+        sandbox,
+        baseUrl: (process.env.ZARINPAL_BASE_URL || (sandbox ? 'https://sandbox.zarinpal.com' : 'https://payment.zarinpal.com')).replace(/\/+$/, ''),
+        timeoutMs: Math.max(1000, int(process.env.ZARINPAL_TIMEOUT_MS, 15000)),
+      },
+    };
+  },
   /**
    * sms.ir REST API credentials (https://sms.ir/rest-api/). When the key or the
    * line number is missing, daily reports are still stored in the outbox but

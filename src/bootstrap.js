@@ -1,5 +1,6 @@
 import { config } from './config.js';
 import { createUser, findByUsername, updatePassword } from './repositories/users.js';
+import { createAdmin, findAdminByUsername, updateAdminPassword } from './repositories/admins.js';
 
 /**
  * Creates the first teacher account on an empty database.
@@ -50,4 +51,43 @@ export function runBootstrap(db, { cfg = config.bootstrap, force = false, log = 
   });
   log(`bootstrap: created the first teacher "${cfg.username}" — log in and change the password`, { id: user.id });
   return { created: true, username: user.username, id: user.id };
+}
+
+/**
+ * Creates the site-owner account. It is independent of the teacher bootstrap:
+ * a database with teachers can still gain its first admin on deploy. The
+ * development default is admin/admin1234; production only creates an account
+ * when ADMIN_PASSWORD is set.
+ */
+export function runAdminBootstrap(db, { cfg = config.admin, force = false, log = () => {} } = {}) {
+  if (!cfg.enabled) return { created: false, reason: 'disabled' };
+  if (!cfg.username) return { created: false, reason: 'invalid-config', problem: 'ADMIN_USERNAME is empty' };
+  if (!cfg.password) {
+    return {
+      created: false,
+      reason: 'invalid-config',
+      problem: 'ADMIN_PASSWORD is required before an admin account can be created',
+    };
+  }
+  if (cfg.password.length < MIN_PASSWORD_LENGTH) {
+    return { created: false, reason: 'invalid-config', problem: `admin password is shorter than ${MIN_PASSWORD_LENGTH} characters` };
+  }
+
+  const existing = findAdminByUsername(db, cfg.username);
+  if (existing) {
+    if (force) {
+      updateAdminPassword(db, existing.id, cfg.password);
+      log(`bootstrap: admin password reset for "${cfg.username}"`);
+      return { created: false, updated: true, username: cfg.username };
+    }
+    return { created: false, reason: 'already-exists', username: cfg.username };
+  }
+
+  const admin = createAdmin(db, {
+    username: cfg.username,
+    password: cfg.password,
+    displayName: cfg.displayName,
+  });
+  log(`bootstrap: created the site admin "${cfg.username}" — change ADMIN_PASSWORD after the first login`, { id: admin.id });
+  return { created: true, username: admin.username, id: admin.id };
 }

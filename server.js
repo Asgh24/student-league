@@ -6,7 +6,7 @@ import { migrations } from './src/migrations/index.js';
 import { createApp, publicDir } from './src/app.js';
 import { createSessionStore, startSessionSweep } from './src/middleware/session.js';
 import { runSeed } from './src/seed.js';
-import { runBootstrap } from './src/bootstrap.js';
+import { runAdminBootstrap, runBootstrap } from './src/bootstrap.js';
 import { APP_VERSION } from './src/version.js';
 import { createClientFor, isConfigured, pushBackup, restoreOnBoot } from './src/services/githubBackup.js';
 import { createBackupScheduler } from './src/services/backupScheduler.js';
@@ -32,6 +32,11 @@ async function boot() {
     const result = runBootstrap(db, { log: logBackup });
     if (result.reason === 'invalid-config') logger.warn('no teacher account exists yet', { reason: result.problem });
   }
+
+  // The site owner can exist even when teachers already do (unlike the first
+  // teacher bootstrap, which only touches an empty users table).
+  const adminResult = runAdminBootstrap(db, { log: logBackup });
+  if (adminResult.reason === 'invalid-config') logger.warn('no admin account exists yet', { reason: adminResult.problem });
 
   // Demo data is generated automatically outside production when the DB is empty.
   const hasUsers = db.prepare('SELECT COUNT(*) AS n FROM users').get().n > 0;

@@ -71,6 +71,76 @@ export const schemas = {
     password: z.string().min(4, 'گذرواژه حداقل ۴ نویسه').max(200),
   }),
 
+  /** Teacher self-registration; gets a trial window from config.trialDays. */
+  teacherRegister: z.object({
+    displayName: z.string().trim().min(2, 'نام نمایشی حداقل ۲ نویسه').max(80),
+    username: z.string().trim().min(3, 'نام کاربری حداقل ۳ نویسه').max(32)
+      .regex(/^[A-Za-z0-9_.\-\u0600-\u06FF]+$/, 'نام کاربری فقط می‌تواند شامل حروف، عدد، نقطه، خط تیره و زیرخط باشد'),
+    password: z.string().min(8, 'گذرواژه حداقل ۸ نویسه').max(200),
+  }),
+
+  subscriptionCheckout: z.object({
+    planId: z.coerce.number().int().positive(),
+  }),
+
+  adminTeacherCreate: z.object({
+    displayName: z.string().trim().min(2).max(80),
+    username: z.string().trim().min(3).max(32)
+      .regex(/^[A-Za-z0-9_.\-\u0600-\u06FF]+$/, 'نام کاربری نامعتبر است'),
+    password: z.string().min(8).max(200),
+    trialDays: z.coerce.number().int().min(0).max(365).default(14),
+  }),
+
+  adminGrant: z.object({
+    days: z.coerce.number().int().min(1, 'تعداد روز باید بیشتر از صفر باشد').max(3650),
+    note: z.string().trim().max(200).default(''),
+  }),
+
+  planCreate: z.object({
+    name: z.string().trim().min(2, 'نام طرح الزامی است').max(80),
+    days: z.coerce.number().int().min(1).max(3650),
+    price: z.coerce.number().int().min(0).max(1000000000),
+    description: z.string().trim().max(300).default(''),
+    active: z.boolean().default(true),
+    sortOrder: z.coerce.number().int().min(0).max(999).default(0),
+  }),
+
+  planUpdate: z.object({
+    name: z.string().trim().min(2).max(80).optional(),
+    days: z.coerce.number().int().min(1).max(3650).optional(),
+    price: z.coerce.number().int().min(0).max(1000000000).optional(),
+    description: z.string().trim().max(300).optional(),
+    active: z.boolean().optional(),
+    sortOrder: z.coerce.number().int().min(0).max(999).optional(),
+  }).refine((value) => Object.keys(value).length > 0, { message: 'هیچ تغییری ارسال نشده است' }),
+
+  /** In-site messaging between one teacher and one student account. */
+  messageStart: z.object({
+    studentId: z.coerce.number().int().positive().optional(),
+    subject: z.string().trim().max(120).default(''),
+  }),
+
+  messageSend: z.object({
+    body: z.string().trim().min(1, 'متن پیام خالی است').max(4000),
+  }),
+
+  messageList: z.object({
+    limit: z.coerce.number().int().min(1).max(200).default(100),
+    before: z.coerce.number().int().positive().optional(),
+  }),
+
+  /** Admin SMS panel. Mobiles are normalized by the route. */
+  smsTest: z.object({
+    mobile: z.string().trim().min(10).max(20),
+    message: z.string().trim().min(1, 'متن پیامک الزامی است').max(1000),
+  }),
+
+  smsBulk: z.object({
+    mobiles: z.array(z.string().trim().min(10).max(20)).min(1, 'حداقل یک شماره لازم است').max(100),
+    message: z.string().trim().min(1, 'متن پیامک الزامی است').max(1000),
+    kind: z.enum(['test', 'bulk']).default('bulk'),
+  }),
+
   changePassword: z.object({
     currentPassword: z.string().min(4).max(200),
     newPassword: z.string().min(6, 'گذرواژه جدید حداقل ۶ نویسه').max(200),

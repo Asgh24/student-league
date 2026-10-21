@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { createAnswersRouter, createLeagueQuestionsRouter, createLeagueQuizRouter, createQuestionsRouter } from './qa.js';
+import { createAdminRouter } from './admin.js';
 import { createAttendanceRouter } from './attendance.js';
 import { createAuthRouter } from './auth.js';
 import { createColumnsRouter, createLeagueColumnsRouter } from './columns.js';
@@ -8,12 +9,14 @@ import { createLeagueEvaluationsRouter } from './evaluations.js';
 import { createFilesRouter, createLeagueFilesRouter } from './files.js';
 import { createHomeworkRouter, createLeagueHomeworkRouter } from './homework.js';
 import { createLeaguesRouter } from './leagues.js';
+import { createMessagesRouter } from './messages.js';
 import { createMetaRouter } from './meta.js';
 import { createLeagueReportsRouter } from './reports.js';
 import { createScheduleRouter } from './schedule.js';
 import { createLeagueSeatingRouter } from './seating.js';
 import { createScoresRouter } from './scores.js';
 import { createStudentPortalRouter } from './student.js';
+import { createSubscriptionRouter } from './subscription.js';
 import { createLeagueStudentsRouter, createStudentsRouter } from './students.js';
 import { createLeagueTeamsRouter, createTeamsRouter } from './teams.js';
 import { createToolsRouter } from './tools.js';
@@ -24,6 +27,9 @@ export function createApiRouter(ctx) {
 
   router.use('/auth', createAuthRouter(ctx));
   router.use('/meta', createMetaRouter(ctx));
+  router.use('/admin', createAdminRouter(ctx));
+  router.use('/subscription', createSubscriptionRouter(ctx));
+  router.use('/messages', createMessagesRouter(ctx));
 
   // Teacher resources scoped to a league the teacher owns.
   router.use('/leagues/:id/students', createLeagueStudentsRouter(ctx));

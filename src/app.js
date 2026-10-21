@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { config } from './config.js';
 import { createApiRouter } from './routes/index.js';
 import { createHealthRouter } from './routes/health.js';
+import { createPaymentRouter } from './routes/payments.js';
 import { attachUser } from './middleware/auth.js';
 import { csrfProtection } from './middleware/csrf.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -67,6 +68,10 @@ export function createApp({ db, version = '1.0.0', sessionStore = createSessionS
   );
 
   app.use('/healthz', createHealthRouter({ db, version }));
+
+  // Payment provider redirects arrive here. They are deliberately outside
+  // `/api/v1` (no CSRF/JSON middleware) and before the SPA fallback.
+  app.use('/payments', createPaymentRouter({ db }));
 
   app.use(sessionMiddleware(sessionStore));
   // No global CSRF-token middleware: only the auth endpoints need a token before

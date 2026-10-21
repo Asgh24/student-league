@@ -79,7 +79,9 @@ export function renderSettings() {
       ]),
       el('p', {}, [
         el('strong', { text: 'نقش: ' }),
-        el('span', { text: state.user.role === 'teacher' ? 'معلم' : 'دانش‌آموز' }),
+        el('span', {
+          text: state.user.role === 'admin' ? 'مدیر سامانه' : state.user.role === 'teacher' ? 'معلم' : 'دانش‌آموز',
+        }),
       ]),
       el('p', {}, [
         el('strong', { text: 'نام نمایشی: ' }),

@@ -5,7 +5,14 @@ const STORAGE_KEY = 'scl.leagueId';
 const listeners = new Set();
 
 export const state = {
-  meta: { appName: 'لیگ جامع دانش‌آموزی', version: '', likesPerDay: 10, maxUploadBytes: 0 },
+  meta: {
+    appName: 'لیگ جامع دانش‌آموزی',
+    version: '',
+    likesPerDay: 10,
+    maxUploadBytes: 0,
+    trialDays: 14,
+    paymentProvider: 'mock',
+  },
   user: null,
   leagueId: null,
   persianDigits: true,
@@ -35,6 +42,7 @@ export function setMeta(meta) {
 export function setUser(user) {
   state.user = user ?? null;
   state.persianDigits = user ? user.persianDigits !== false : true;
+  if (user?.role !== 'teacher' && user?.role !== 'student') state.leagueId = null;
   emit();
 }
 
@@ -73,8 +81,13 @@ export function isStudent() {
   return state.user?.role === 'student';
 }
 
+export function isAdmin() {
+  return state.user?.role === 'admin';
+}
+
 /** Landing route for the current session. */
 export function homePath() {
+  if (isAdmin()) return 'admin';
   if (isTeacher()) return 'teacher';
   if (isStudent()) return 'student';
   return 'login';
