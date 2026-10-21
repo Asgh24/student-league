@@ -3,11 +3,13 @@ import { createAnswersRouter, createLeagueQuestionsRouter, createLeagueQuizRoute
 import { createAttendanceRouter } from './attendance.js';
 import { createAuthRouter } from './auth.js';
 import { createColumnsRouter, createLeagueColumnsRouter } from './columns.js';
+import { createLeagueContactsRouter } from './contacts.js';
 import { createLeagueEvaluationsRouter } from './evaluations.js';
 import { createFilesRouter, createLeagueFilesRouter } from './files.js';
 import { createHomeworkRouter, createLeagueHomeworkRouter } from './homework.js';
 import { createLeaguesRouter } from './leagues.js';
 import { createMetaRouter } from './meta.js';
+import { createLeagueReportsRouter } from './reports.js';
 import { createScheduleRouter } from './schedule.js';
 import { createLeagueSeatingRouter } from './seating.js';
 import { createScoresRouter } from './scores.js';
@@ -34,6 +36,8 @@ export function createApiRouter(ctx) {
   router.use('/leagues/:id/questions', createLeagueQuestionsRouter(ctx));
   router.use('/leagues/:id/quiz-sessions', createLeagueQuizRouter(ctx));
   router.use('/leagues/:id/seating', createLeagueSeatingRouter(ctx));
+  router.use('/leagues/:id/contacts', createLeagueContactsRouter(ctx));
+  router.use('/leagues/:id/reports', createLeagueReportsRouter(ctx));
   router.use('/leagues/:id/tools', createToolsRouter(ctx));
   router.use('/leagues/:id/schedule', createScheduleRouter(ctx));
   router.use('/leagues/:id/files', createLeagueFilesRouter(ctx));

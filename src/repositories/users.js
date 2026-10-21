@@ -3,14 +3,36 @@ import { randomUUID } from 'node:crypto';
 
 export const BCRYPT_ROUNDS = 10;
 
+/**
+ * Canonical form of a password before it reaches bcrypt. Persian keyboards
+ * produce visually identical characters (Arabic Yeh/Kaf, Arabic/Persian
+ * digits, ZWNJ), so passwords may be typed in more than one way. Unifying them
+ * makes a Persian password work regardless of the keyboard that typed it,
+ * while ASCII passwords are left untouched.
+ */
+export function normalizePassword(plain) {
+  return String(plain ?? '')
+    .normalize('NFC')
+    .replace(/[\u064A\u0649]/g, '\u06CC')
+    .replace(/\u0643/g, '\u06A9')
+    .replace(/[\u06F0-\u06F9]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0))
+    .replace(/[\u0660-\u0669]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '')
+    .replace(/\u00A0/g, ' ')
+    .trim();
+}
+
 export function hashPassword(plain) {
-  return bcrypt.hashSync(String(plain), BCRYPT_ROUNDS);
+  return bcrypt.hashSync(normalizePassword(plain), BCRYPT_ROUNDS);
 }
 
 export function verifyPassword(plain, hash) {
   if (!hash) return false;
   try {
-    return bcrypt.compareSync(String(plain), hash);
+    if (bcrypt.compareSync(String(plain), hash)) return true;
+    // Hashes created before the normalization existed keep working.
+    const normalized = normalizePassword(plain);
+    return normalized !== String(plain) ? bcrypt.compareSync(normalized, hash) : false;
   } catch {
     return false;
   }

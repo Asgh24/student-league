@@ -54,6 +54,10 @@ const { renderEvaluations } = await import('../public/js/views/evaluations.js');
 const { renderQa } = await import('../public/js/views/qa.js');
 const { renderSeating } = await import('../public/js/views/seating.js');
 const { renderStudentEvaluations } = await import('../public/js/views/student/evaluations.js');
+const { renderContacts } = await import('../public/js/views/contacts.js');
+const { renderReports } = await import('../public/js/views/reports.js');
+const { renderFun } = await import('../public/js/views/fun.js');
+const { renderSettings } = await import('../public/js/views/settings.js');
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const shellHtml = fs.readFileSync(path.join(rootDir, 'public', 'index.html'), 'utf8');
@@ -282,7 +286,7 @@ describe('student progress chart', () => {
 });
 
 describe('teacher dashboard', () => {
-  it('renders the league selector and the twelve tool tiles', async () => {
+  it('renders the league selector and the sixteen tool tiles', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/leagues') {
         return Promise.resolve({
@@ -301,12 +305,53 @@ describe('teacher dashboard', () => {
     await renderTeacherDashboard();
 
     const tiles = document.querySelectorAll('#view .tile');
-    expect(tiles).toHaveLength(13);
+    expect(tiles).toHaveLength(16);
     expect(document.querySelector('#view').textContent).toContain('کلاس ششم الف');
     expect(document.querySelector('#view').textContent).toContain('لیگ انفرادی');
     expect(document.querySelector('#view').textContent).toContain('ارزشیابی دروس');
     expect(document.querySelector('#view').textContent).toContain('جای‌گیری');
+    expect(document.querySelector('#view').textContent).toContain('شماره‌ها');
+    expect(document.querySelector('#view').textContent).toContain('گزارش روزانه');
+    expect(document.querySelector('#view').textContent).toContain('سرگرمی');
     expect(state.leagueId).toBe(3);
+  });
+
+  it('shows the first league immediately after it is created', async () => {
+    let created = false;
+    api.get.mockImplementation((url) => {
+      if (url === '/leagues') {
+        return Promise.resolve({
+          items: created
+            ? [{ id: 7, name: 'لیگ تازه', status: 'active', studentCount: 0, teamCount: 0, createdAt: '2026-10-21T00:00:00.000Z' }]
+            : [],
+        });
+      }
+      if (url === '/leagues/7') {
+        return Promise.resolve({
+          league: { id: 7, name: 'لیگ تازه', status: 'active', createdAt: '2026-10-21T00:00:00.000Z' },
+          summary: { studentCount: 0, presentToday: 0, absentToday: 0, lateToday: 0, unmarkedToday: 0, averageScore: 0, teamCount: 0, columnCount: 8 },
+        });
+      }
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+    api.post.mockImplementation((url) => {
+      expect(url).toBe('/leagues');
+      created = true;
+      return Promise.resolve({ league: { id: 7, name: 'لیگ تازه' } });
+    });
+
+    await renderTeacherDashboard();
+    expect(document.querySelector('#view').textContent).toContain('هنوز لیگی نساخته‌اید');
+
+    [...document.querySelectorAll('#view button')].find((node) => node.textContent.includes('ساخت اولین لیگ')).click();
+    await vi.waitFor(() => expect(document.querySelector('#f-name')).not.toBeNull());
+    document.querySelector('#f-name').value = 'لیگ تازه';
+    [...document.querySelectorAll('#modal-root button')].find((node) => node.textContent.includes('ساخت لیگ')).click();
+
+    // no manual refresh and no second call to renderTeacherDashboard
+    await vi.waitFor(() => expect(document.querySelector('#view').textContent).toContain('لیگ تازه'));
+    expect(document.querySelectorAll('#view .tile')).toHaveLength(16);
+    expect(api.get).toHaveBeenCalledWith('/leagues/7');
   });
 });
 
@@ -930,7 +975,7 @@ describe('classroom seating', () => {
     });
   }
 
-  it('shows the classroom grid and seats a student by hand', async () => {
+  it('seats a student by hand and saves the plan explicitly', async () => {
     mockSeating();
     api.put.mockImplementation((url, payload) => {
       expect(url).toBe('/leagues/1/seating');
@@ -945,10 +990,21 @@ describe('classroom seating', () => {
     expect(view.querySelector('#seat-cols').value).toBe('3');
     expect(view.textContent).toContain('آرش آزمون');
 
-    // pick a student, then click an empty seat
+    // the save button starts disabled: nothing changed yet
+    const saveButton = () => [...document.querySelectorAll('#view button')].find((node) => node.textContent.includes('ذخیره چینش'));
+    expect(saveButton().disabled).toBe(true);
+
+    // pick a student, then click an empty seat: this stays local
     const chip = [...view.querySelectorAll('.seating__list .chip--button')].find((node) => node.textContent === 'آرش آزمون');
     chip.click();
     document.querySelector('.seat[data-row="0"][data-col="1"]').click();
+
+    expect(document.querySelector('.seat[data-row="0"][data-col="1"]').textContent).toContain('آرش آزمون');
+    expect(api.put).not.toHaveBeenCalled();
+    expect(document.querySelector('#view').textContent).toContain('تغییرات ذخیره نشده');
+
+    await vi.waitFor(() => expect(saveButton().disabled).toBe(false));
+    saveButton().click();
 
     await vi.waitFor(() => expect(api.put).toHaveBeenCalled());
     expect(api.put).toHaveBeenCalledWith('/leagues/1/seating', {
@@ -956,7 +1012,8 @@ describe('classroom seating', () => {
       cols: 3,
       seats: [{ row: 0, col: 1, studentId: 11 }],
     });
-    await vi.waitFor(() => expect(document.querySelector('.seat[data-row="0"][data-col="1"]').textContent).toContain('آرش آزمون'));
+    await vi.waitFor(() => expect(document.querySelector('#view').textContent).toContain('چیدمان ذخیره شد'));
+    expect(document.querySelector('.seat[data-row="0"][data-col="1"]').textContent).toContain('آرش آزمون');
   });
 
   it('shuffles the class with one click', async () => {
@@ -1019,6 +1076,161 @@ describe('student evaluations view', () => {
     api.get.mockResolvedValue({ items: [], stats: { count: 0, graded: 0, average: null, bestSubject: null, subjects: [] } });
     await renderStudentEvaluations();
     expect(document.querySelector('#view').textContent).toContain('هنوز ارزشیابی‌ای ثبت نشده است');
+  });
+});
+
+describe('parent contact numbers', () => {
+  it('lists the students and saves a normalized parent number', async () => {
+    api.get.mockResolvedValue({
+      league: { id: 1, name: 'لیگ تست' },
+      items: [
+        { id: 11, name: 'آرش آزمون', parentPhone: '', studentPhone: '', hasLogin: true, hasParentPhone: false },
+        { id: 12, name: 'بهار بنفش', parentPhone: '09121112233', studentPhone: '', hasLogin: false, hasParentPhone: true },
+      ],
+    });
+    api.patch.mockResolvedValue({
+      student: { id: 11, name: 'آرش آزمون', parentPhone: '09123456789', studentPhone: '', hasLogin: true, hasParentPhone: true },
+    });
+
+    await renderContacts({ params: { id: '1' } });
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('شماره‌های والدین و دانش‌آموزان');
+    expect(view.textContent).toContain('آرش آزمون');
+    expect(view.querySelectorAll('tbody tr')).toHaveLength(2);
+
+    const parent = view.querySelector('[aria-label="شماره والد آرش آزمون"]');
+    parent.value = '۰۹۱۲۳۴۵۶۷۸۹';
+    parent.dispatchEvent(new window.Event('input', { bubbles: true }));
+
+    const rowSave = [...view.querySelectorAll('tbody tr')][0].querySelector('button');
+    expect(rowSave.disabled).toBe(false);
+    rowSave.click();
+
+    await vi.waitFor(() => expect(api.patch).toHaveBeenCalledWith('/leagues/1/contacts/11', {
+      parentPhone: '09123456789',
+      studentPhone: '',
+    }));
+    await vi.waitFor(() => expect(parent.value).toBe('09123456789'));
+    expect(view.textContent).toContain('شماره والد');
+  });
+
+  it('rejects a short parent number before calling the API', async () => {
+    api.get.mockResolvedValue({
+      league: { id: 1, name: 'لیگ تست' },
+      items: [{ id: 11, name: 'آرش آزمون', parentPhone: '', studentPhone: '', hasLogin: false, hasParentPhone: false }],
+    });
+
+    await renderContacts({ params: { id: '1' } });
+    const view = document.querySelector('#view');
+    const parent = view.querySelector('[aria-label="شماره والد آرش آزمون"]');
+    parent.value = '12345';
+    parent.dispatchEvent(new window.Event('input', { bubbles: true }));
+    view.querySelector('tbody tr button').click();
+
+    await vi.waitFor(() => expect(document.getElementById('toasts').textContent).toContain('شماره والد باید'));
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+});
+
+describe('daily parent report', () => {
+  function reportPayload() {
+    return {
+      date: '2026-10-21',
+      league: { id: 1, name: 'لیگ تست' },
+      items: [
+        {
+          studentId: 11, name: 'آرش آزمون', parentPhone: '09123456789', studentPhone: '', hasParentPhone: true,
+          totalDelta: -100, changes: 1,
+          lines: [{ columnName: 'انضباطی', delta: -100, changes: 1 }],
+          message: 'لیگ تست | گزارش روزانه ۱۴۰۵/۰۷/۲۹\nآرش آزمون: انضباطی -۱۰۰\nجمع تغییرات: -۱۰۰',
+        },
+        {
+          studentId: 12, name: 'بهار بنفش', parentPhone: '', studentPhone: '', hasParentPhone: false,
+          totalDelta: 25, changes: 1,
+          lines: [{ columnName: 'ریاضی', delta: 25, changes: 1 }],
+          message: 'لیگ تست | گزارش روزانه ۱۴۰۵/۰۷/۲۹\nبهار بنفش: ریاضی +۲۵\nجمع تغییرات: +۲۵',
+        },
+      ],
+      summary: { students: 2, changed: 2, withoutParentPhone: 1, sent: 0, queued: 0, failed: 0 },
+      sms: { provider: 'sms.ir', configured: false, lineNumber: '', hasApiKey: false },
+      recent: [],
+    };
+  }
+
+  it('selects students with a change and a parent number and previews the message', async () => {
+    api.get.mockResolvedValue(reportPayload());
+    await renderReports({ params: { id: '1' } });
+
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('گزارش روزانه والدین');
+    expect(view.querySelector('#report-date')).not.toBeNull();
+    expect(view.querySelector('#report-date').querySelectorAll('select')).toHaveLength(3);
+    expect(view.textContent).toContain('سرویس پیامک پیکربندی نشده است');
+    expect(view.textContent).toContain('انضباطی');
+    expect(view.textContent).toContain('آرش آزمون: انضباطی');
+    expect(view.textContent).toContain('۱ دانش‌آموز انتخاب شده');
+
+    const checks = [...view.querySelectorAll('tbody input[type="checkbox"]')];
+    expect(checks.map((node) => node.checked)).toEqual([true, false]);
+    expect(api.get).toHaveBeenCalledWith(expect.stringMatching(/^\/leagues\/1\/reports\/daily\?date=\d{4}-\d{2}-\d{2}$/));
+  });
+
+  it('sends the selected reports and shows the queued result', async () => {
+    api.get.mockResolvedValue(reportPayload());
+    api.post.mockResolvedValue({
+      ...reportPayload(),
+      results: [{ studentId: 11, name: 'آرش آزمون', status: 'queued', messageId: 1 }],
+      counts: { sent: 0, queued: 1, failed: 0, skipped: 0 },
+    });
+
+    await renderReports({ params: { id: '1' } });
+    const send = [...document.querySelectorAll('#view button')].find((node) => node.textContent.includes('ارسال پیامک به والدین'));
+    expect(send.disabled).toBe(false);
+    send.click();
+
+    await vi.waitFor(() => expect(document.querySelector('#modal-root .modal')).not.toBeNull());
+    [...document.querySelectorAll('#modal-root button')].find((node) => node.textContent.includes('ارسال پیامک')).click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/leagues/1/reports/daily/send', {
+      date: '2026-10-21',
+      studentIds: [11],
+    }));
+    await vi.waitFor(() => expect(document.querySelector('#view').textContent).toContain('نتیجهٔ ارسال'));
+    expect(document.querySelector('#view').textContent).toContain('در صف');
+    expect(document.querySelector('#view').textContent).toContain('ارسال‌شده ۰');
+  });
+});
+
+describe('fun tab', () => {
+  it('embeds neal.fun and offers an external fallback link', async () => {
+    setUser({ id: 1, role: 'teacher', username: 'teacher-a', displayName: 'خانم الف', persianDigits: true });
+    renderFun();
+
+    const view = document.querySelector('#view');
+    const frame = view.querySelector('iframe.fun-frame');
+    expect(frame).not.toBeNull();
+    expect(frame.getAttribute('src')).toBe('https://neal.fun/');
+    expect(view.textContent).toContain('neal.fun');
+    const external = view.querySelector('a[href="https://neal.fun/"]');
+    expect(external.getAttribute('target')).toBe('_blank');
+    expect(external.getAttribute('rel')).toContain('noopener');
+    expect(view.textContent).toContain('باز کردن در پنجرهٔ جدید');
+  });
+});
+
+describe('password settings', () => {
+  it('lets the teacher change their own password', () => {
+    setUser({ id: 1, role: 'teacher', username: 'teacher-a', displayName: 'خانم الف', persianDigits: true });
+    renderSettings();
+    expect(document.querySelector('#pw-current')).not.toBeNull();
+    expect(document.querySelector('#view').textContent).toContain('گذرواژهٔ فارسی هم پذیرفته می‌شود');
+  });
+
+  it('hides the password form from students and explains the teacher rule', () => {
+    setUser({ id: 4, role: 'student', username: 'student-a', displayName: 'آرش آزمون', persianDigits: true });
+    renderSettings();
+    expect(document.querySelector('#pw-current')).toBeNull();
+    expect(document.querySelector('#view').textContent).toContain('تغییر گذرواژه فقط توسط معلم انجام می‌شود');
   });
 });
 

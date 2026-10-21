@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
-import { AppError } from '../lib/errors.js';
+import { AppError, forbidden } from '../lib/errors.js';
 import { asyncHandler } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
 import { config } from '../config.js';
@@ -80,6 +80,10 @@ export function createAuthRouter({ db }) {
     requireAuth,
     validate({ body: schemas.changePassword }),
     asyncHandler(async (req, res) => {
+      // Student passwords are managed by the teacher, never by the student.
+      if (req.user.role !== 'teacher') {
+        throw forbidden('تغییر گذرواژه فقط توسط معلم انجام می‌شود');
+      }
       const row = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
       if (!verifyPassword(req.body.currentPassword, row.password_hash)) {
         throw new AppError(400, 'WRONG_PASSWORD', 'گذرواژه فعلی نادرست است');

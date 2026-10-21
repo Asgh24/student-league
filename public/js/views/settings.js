@@ -1,4 +1,4 @@
-/** Change password (both roles) and the Persian digit preference (students). */
+/** Teacher password change and the Persian digit preference (students). */
 
 import { api } from '../api.js';
 import { el } from '../dom.js';
@@ -33,8 +33,15 @@ function passwordCard() {
 
   return card({ title: 'تغییر گذرواژه', icon: '🔑' }, [
     field('گذرواژه فعلی', current),
-    field('گذرواژه جدید', next, 'حداقل ۶ نویسه'),
+    field('گذرواژه جدید', next, 'حداقل ۶ نویسه؛ گذرواژهٔ فارسی هم پذیرفته می‌شود.'),
     el('div.row', {}, [save]),
+  ]);
+}
+
+/** Students cannot change their own password; the teacher does it for them. */
+function studentPasswordNote() {
+  return card({ title: 'گذرواژه', icon: '🔒' }, [
+    el('p.small', { text: 'تغییر گذرواژه فقط توسط معلم انجام می‌شود. اگر گذرواژهٔ خود را فراموش کرده‌اید، از معلم بخواهید آن را تغییر دهد.' }),
   ]);
 }
 
@@ -62,7 +69,7 @@ function digitsCard() {
 
 export function renderSettings() {
   setTopbarTitle('تنظیمات');
-  const cards = [passwordCard()];
+  const cards = [isStudent() ? studentPasswordNote() : passwordCard()];
   if (isStudent()) cards.push(digitsCard());
   if (state.user) {
     cards.push(card({ title: 'حساب کاربری', icon: '🪪' }, [

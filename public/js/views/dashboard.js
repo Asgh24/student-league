@@ -1,4 +1,4 @@
-/** Teacher workspace: league switching, summary cards and the 11 tool tiles. */
+/** Teacher workspace: league switching, summary cards and the tool tiles. */
 
 import { api } from '../api.js';
 import { el } from '../dom.js';
@@ -22,6 +22,9 @@ const TOOLS = [
   { suffix: 'schedule', icon: '🗂️', label: 'برنامه هفتگی' },
   { suffix: 'files', icon: '📎', label: 'ارسال فایل' },
   { suffix: 'seating', icon: '🪑', label: 'جای‌گیری' },
+  { suffix: 'contacts', icon: '📱', label: 'شماره‌ها' },
+  { suffix: 'reports', icon: '📨', label: 'گزارش روزانه' },
+  { href: 'fun', icon: '🎮', label: 'سرگرمی' },
 ];
 
 async function createLeague() {
@@ -36,6 +39,9 @@ async function createLeague() {
     const payload = await api.post('/leagues', { name: values.name.trim() });
     setLeagueId(payload?.league?.id ?? null);
     notify.ok('لیگ با موفقیت ساخته شد');
+    // Re-render immediately: on a fresh account the dashboard previously kept
+    // showing the empty state until a manual page refresh.
+    await renderTeacherDashboard();
   } catch (error) {
     notify.error(errorMessage(error));
   }
@@ -213,7 +219,7 @@ export async function renderTeacherDashboard() {
   const tiles = TOOLS.map((tool) => tile({
     icon: tool.icon,
     label: tool.label,
-    href: tool.suffix ? `${base}/${tool.suffix}` : base,
+    href: tool.href ?? (tool.suffix ? `${base}/${tool.suffix}` : base),
   }));
 
   body.textContent = '';

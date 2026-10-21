@@ -315,6 +315,18 @@ export const schemas = {
     })).max(400),
   }),
 
+  /** «شماره‌ها»: parent and student mobile numbers (empty = not provided). */
+  contactSave: z.object({
+    parentPhone: z.string().trim().max(20).default(''),
+    studentPhone: z.string().trim().max(20).default(''),
+  }),
+
+  /** «گزارش روزانه»: the day plus the students whose parents receive it. */
+  dailyReportSend: z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ نامعتبر است'),
+    studentIds: z.array(z.coerce.number().int().positive()).min(1, 'حداقل یک دانش‌آموز انتخاب کنید').max(200),
+  }),
+
   scheduleSave: z.object({
     slots: z.array(z.object({
       dayIndex: z.coerce.number().int().min(0).max(6),

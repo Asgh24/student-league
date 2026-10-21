@@ -18,15 +18,18 @@ import { homePath, isStudent, isTeacher, setLeagueId, setMeta, setUser, state, s
 import { notify } from './ui.js';
 
 import { renderAttendance } from './views/attendance.js';
+import { renderContacts } from './views/contacts.js';
 import { renderTeacherDashboard } from './views/dashboard.js';
 import { renderEvaluations } from './views/evaluations.js';
 import { renderFiles } from './views/files.js';
+import { renderFun } from './views/fun.js';
 import { renderHomework } from './views/homework.js';
 import { renderLeague } from './views/league.js';
 import { renderLiveBoard } from './views/liveboard.js';
 import { renderLogin } from './views/login.js';
 import { renderQa } from './views/qa.js';
 import { renderRaffle } from './views/raffle.js';
+import { renderReports } from './views/reports.js';
 import { renderSchedule } from './views/schedule.js';
 import { renderSeating } from './views/seating.js';
 import { renderSettings } from './views/settings.js';
@@ -60,6 +63,8 @@ function leagueNavItems() {
     ['schedule', '🗂️', 'برنامه هفتگی'],
     ['files', '📎', 'ارسال فایل'],
     ['seating', '🪑', 'جای‌گیری'],
+    ['contacts', '📱', 'شماره‌ها'],
+    ['reports', '📨', 'گزارش روزانه'],
   ];
   return entries.map(([suffix, icon, label]) => {
     const href = suffix ? `${base}/${suffix}` : base;
@@ -79,6 +84,7 @@ function teacherNav() {
   }
   items.push({ group: 'حساب کاربری' });
   items.push({ label: 'تنظیمات', icon: '⚙️', href: 'teacher/settings', active: active === 'teacher/settings' });
+  items.push({ label: 'سرگرمی', icon: '🎮', href: 'fun', active: active === 'fun' });
   return items;
 }
 
@@ -94,6 +100,7 @@ function studentNav() {
     ['student/ranking', '🏅', 'رده‌بندی'],
     ['student/likes', '💜', 'لایک'],
     ['student/settings', '⚙️', 'تنظیمات'],
+    ['fun', '🎮', 'سرگرمی'],
   ];
   return tabs.map(([href, icon, label]) => ({ label, icon, href, active: active === href }));
 }
@@ -161,6 +168,9 @@ const routes = [
   { path: 'teacher/league/:id/schedule', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSchedule(ctx) },
   { path: 'teacher/league/:id/files', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderFiles(ctx) },
   { path: 'teacher/league/:id/seating', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSeating(ctx) },
+  { path: 'teacher/league/:id/contacts', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderContacts(ctx) },
+  { path: 'teacher/league/:id/reports', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderReports(ctx) },
+  { path: 'fun', guard: () => (state.user ? undefined : 'login'), view: () => renderFun() },
   { path: 'student', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentDashboard(ctx) },
   { path: 'student/report-card', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderReportCard(ctx) },
   { path: 'student/evaluations', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentEvaluations(ctx) },

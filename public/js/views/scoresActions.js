@@ -194,6 +194,29 @@ export async function recordWithReason(row, columns, leagueId, reload) {
   }
 }
 
+async function changeStudentPassword(row) {
+  const values = await formDialog({
+    title: `تغییر گذرواژه — ${row.name}`,
+    description: 'گذرواژهٔ جدید را معلم تعیین می‌کند. گذرواژهٔ فارسی (مثلاً «رمزمن») هم پذیرفته می‌شود.',
+    submitLabel: 'ذخیره گذرواژه',
+    fields: [
+      { name: 'password', label: 'گذرواژه جدید', type: 'text', required: true, placeholder: 'حداقل ۶ نویسه' },
+    ],
+  });
+  if (!values) return;
+  const password = values.password.trim();
+  if (password.length < 6) {
+    notify.error('گذرواژه باید حداقل ۶ نویسه باشد');
+    return;
+  }
+  try {
+    await api.post(`/students/${row.id}/password`, { password });
+    notify.ok('گذرواژه دانش‌آموز تغییر کرد');
+  } catch (error) {
+    notify.error(errorMessage(error));
+  }
+}
+
 export async function showProfile(row, { columns = [], leagueId = null, reload = () => {} } = {}) {
   const body = el('div', {}, [el('p.small.muted', { text: 'در حال بارگذاری…' })]);
   const modal = openModal({ title: `پرونده ${row.name}`, body });
@@ -248,6 +271,9 @@ export async function showProfile(row, { columns = [], leagueId = null, reload =
         button('افزودن قهرمانی', { kind: 'ghost', icon: '🏆', onClick: () => { modal.close(); addChampionship(row, reload); } }),
         button('حذف آخرین قهرمانی', { kind: 'ghost', icon: '🎗️', onClick: () => { modal.close(); removeChampionship(row, reload); } }),
         button('ثبت امتیاز با دلیل', { kind: 'ghost', icon: '📝', onClick: () => { modal.close(); recordWithReason(row, columns, leagueId, reload); } }),
+        student.hasLogin
+          ? button('تغییر گذرواژه', { kind: 'ghost', icon: '🔑', onClick: () => { modal.close(); changeStudentPassword(row); } })
+          : null,
         button('حذف دانش‌آموز', { kind: 'danger', icon: '✕', onClick: () => { modal.close(); deleteStudent(row, reload); } }),
       ]),
     ]);

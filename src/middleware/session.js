@@ -110,7 +110,9 @@ export function sessionMiddleware(store) {
     // Only persist a session once the app actually stores something in it
     // (a CSRF token or a login), so anonymous page views cannot create rows.
     saveUninitialized: false,
-    rolling: true,
+    // The session lives for exactly `sessionMaxAgeMs` (24h by default) from the
+    // login; normal activity must not extend that window.
+    rolling: false,
     proxy: config.trustProxy,
     cookie: {
       httpOnly: true,

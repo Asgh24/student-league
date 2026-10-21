@@ -60,7 +60,9 @@ export const config = {
     return process.env.SESSION_COOKIE_NAME || 'scl.sid';
   },
   get sessionMaxAgeMs() {
-    return int(process.env.SESSION_MAX_AGE_MS, 7 * 24 * 60 * 60 * 1000);
+    // Sessions always live for 24 hours from the moment of login. `rolling` is
+    // disabled in the session middleware so activity does not extend it.
+    return int(process.env.SESSION_MAX_AGE_MS, 24 * 60 * 60 * 1000);
   },
   get trustProxy() {
     // Fail closed: only trust X-Forwarded-* when the deployment explicitly opts
@@ -127,6 +129,22 @@ export const config = {
   },
   get logLevel() {
     return process.env.LOG_LEVEL || (this.isProd ? 'info' : 'debug');
+  },
+  /**
+   * sms.ir REST API credentials (https://sms.ir/rest-api/). When the key or the
+   * line number is missing, daily reports are still stored in the outbox but
+   * are not handed to the provider.
+   */
+  get sms() {
+    const apiKey = (process.env.SMSIR_API_KEY || '').trim();
+    const lineNumber = (process.env.SMSIR_LINE_NUMBER || '').trim();
+    return {
+      apiKey,
+      lineNumber,
+      baseUrl: (process.env.SMSIR_BASE_URL || 'https://api.sms.ir').replace(/\/+$/, ''),
+      enabled: bool(process.env.SMS_ENABLED, Boolean(apiKey && lineNumber)),
+      timeoutMs: Math.max(1000, int(process.env.SMS_TIMEOUT_MS, 15000)),
+    };
   },
 };
 

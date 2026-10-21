@@ -34,6 +34,8 @@ export function createApp({ db, version = '1.0.0', sessionStore = createSessionS
           imgSrc: ["'self'", 'data:', 'blob:'],
           fontSrc: ["'self'", 'data:'],
           connectSrc: ["'self'"],
+          // The «سرگرمی» tab embeds neal.fun; everything else stays same-origin.
+          frameSrc: ["'self'", 'https://neal.fun', 'https://*.neal.fun'],
           objectSrc: ["'none'"],
           baseUri: ["'self'"],
           formAction: ["'self'"],

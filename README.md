@@ -139,7 +139,7 @@ is only needed if you upgrade Chart.js or the Vazirmatn font package.
 | `DATA_DIR` | `./data` | **Must be a persistent volume.** Holds the database, `uploads/` and `backups/` |
 | `SESSION_SECRET` | — | **Required in production**, at least 16 characters |
 | `SESSION_COOKIE_NAME` | `scl.sid` | Session cookie name |
-| `SESSION_MAX_AGE_MS` | `604800000` | Session lifetime (7 days) |
+| `SESSION_MAX_AGE_MS` | `86400000` | Session lifetime: 24 hours from login (activity does not extend it) |
 | `TRUST_PROXY` | `false` | `true` behind a reverse proxy / PaaS load balancer so `secure` cookies and client IPs work |
 | `APP_TZ_OFFSET_MINUTES` | `210` | Minutes east of UTC for "today" and Jalali dates (Iran = UTC+03:30) |
 | `SEED_ENABLED` | `true` | Allows demo seeding (never runs in production) |
@@ -158,6 +158,11 @@ is only needed if you upgrade Chart.js or the Vazirmatn font package.
 | `LIKES_PER_DAY` | `10` | Likes a student may give per day |
 | `BODY_LIMIT` | `512kb` | JSON body limit |
 | `LOG_LEVEL` | `debug` | `debug` \| `info` \| `warn` \| `error` |
+| `SMS_ENABLED` | auto | Enables real delivery; defaults to `true` only when the key **and** line number are set |
+| `SMSIR_API_KEY` | — | sms.ir REST API key (`X-API-KEY` header) |
+| `SMSIR_LINE_NUMBER` | — | sms.ir sender line number used by `POST /v1/send/bulk` |
+| `SMSIR_BASE_URL` | `https://api.sms.ir` | Override for a proxy or test server |
+| `SMS_TIMEOUT_MS` | `15000` | Timeout of one provider request |
 | `BACKUP_DIR` | `$DATA_DIR/backups` | Output directory of `npm run backup` |
 | `BACKUP_GITHUB_ENABLED` | `false` | Uploads snapshots to GitHub on an interval |
 | `BACKUP_GITHUB_REPO` | — | `owner/name` of a **private** repository that holds the snapshots |
@@ -896,7 +901,11 @@ npm run bootstrap -- --force      # reset that account's password (forgotten log
   the database, so a long retention window fills the backup repository over time; Git also
   keeps every uploaded version in history, so prune with `BACKUP_GITHUB_KEEP` rather than
   expecting space to be freed.
-* **No email/SMS.** Password recovery is manual (teacher resets student passwords).
+* **No email.** Password recovery is manual (teacher resets student passwords).
+* **SMS requires sms.ir credentials.** The daily parent report is always stored in the
+  `sms_messages` outbox first; without `SMSIR_API_KEY` and `SMSIR_LINE_NUMBER` it stays
+  `queued` instead of failing, and no background job retries it automatically — resend
+  from «گزارش روزانه» after configuring the provider.
 * **No i18n framework.** The UI is Persian-only; `APP_NAME` is the single
   configurable brand string.
 * **Rate limiting is in-memory per process.** Restarting the server resets the

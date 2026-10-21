@@ -1107,3 +1107,110 @@ body.quiz-open {
     font-size: 0.78rem;
   }
 }
+
+/* --------------------------------------------------- «????????» (contacts) */
+.contacts-input {
+  width: 100%;
+  max-width: 190px;
+  direction: ltr;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.contacts-table td {
+  vertical-align: middle;
+}
+.contacts-table .name-cell .chip {
+  margin-inline-start: 6px;
+}
+
+/* ------------------------------------------------ «????? ??????» (reports) */
+.report-table tr.is-selected {
+  background: var(--surface-2);
+}
+.report-table td .chip {
+  margin: 2px;
+}
+.report-previews {
+  display: grid;
+  gap: 10px;
+  max-height: 420px;
+  overflow: auto;
+}
+.report-message {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  padding: 10px 12px;
+}
+.report-message__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.report-message__body {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.report-recent {
+  display: grid;
+  gap: 10px;
+}
+.report-recent__item {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+}
+.report-recent__item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+/* ------------------------------------------------------ «??????» (fun tab) */
+.fun-frame-wrap {
+  position: relative;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.fun-frame {
+  display: block;
+  width: 100%;
+  height: min(78vh, 820px);
+  min-height: 480px;
+  border: 0;
+  background: #fff;
+}
+.fun-fallback {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  border: 1px solid var(--amber);
+  border-radius: var(--radius-sm);
+  background: #fffbeb;
+  color: var(--ink);
+}
+.fun-fallback[hidden] {
+  display: none;
+}
+.fun-fallback__icon {
+  font-size: 1.5rem;
+}
+@media (max-width: 720px) {
+  .fun-frame {
+    height: 68vh;
+    min-height: 360px;
+  }
+}
