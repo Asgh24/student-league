@@ -7,6 +7,7 @@ import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
 import { ownedRow, ownedRowQuery } from '../middleware/ownership.js';
 import { findDisciplineColumn } from '../repositories/leagues.js';
 import { applyScoreDelta } from '../services/scoring.js';
+import { createQuizSession, recentQuizSessions } from '../services/quiz.js';
 
 export function createLeagueQuestionsRouter({ db }) {
   const router = Router({ mergeParams: true });
@@ -18,7 +19,7 @@ export function createLeagueQuestionsRouter({ db }) {
              (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) AS answerCount
       FROM questions q WHERE q.league_id = ? ORDER BY q.id DESC
     `).all(req.league.id);
-    res.json({ items });
+    res.json({ items, recent: recentQuizSessions(db, req.league.id) });
   });
 
   router.post('/', validate({ body: schemas.questionCreate }), (req, res) => {
@@ -57,6 +58,22 @@ export function createQuestionsRouter({ db }) {
       WHERE a.question_id = ? ORDER BY a.id ASC
     `).all(req.question.id);
     res.json({ question: { id: req.question.id, body: req.question.body, points: req.question.points }, items });
+  });
+
+  return router;
+}
+
+/** «حالت پخش»: records a completed presentation run and awards its points. */
+export function createLeagueQuizRouter({ db }) {
+  const router = Router({ mergeParams: true });
+  router.use(requireTeacher, loadOwnedLeague(db));
+
+  router.get('/', (req, res) => {
+    res.json({ items: recentQuizSessions(db, req.league.id) });
+  });
+
+  router.post('/', validate({ body: schemas.quizSessionCreate }), (req, res) => {
+    res.status(201).json(createQuizSession(db, req.league.id, req.user, req.body));
   });
 
   return router;

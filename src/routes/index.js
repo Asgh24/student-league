@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createAnswersRouter, createLeagueQuestionsRouter, createQuestionsRouter } from './qa.js';
+import { createAnswersRouter, createLeagueQuestionsRouter, createLeagueQuizRouter, createQuestionsRouter } from './qa.js';
 import { createAttendanceRouter } from './attendance.js';
 import { createAuthRouter } from './auth.js';
 import { createColumnsRouter, createLeagueColumnsRouter } from './columns.js';
@@ -31,6 +31,7 @@ export function createApiRouter(ctx) {
   router.use('/leagues/:id/evaluations', createLeagueEvaluationsRouter(ctx));
   router.use('/leagues/:id/homework', createLeagueHomeworkRouter(ctx));
   router.use('/leagues/:id/questions', createLeagueQuestionsRouter(ctx));
+  router.use('/leagues/:id/quiz-sessions', createLeagueQuizRouter(ctx));
   router.use('/leagues/:id/tools', createToolsRouter(ctx));
   router.use('/leagues/:id/schedule', createScheduleRouter(ctx));
   router.use('/leagues/:id/files', createLeagueFilesRouter(ctx));

@@ -104,6 +104,101 @@ describe('questions and answers', () => {
     expect(total).toBe(0);
   });
 
+  it('runs a presentation quiz, scores it and awards the question points once', async () => {
+    const first = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: 'پایتخت ایران؟', points: 10 });
+    const second = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: '۲×۳؟', points: 20 });
+    const third = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: 'آب چیست؟', points: 30 });
+
+    const res = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/quiz-sessions`, {
+      studentId: fixture.studentsA[0].id,
+      items: [
+        { questionId: first.body.question.id, correct: true },
+        { questionId: second.body.question.id, correct: false },
+        { questionId: third.body.question.id, correct: true },
+      ],
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.session.total).toBe(3);
+    expect(res.body.session.correct).toBe(2);
+    expect(res.body.session.percent).toBe(67);
+    expect(res.body.session.awardedPoints).toBe(40);
+    expect(res.body.session.studentName).toBe(fixture.studentsA[0].name);
+    expect(res.body.session.items.map((item) => item.correct)).toEqual([true, false, true]);
+    expect(res.body.pointsApplied).toBe(true);
+
+    const discipline = ctx.db
+      .prepare('SELECT id FROM columns WHERE league_id = ? AND name = ?')
+      .get(fixture.leagueA.id, 'انضباطی');
+    const points = ctx.db
+      .prepare('SELECT COALESCE(SUM(value), 0) AS total FROM scores WHERE student_id = ? AND column_id = ?')
+      .get(fixture.studentsA[0].id, discipline.id);
+    expect(points.total).toBe(40);
+
+    const history = ctx.db.prepare('SELECT reason FROM score_history ORDER BY id DESC LIMIT 1').get();
+    expect(history.reason).toContain('2 از 3');
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM quiz_sessions').get().n).toBe(1);
+
+    const list = await client.get(`/api/v1/leagues/${fixture.leagueA.id}/questions`);
+    expect(list.body.recent).toHaveLength(1);
+    expect(list.body.recent[0].correct).toBe(2);
+    expect(list.body.recent[0].awardedPoints).toBe(40);
+  });
+
+  it('validates a presentation quiz and rejects foreign rows', async () => {
+    const own = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: 'سؤال خودی', points: 5 });
+    const foreign = ctx.db
+      .prepare('INSERT INTO questions (league_id, body, points, is_open, created_at) VALUES (?, ?, ?, 1, ?)')
+      .run(fixture.leagueB.id, 'سؤال غریبه', 5, new Date().toISOString());
+
+    const empty = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/quiz-sessions`, {
+      studentId: fixture.studentsA[0].id,
+      items: [],
+    });
+    expect(empty.status).toBe(400);
+
+    const duplicate = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/quiz-sessions`, {
+      studentId: fixture.studentsA[0].id,
+      items: [
+        { questionId: own.body.question.id, correct: true },
+        { questionId: own.body.question.id, correct: true },
+      ],
+    });
+    expect(duplicate.status).toBe(400);
+    expect(duplicate.body.error.code).toBe('DUPLICATE_QUESTION');
+
+    const foreignQuestion = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/quiz-sessions`, {
+      studentId: fixture.studentsA[0].id,
+      items: [{ questionId: Number(foreign.lastInsertRowid), correct: true }],
+    });
+    expect(foreignQuestion.status).toBe(400);
+    expect(foreignQuestion.body.error.code).toBe('QUESTION_NOT_FOUND');
+
+    const foreignStudent = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/quiz-sessions`, {
+      studentId: fixture.studentsB[0].id,
+      items: [{ questionId: own.body.question.id, correct: true }],
+    });
+    expect(foreignStudent.status).toBe(404);
+
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM quiz_sessions').get().n).toBe(0);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM scores').get().n).toBe(0);
+  });
+
+  it('hides presentation quizzes from other teachers', async () => {
+    const question = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: 'سؤال', points: 5 });
+    const other = createClient(ctx.db);
+    await other.login('teacher-b', 'password-b1');
+    const denied = await other.post(`/api/v1/leagues/${fixture.leagueA.id}/quiz-sessions`, {
+      studentId: fixture.studentsA[0].id,
+      items: [{ questionId: question.body.question.id, correct: true }],
+    });
+    expect(denied.status).toBe(403);
+
+    const student = createClient(ctx.db);
+    await student.login('student-a', 'student-a1');
+    const forbidden = await student.get(`/api/v1/leagues/${fixture.leagueA.id}/quiz-sessions`);
+    expect(forbidden.status).toBe(403);
+  });
+
   it('closes a question so students can no longer answer', async () => {
     const created = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: 'بسته شدنی' });
     await client.post(`/api/v1/questions/${created.body.question.id}/close`, {});

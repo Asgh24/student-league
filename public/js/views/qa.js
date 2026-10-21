@@ -7,6 +7,7 @@ import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { confirmDialog, emptyState, formDialog, notify, openModal } from '../ui.js';
 import { button, card, chip, fa, faDateTime, grid, iconButton, loadingNode, pageHead } from './common.js';
+import { startQuiz } from './quizStage.js';
 
 async function createQuestion(leagueId, reload) {
   const values = await formDialog({
@@ -109,6 +110,35 @@ async function openAnswers(question, reload) {
   await refresh();
 }
 
+/** Last presentation runs, so a finished quiz leaves a visible result. */
+function recentCard(sessions) {
+  if (sessions.length === 0) return null;
+  return card({ title: 'نتایج اخیر حالت پخش', icon: '🏁' }, [
+    el('div', {}, sessions.map((session) => el('div.timeline-item', {}, [
+      el('div', { style: { flex: '1' } }, [
+        el('div', {}, [
+          el('strong', { text: session.studentName }),
+          chip(`✅ ${fa(session.correct)} از ${fa(session.total)}`, session.percent >= 50 ? 'ok' : 'bad'),
+        ]),
+        el('div.row', { style: { gap: '6px', marginTop: '4px', flexWrap: 'wrap' } }, [
+          chip(`🎁 ${fa(session.awardedPoints)} امتیاز`, 'amber'),
+          chip(`${fa(session.percent)}٪`, 'muted'),
+          chip(faDateTime(session.createdAt), 'muted'),
+        ]),
+      ]),
+    ]))),
+  ]);
+}
+
+async function openQuiz(leagueId, questions, reload) {
+  try {
+    const payload = await api.get(`/leagues/${leagueId}/students`);
+    await startQuiz({ leagueId, questions, students: payload.items ?? [], onFinished: reload });
+  } catch (error) {
+    notify.error(errorMessage(error));
+  }
+}
+
 export async function renderQa({ params }) {
   const leagueId = Number(params.id);
   setLeagueId(leagueId);
@@ -157,12 +187,19 @@ export async function renderQa({ params }) {
       ]));
     }
 
-    body.replaceChildren(
+    const recent = recentCard(payload.recent ?? []);
+    body.replaceChildren(...[
       pageHead({
         icon: '❓',
         title: 'سوال و پاسخ',
         subtitle: league.league.name,
         actions: [
+          button('حالت پخش', {
+            kind: 'soft',
+            icon: '▶️',
+            disabled: items.length === 0,
+            onClick: () => openQuiz(leagueId, items, load),
+          }),
           button('سؤال جدید', { icon: '➕', onClick: () => createQuestion(leagueId, load) }),
           el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' }),
         ],
@@ -176,7 +213,8 @@ export async function renderQa({ params }) {
         ]),
       ]),
       card({ title: 'فهرست سؤالات', icon: '📋' }, [list]),
-    );
+      recent,
+    ].filter(Boolean));
   }
 
   await load();

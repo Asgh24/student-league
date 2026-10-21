@@ -295,6 +295,15 @@ export const schemas = {
     points: z.coerce.number().int().min(0).max(10000),
   }),
 
+  /** «حالت پخش»: one completed presentation run for a single student. */
+  quizSessionCreate: z.object({
+    studentId: z.coerce.number().int().positive(),
+    items: z.array(z.object({
+      questionId: z.coerce.number().int().positive(),
+      correct: z.boolean(),
+    })).min(1, 'حداقل یک سؤال لازم است').max(100),
+  }),
+
   scheduleSave: z.object({
     slots: z.array(z.object({
       dayIndex: z.coerce.number().int().min(0).max(6),

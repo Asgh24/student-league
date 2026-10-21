@@ -51,6 +51,7 @@ const { renderTeams } = await import('../public/js/views/teams.js');
 const { renderStudentDashboard } = await import('../public/js/views/student/dashboard.js');
 const { renderReportCard } = await import('../public/js/views/student/reportcard.js');
 const { renderEvaluations } = await import('../public/js/views/evaluations.js');
+const { renderQa } = await import('../public/js/views/qa.js');
 const { renderStudentEvaluations } = await import('../public/js/views/student/evaluations.js');
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -816,6 +817,90 @@ describe('course evaluations (teacher view)', () => {
     // descriptive sheets offer the qualitative levels instead of a full-mark button
     expect([...view.querySelectorAll('button')].some((node) => node.textContent.includes('نیاز به تلاش'))).toBe(true);
     expect([...view.querySelectorAll('button')].some((node) => node.textContent.includes('نمرهٔ کامل'))).toBe(false);
+  });
+});
+
+describe('Q&A presentation mode', () => {
+  const question = {
+    id: 5, body: 'پایتخت ایران کجاست؟', points: 15, isOpen: true, answerCount: 0,
+    createdAt: '2026-10-20T10:00:00.000Z',
+  };
+  const league = { league: { id: 1, name: 'لیگ تست' } };
+
+  function mockLoad(recent = []) {
+    api.get.mockImplementation((url) => {
+      if (url === '/leagues/1') return Promise.resolve(league);
+      if (url === '/leagues/1/questions') return Promise.resolve({ items: [question], recent });
+      if (url === '/leagues/1/students') return Promise.resolve({ items: [{ id: 11, name: 'آرش آزمون' }] });
+      if (url === '/questions/5/answers') return Promise.resolve({ items: [] });
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+  }
+
+  it('plays a one-question quiz, shows the score and posts the result', async () => {
+    mockLoad();
+    api.post.mockResolvedValue({
+      session: {
+        id: 1, studentId: 11, studentName: 'آرش آزمون', total: 1, correct: 1, percent: 100,
+        awardedPoints: 15, createdAt: '2026-10-20T10:05:00.000Z', items: [],
+      },
+      requestedPoints: 15,
+      pointsApplied: true,
+    });
+
+    await renderQa({ params: { id: '1' } });
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('حالت پخش');
+    expect(view.textContent).toContain('پایتخت ایران کجاست؟');
+
+    [...view.querySelectorAll('button')].find((node) => node.textContent.includes('حالت پخش')).click();
+    await vi.waitFor(() => expect(document.querySelector('#f-count')).not.toBeNull());
+
+    // the dialog defaults to the only question and the first student
+    expect(document.querySelector('#f-count').value).toBe('1');
+    expect(document.querySelector('#f-studentId').value).toBe('11');
+    document.querySelector('#f-count').value = '1';
+    [...document.querySelectorAll('#modal-root button')]
+      .find((node) => node.textContent.includes('شروع پخش')).click();
+
+    await vi.waitFor(() => expect(document.querySelector('.quiz-stage')).not.toBeNull());
+    const stage = document.querySelector('.quiz-stage');
+    expect(stage.textContent).toContain('پایتخت ایران کجاست؟');
+    expect(stage.textContent).toContain('سؤال ۱ از ۱');
+    expect(stage.textContent).toContain('درست');
+    expect(stage.textContent).toContain('غلط');
+
+    [...stage.querySelectorAll('button')].find((node) => node.textContent.includes('درست')).click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalled());
+    expect(api.post).toHaveBeenCalledWith('/leagues/1/quiz-sessions', {
+      studentId: 11,
+      items: [{ questionId: 5, correct: true }],
+    });
+
+    await vi.waitFor(() => expect(document.querySelector('.quiz-score')).not.toBeNull());
+    const summary = document.querySelector('.quiz-summary');
+    expect(summary.textContent).toContain('از');
+    expect(summary.querySelector('.quiz-score').textContent).toContain('۱');
+    expect(summary.textContent).toContain('۱۵ امتیاز');
+    expect(document.querySelector('.quiz-save-status').textContent).toContain('ثبت شد');
+
+    [...summary.querySelectorAll('button')].find((node) => node.textContent.includes('بستن')).click();
+    expect(document.querySelector('.quiz-stage')).toBeNull();
+  });
+
+  it('lists the latest presentation results next to the questions', async () => {
+    mockLoad([{
+      id: 3, studentId: 11, studentName: 'آرش آزمون', total: 10, correct: 7, percent: 70,
+      awardedPoints: 140, createdAt: '2026-10-20T10:05:00.000Z', items: [],
+    }]);
+    await renderQa({ params: { id: '1' } });
+
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('نتایج اخیر حالت پخش');
+    expect(view.textContent).toContain('آرش آزمون');
+    expect(view.textContent).toContain('۷ از ۱۰');
+    expect(view.textContent).toContain('۱۴۰ امتیاز');
   });
 });
 
