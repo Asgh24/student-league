@@ -316,8 +316,8 @@ export async function renderSeating({ params }) {
         el('div.stat', {}, [el('div.stat__value', { text: `${fa(plan.layout.rows)}×${fa(plan.layout.cols)}` }), el('div.stat__label', { text: '📐 ابعاد کلاس' })]),
       ]),
       status,
-      grid('grid--two', [classroomCard(), unassignedCard()]),
       layoutCard(),
+      grid('grid--two', [classroomCard(), unassignedCard()]),
     );
   }
 
