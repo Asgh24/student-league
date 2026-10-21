@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { confirmDialog, emptyState, formDialog, notify, openModal } from '../ui.js';
-import { button, card, chip, fa, faDateTime, grid, iconButton, loadingNode, pageHead } from './common.js';
+import { backToWorkbench, button, card, chip, fa, faDateTime, grid, iconButton, loadingNode, pageHead } from './common.js';
 import { startQuiz } from './quizStage.js';
 
 async function createQuestion(leagueId, reload) {
@@ -202,6 +202,7 @@ export async function renderQa({ params }) {
           }),
           button('سؤال جدید', { icon: '➕', onClick: () => createQuestion(leagueId, load) }),
           el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' }),
+          backToWorkbench(),
         ],
       }),
       grid('grid--stats', [

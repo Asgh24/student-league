@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { emptyState, notify } from '../ui.js';
-import { button, card, chip, fa, faDate, grid, loadingNode, pageHead, ratioChip, STATUS_KIND, STATUS_LABELS, statCard } from './common.js';
+import { backToWorkbench, button, card, chip, fa, faDate, grid, loadingNode, pageHead, ratioChip, STATUS_KIND, STATUS_LABELS, statCard } from './common.js';
 
 function shiftIso(iso, days) {
   const date = new Date(`${iso}T00:00:00Z`);
@@ -143,7 +143,10 @@ export async function renderAttendance({ params }) {
         icon: '🗓️',
         title: 'حضور و غیاب',
         subtitle: league.league.name,
-        actions: [el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' })],
+        actions: [
+          el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' }),
+          backToWorkbench(),
+        ],
       }),
       grid('grid--stats', [
         statCard({ label: 'حاضر', value: fa(sheet.counters.present), kind: 'ok', icon: '✅' }),

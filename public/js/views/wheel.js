@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { emptyState, notify } from '../ui.js';
-import { button, card, fa, grid, loadingNode, pageHead } from './common.js';
+import { backToWorkbench, button, card, fa, grid, loadingNode, pageHead } from './common.js';
 
 const PALETTE = ['#7c3aed', '#a855f7', '#ec4899', '#f59e0b', '#22c55e', '#0ea5e9', '#f43f5e', '#8b5cf6'];
 const SIZE = 340;
@@ -157,6 +157,7 @@ export async function renderWheel({ params }) {
         subtitle: league.league.name,
         actions: [
           el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' }),
+          backToWorkbench(),
           el('a.btn.btn--soft', { href: `#/teacher/league/${leagueId}/raffle`, text: '🎲 قرعه‌کشی' }),
         ],
       }),

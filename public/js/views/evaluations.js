@@ -12,7 +12,7 @@ import { EVALUATION_KINDS, GRADES, gradesForLevel, DESCRIPTIVE_LEVELS, numericBa
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId, state } from '../store.js';
 import { confirmDialog, emptyState, formDialog, notify } from '../ui.js';
-import { button, card, chip, fa, faDate, grid, iconButton, loadingNode, pageHead, statCard } from './common.js';
+import { backToWorkbench, button, card, chip, fa, faDate, grid, iconButton, loadingNode, pageHead, statCard } from './common.js';
 import { gradingCard } from './evaluationGrading.js';
 
 function today() {
@@ -381,6 +381,7 @@ export async function renderEvaluations({ params }) {
         subtitle: payload.league?.name ?? '',
         actions: [
           el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' }),
+          backToWorkbench(),
         ],
       }),
       grid('grid--stats', [

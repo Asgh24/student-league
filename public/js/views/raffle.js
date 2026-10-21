@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { confirmDialog, emptyState, notify } from '../ui.js';
-import { button, card, fa, faDateTime, grid, loadingNode, pageHead } from './common.js';
+import { backToWorkbench, button, card, fa, faDateTime, grid, loadingNode, pageHead } from './common.js';
 
 export async function renderRaffle({ params }) {
   const leagueId = Number(params.id);
@@ -133,6 +133,7 @@ export async function renderRaffle({ params }) {
         subtitle: leagueName,
         actions: [
           el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' }),
+          backToWorkbench(),
           el('a.btn.btn--soft', { href: `#/teacher/league/${leagueId}/wheel`, text: '🎡 گردونه شانس' }),
         ],
       }),

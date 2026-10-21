@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { emptyState, notify } from '../ui.js';
-import { button, card, countdownBox, fa, faDateTime, grid, loadingNode, pageHead, startCountdown } from './common.js';
+import { backToWorkbench, button, card, countdownBox, fa, faDateTime, grid, loadingNode, pageHead, startCountdown } from './common.js';
 
 let audioContext = null;
 
@@ -220,7 +220,10 @@ export async function renderTimerTools({ params }) {
         icon: '⏱️',
         title: 'تایمر و ابزار',
         subtitle: league.league.name,
-        actions: [el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' })],
+        actions: [
+          el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' }),
+          backToWorkbench(),
+        ],
       }),
       grid('grid--two', [countdownCard(leagueId, payload.timer, load), stopwatchCard()]),
     );

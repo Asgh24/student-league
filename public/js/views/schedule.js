@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { emptyState, notify } from '../ui.js';
-import { button, card, fa, loadingNode, pageHead } from './common.js';
+import { backToWorkbench, button, card, fa, loadingNode, pageHead } from './common.js';
 
 export async function renderSchedule({ params }) {
   const leagueId = Number(params.id);
@@ -98,6 +98,7 @@ export async function renderSchedule({ params }) {
         actions: [
           button('ذخیره برنامه', { icon: '💾', onClick: save }),
           el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' }),
+          backToWorkbench(),
         ],
       }),
       card({ title: 'جدول هفتگی', icon: '📅' }, [

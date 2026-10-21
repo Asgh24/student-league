@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { emptyState } from '../ui.js';
-import { card, countdownBox, fa, faDateTime, grid, loadingNode, pageHead, startCountdown } from './common.js';
+import { backToWorkbench, card, countdownBox, fa, faDateTime, grid, loadingNode, pageHead, startCountdown } from './common.js';
 
 const POLL_MS = 5000;
 
@@ -94,6 +94,7 @@ export async function renderLiveBoard({ params }) {
         subtitle: `${payload.league.name} · آخرین به‌روزرسانی ${faDateTime(payload.updatedAt)}`,
         actions: [
           el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' }),
+          backToWorkbench(),
         ],
       }),
       grid('grid--two', [

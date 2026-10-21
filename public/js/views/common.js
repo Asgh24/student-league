@@ -29,6 +29,11 @@ export function pageHead({ icon = '', title, subtitle = '', actions = [] }) {
   return head;
 }
 
+/** Ghost link back to the teacher dashboard (میزکار). */
+export function backToWorkbench() {
+  return el('a.btn.btn--ghost', { href: '#/teacher', text: '↩️ بازگشت به میزکار' });
+}
+
 export function button(label, { kind = '', icon = '', onClick = null, type = 'button', title = '', disabled = false } = {}) {
   const classes = `btn${kind ? `.btn--${kind}` : ''}`;
   return el(`button.${classes}`, {

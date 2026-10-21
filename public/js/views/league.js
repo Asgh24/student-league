@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { emptyState, notify } from '../ui.js';
-import { button, card, countdownBox, fa, faDate, faDateTime, grid, loadingNode, pageHead, startCountdown, statCard } from './common.js';
+import { backToWorkbench, button, card, countdownBox, fa, faDate, faDateTime, grid, loadingNode, pageHead, startCountdown, statCard } from './common.js';
 import { createScoresTable } from './scoresTable.js';
 
 function timerCard(leagueId, timer, reload) {
@@ -184,7 +184,7 @@ export async function renderLeague({ params }) {
         icon: '🏆',
         title: league.name,
         subtitle: league.status === 'completed' ? `پایان‌یافته در ${faDate(league.completedAt)}` : 'لیگ فعال',
-        actions: [el('a.btn.btn--ghost', { href: '#/teacher', text: '↩️ بازگشت به میزکار' })],
+        actions: [backToWorkbench()],
       }),
       grid('grid--stats', [
         statCard({ label: 'دانش‌آموزان', value: fa(summary.studentCount), icon: '🧑‍🎓' }),

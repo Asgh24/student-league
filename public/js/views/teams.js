@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { confirmDialog, emptyState, formDialog, notify, openModal } from '../ui.js';
-import { button, card, fa, grid, iconButton, loadingNode, pageHead } from './common.js';
+import { backToWorkbench, button, card, fa, grid, iconButton, loadingNode, pageHead } from './common.js';
 
 function standingsTable(state, reload) {
   const { teams, individualAffectsTeam } = state;
@@ -266,6 +266,7 @@ export async function renderTeams({ params }) {
         actions: [
           button('ساخت تیم', { icon: '➕', onClick: () => createTeam(leagueId, load) }),
           el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '📋 جدول امتیازها' }),
+          backToWorkbench(),
         ],
       }),
       grid('grid--two', [

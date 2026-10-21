@@ -6,7 +6,7 @@ import { bytes, errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { confirmDialog, emptyState, notify } from '../ui.js';
-import { button, card, fa, faDateTime, iconButton, loadingNode, pageHead } from './common.js';
+import { backToWorkbench, button, card, fa, faDateTime, iconButton, loadingNode, pageHead } from './common.js';
 
 async function deleteFile(item, reload) {
   const agreed = await confirmDialog({
@@ -131,7 +131,10 @@ export async function renderFiles({ params }) {
         icon: '📎',
         title: 'ارسال فایل',
         subtitle: league.league.name,
-        actions: [el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' })],
+        actions: [
+          el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' }),
+          backToWorkbench(),
+        ],
       }),
       card({ title: 'ارسال فایل جدید', icon: '⬆️' }, [
         fileInput,
