@@ -234,7 +234,14 @@ export async function renderSeating({ params }) {
 
   function classroomCard() {
     const { rows, cols } = plan.layout;
-    const gridNode = el('div.seating__grid', { style: { gridTemplateColumns: `repeat(${cols}, minmax(64px, 1fr))` } });
+    // The grid keeps a usable seat width and scrolls inside its wrapper on
+    // phones instead of widening the whole page (which clipped the topbar).
+    const gridNode = el('div.seating__grid', {
+      style: {
+        gridTemplateColumns: `repeat(${cols}, minmax(64px, 1fr))`,
+        minWidth: `${cols * 64 + Math.max(0, cols - 1) * 6}px`,
+      },
+    });
     for (let row = 0; row < rows; row += 1) {
       for (let col = 0; col < cols; col += 1) {
         const seat = seatAt(row, col);
@@ -251,8 +258,9 @@ export async function renderSeating({ params }) {
     }
     return card({ title: 'نمای کلاس', icon: '🪑' }, [
       el('div.seating__board', { text: '🧑‍🏫 تخته / میز معلم' }),
-      gridNode,
+      el('div.seating__grid-wrap', {}, [gridNode]),
       el('p.small.muted', { text: 'روی دانش‌آموز «بدون جا» کلیک کنید و بعد روی صندلی؛ برای برداشتن، روی صندلی پر کلیک کنید. سپس «💾 ذخیره چینش» را بزنید.' }),
+      el('p.small.muted.seating__scroll-hint', { text: '📱 در گوشی، برای دیدن صندلی‌های بیشتر جدول را افقی بکشید.' }),
     ]);
   }
 

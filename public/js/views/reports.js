@@ -185,7 +185,7 @@ export async function renderReports({ params }) {
         }))
         : [el('span.small.muted', { text: 'بدون تغییر' })]);
       const node = el('tr', { class: selected.has(item.studentId) ? 'is-selected' : '' }, [
-        el('td', {}, [checkbox]),
+        el('td', {}, [el('label.report-check', {}, [checkbox])]),
         el('td.name-cell', {}, [el('strong', { text: item.name })]),
         changesCell,
         el('td', {}, [el(`span.chip.chip--${deltaKind(item.totalDelta)}`, { text: signed(item.totalDelta) })]),

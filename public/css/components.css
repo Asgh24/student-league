@@ -1108,7 +1108,7 @@ body.quiz-open {
   }
 }
 
-/* --------------------------------------------------- �????????� (contacts) */
+/* --------------------------------------------------- �????????� (contacts) */
 .contacts-input {
   width: 100%;
   max-width: 190px;
@@ -1123,9 +1123,17 @@ body.quiz-open {
   margin-inline-start: 6px;
 }
 
-/* ------------------------------------------------ �????? ??????� (reports) */
+/* ------------------------------------------------ �????? ??????� (reports) */
 .report-table tr.is-selected {
   background: var(--surface-2);
+}
+.report-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  cursor: pointer;
 }
 .report-table td .chip {
   margin: 2px;
@@ -1174,7 +1182,7 @@ body.quiz-open {
   padding-bottom: 0;
 }
 
-/* ------------------------------------------------------ �??????� (fun tab) */
+/* ------------------------------------------------------ �??????� (fun tab) */
 .fun-frame-wrap {
   position: relative;
   margin-top: 10px;
@@ -1214,3 +1222,144 @@ body.quiz-open {
     min-height: 360px;
   }
 }
+
+/* ------------------------------------------- mobile and touch refinements */
+/* The seating grid can be wider than a phone. Scroll it inside this wrapper
+   instead of letting it widen the page (which used to clip the topbar and the
+   outer seats). */
+.seating__grid-wrap {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: 6px;
+  -webkit-overflow-scrolling: touch;
+}
+.seating__scroll-hint {
+  display: none;
+}
+@media (max-width: 620px) {
+  .seating__scroll-hint {
+    display: block;
+  }
+}
+
+/* iOS Safari zooms the whole page when a control smaller than 16px is focused. */
+@media (max-width: 720px) {
+  input[type="text"],
+  input[type="password"],
+  input[type="number"],
+  input[type="search"],
+  input[type="date"],
+  input[type="tel"],
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Contacts: on phones each row becomes a small card so both numbers, the
+   status and the save button fit without a hidden horizontal scroll. */
+@media (max-width: 560px) {
+  table.grid-table.contacts-table {
+    width: 100%;
+    min-width: 0;
+  }
+  .contacts-table thead {
+    display: none;
+  }
+  .contacts-table,
+  .contacts-table tbody {
+    display: block;
+  }
+  .contacts-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 6px 8px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .contacts-table tr:last-child {
+    border-bottom: 0;
+  }
+  table.grid-table.contacts-table td {
+    display: block;
+    padding: 0;
+    border: 0;
+    text-align: start;
+    white-space: normal;
+  }
+  table.grid-table.contacts-table td.name-cell {
+    position: static;
+    right: auto;
+    grid-column: 1 / -1;
+    min-width: 0;
+    max-width: none;
+  }
+  .contacts-table td:nth-child(2)::before {
+    content: 'شماره والد';
+  }
+  .contacts-table td:nth-child(3)::before {
+    content: 'شماره دانش‌آموز';
+  }
+  .contacts-table td:nth-child(2)::before,
+  .contacts-table td:nth-child(3)::before {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .contacts-table td:nth-child(4) {
+    align-self: center;
+  }
+  table.grid-table.contacts-table td.actions-td {
+    position: static;
+    left: auto;
+    grid-column: 2;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+  }
+  .contacts-table td.actions-td .btn {
+    width: 100%;
+  }
+  .contacts-input {
+    max-width: none;
+  }
+}
+
+/* Touch screens: dense tables used to expose 30px icon buttons. */
+@media (pointer: coarse) {
+  .btn--icon.btn--xs {
+    width: 38px;
+    min-height: 38px;
+    font-size: 1rem;
+  }
+  .btn--xs {
+    min-height: 38px;
+  }
+  .btn--sm {
+    min-height: 40px;
+  }
+  .chip--button {
+    min-height: 38px;
+  }
+  .seat {
+    min-height: 58px;
+  }
+  .score-value {
+    min-width: 34px;
+    min-height: 38px;
+  }
+  .pill {
+    min-height: 38px;
+  }
+  .report-check {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .report-check input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+  }
+}
+

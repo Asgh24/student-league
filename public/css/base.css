@@ -114,6 +114,9 @@ a {
   gap: 10px;
   min-height: var(--topbar-h);
   padding: 8px 14px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  padding-right: max(14px, env(safe-area-inset-right));
+  padding-left: max(14px, env(safe-area-inset-left));
   color: #fff;
   background: linear-gradient(90deg, var(--brand) 0%, var(--brand-2) 55%, var(--pink) 100%);
   box-shadow: 0 6px 20px rgba(124, 58, 237, 0.35);
@@ -294,6 +297,10 @@ a {
   .topbar__title {
     max-width: 38vw;
     font-size: 0.94rem;
+  }
+  /* Keep the title and the league pill readable; the account is in the drawer. */
+  .topbar .pill--user {
+    display: none;
   }
   .view {
     padding: 12px 10px 56px;
