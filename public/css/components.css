@@ -1949,29 +1949,11 @@ body.quiz-open {
   gap: 12px;
   justify-content: center;
 }
-.quiz-btn {
-  min-width: 150px;
-  min-height: 58px;
-  border: 0;
-  border-radius: var(--radius);
-  font-size: 1.05rem;
-  font-weight: 800;
-}
-.quiz-btn--correct {
-  background: var(--ok);
-  color: #fff;
-}
-.quiz-btn--wrong {
-  background: var(--bad);
-  color: #fff;
-}
-.quiz-btn--correct:hover,
-.quiz-btn--wrong:hover {
-  filter: brightness(1.07);
-}
 .quiz-next-question,
 .quiz-next-student {
   min-height: 58px;
+  min-width: 150px;
+  font-weight: 800;
 }
 .quiz-summary {
   width: min(820px, 100%);
@@ -2056,7 +2038,7 @@ body.quiz-open {
   .quiz-actions {
     flex-direction: column;
   }
-  .quiz-actions .quiz-btn {
+  .quiz-actions .btn {
     width: 100%;
   }
 }

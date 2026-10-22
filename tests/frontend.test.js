@@ -935,8 +935,8 @@ describe('Q&A presentation mode', () => {
     expect(stage.querySelectorAll('.quiz-option')).toHaveLength(3);
     expect(stage.textContent).toContain('تهران');
     expect(stage.textContent).toContain('شیراز');
-    expect(stage.querySelector('.quiz-btn--correct').hidden).toBe(true);
-    expect(stage.querySelector('.quiz-btn--wrong').hidden).toBe(true);
+    expect(stage.querySelector('.quiz-btn')).toBeNull();
+    expect(stage.textContent).not.toContain('❌ غلط');
 
     // Clicking the chosen option grades it automatically: option 1 is correct.
     clickStageOption(0);

@@ -66,6 +66,15 @@ export async function startQuiz({ leagueId, questions, students, onFinished }) {
     notify.error('دانش‌آموزی در این لیگ ثبت نشده است');
     return;
   }
+  const playable = questions.filter((item) => (
+    Array.isArray(item.options)
+    && item.options.length >= 2
+    && Number.isInteger(item.correctIndex)
+  ));
+  if (playable.length === 0) {
+    notify.error('برای حالت پخش، حداقل یک سؤال تستی با گزینه و پاسخ صحیح لازم است');
+    return;
+  }
 
   const values = await formDialog({
     title: 'حالت پخش',
@@ -84,23 +93,23 @@ export async function startQuiz({ leagueId, questions, students, onFinished }) {
         name: 'count',
         label: 'تعداد سؤال',
         type: 'number',
-        value: Math.min(10, questions.length),
+        value: Math.min(10, playable.length),
         min: 1,
-        max: questions.length,
+        max: playable.length,
         required: true,
-        hint: `حداکثر ${fa(questions.length)} سؤال موجود است`,
+        hint: `حداکثر ${fa(playable.length)} سؤال تستی موجود است`,
       },
     ],
   });
   if (!values) return;
 
   const student = students.find((item) => String(item.id) === String(values.studentId)) ?? students[0];
-  const count = Math.max(1, Math.min(questions.length, Number(values.count) || questions.length));
+  const count = Math.max(1, Math.min(playable.length, Number(values.count) || playable.length));
   openStage({
     leagueId,
     student,
     students,
-    questions: shuffle(questions).slice(0, count),
+    questions: shuffle(playable).slice(0, count),
     onFinished,
     onRestart: () => startQuiz({ leagueId, questions, students, onFinished }),
   });
@@ -130,14 +139,6 @@ function openStage({ leagueId, student, students, questions, onFinished, onResta
   const summary = el('div.quiz-summary', { hidden: 'true' });
   const main = el('div.quiz-stage__main');
 
-  function bigButton(label, tone, onClick) {
-    return el(`button.btn.quiz-btn.quiz-btn--${tone}`, { type: 'button', onclick: onClick }, [
-      el('span', { text: label }),
-    ]);
-  }
-
-  const correctButton = bigButton('✅ درست', 'correct', () => answer(true));
-  const wrongButton = bigButton('❌ غلط', 'wrong', () => answer(false));
   const nextQuestionLabel = el('span', { text: 'سؤال بعدی ➡️' });
   const nextQuestionButton = el('button.btn.btn--soft.quiz-next-question', {
     type: 'button',
@@ -183,8 +184,6 @@ function openStage({ leagueId, student, students, questions, onFinished, onResta
 
   main.appendChild(el('div.quiz-question', {}, [questionBody, questionMeta, pickHint, optionsBox, answerBox]));
   main.appendChild(el('div.quiz-actions', {}, [
-    correctButton,
-    wrongButton,
     nextQuestionButton,
     nextStudentButton,
     backButton,
@@ -278,7 +277,7 @@ function openStage({ leagueId, student, students, questions, onFinished, onResta
     }
     const firstOption = optionsBox.querySelector('button.quiz-option:not(:disabled)');
     if (firstOption) firstOption.focus();
-    else correctButton.focus();
+    else nextStudentButton.focus();
   }
 
   function render() {
@@ -320,10 +319,7 @@ function openStage({ leagueId, student, students, questions, onFinished, onResta
       });
     }
 
-    // Multiple-choice questions are graded by the selected option; free-text
-    // legacy questions keep the oral correct/wrong controls.
-    correctButton.hidden = autoGraded || Boolean(assignment);
-    wrongButton.hidden = autoGraded || Boolean(assignment);
+    // Multiple-choice questions are graded only by the selected option.
     nextQuestionButton.hidden = !assignment;
     nextQuestionLabel.textContent = index + 1 >= questions.length
       ? '✅ پایان و ثبت نمره'
@@ -354,18 +350,6 @@ function openStage({ leagueId, student, students, questions, onFinished, onResta
       studentName: activeStudent.name,
       correct: Number(current.correctIndex) === position,
       selectedIndex: position,
-    };
-    render();
-  }
-
-  /** Oral fallback for legacy free-text questions without options. */
-  function answer(correct) {
-    if (closed || !summary.hidden || assignments[index]) return;
-    assignments[index] = {
-      studentId: activeStudent.id,
-      studentName: activeStudent.name,
-      correct: correct === true,
-      selectedIndex: null,
     };
     render();
   }
@@ -578,20 +562,11 @@ function openStage({ leagueId, student, students, questions, onFinished, onResta
 
     const current = question();
     const choices = Array.isArray(current.options) ? current.options : [];
-    if (isAutoGraded(current)) {
-      const position = Number(event.key);
-      if (Number.isInteger(position) && position >= 1 && position <= choices.length) {
-        event.preventDefault();
-        chooseOption(position - 1);
-      }
-      return;
-    }
-    if (event.key === '1' || event.key === 'ArrowLeft') {
+    if (!isAutoGraded(current)) return;
+    const position = Number(event.key);
+    if (Number.isInteger(position) && position >= 1 && position <= choices.length) {
       event.preventDefault();
-      answer(true);
-    } else if (event.key === '2' || event.key === 'ArrowRight') {
-      event.preventDefault();
-      answer(false);
+      chooseOption(position - 1);
     }
   }
 
