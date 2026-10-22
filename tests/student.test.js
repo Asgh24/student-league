@@ -255,7 +255,12 @@ describe('student portal', () => {
   });
 
   it('sees open questions and reads the weekly schedule and files', async () => {
-    await teacher.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: 'پرسش کلاسی', points: 5 });
+    await teacher.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, {
+      body: 'پرسش کلاسی',
+      points: 5,
+      options: ['گزینه یک', 'گزینه دو'],
+      correctIndex: 0,
+    });
     await teacher.put(`/api/v1/leagues/${fixture.leagueA.id}/schedule`, { slots: [{ dayIndex: 0, period: 0, subject: 'ریاضی' }] });
     await teacher.upload(`/api/v1/leagues/${fixture.leagueA.id}/files`, {
       filename: 'help.pdf',
@@ -265,6 +270,8 @@ describe('student portal', () => {
 
     const questions = await student.get('/api/v1/student/questions');
     expect(questions.body.items[0].body).toBe('پرسش کلاسی');
+    expect(questions.body.items[0].options).toEqual(['گزینه یک', 'گزینه دو']);
+    expect(questions.body.items[0].correctIndex).toBeUndefined();
     expect(questions.body.items[0].myAnswer).toBeNull();
 
     const schedule = await student.get('/api/v1/student/schedule');

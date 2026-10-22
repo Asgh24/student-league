@@ -80,6 +80,7 @@ function openStage({ leagueId, student, questions, onFinished, onRestart }) {
   const bar = el('span');
   const questionBody = el('h2.quiz-question__body');
   const questionMeta = el('div.row', { style: { gap: '6px', justifyContent: 'center', flexWrap: 'wrap' } });
+  const optionsBox = el('div.quiz-options', { hidden: 'true' });
   const answerBox = el('div.quiz-answer', { hidden: 'true' });
   const summary = el('div.quiz-summary', { hidden: 'true' });
   const main = el('div.quiz-stage__main');
@@ -121,7 +122,7 @@ function openStage({ leagueId, student, questions, onFinished, onRestart }) {
     summary,
   ]);
 
-  main.appendChild(el('div.quiz-question', {}, [questionBody, questionMeta, answerBox]));
+  main.appendChild(el('div.quiz-question', {}, [questionBody, questionMeta, optionsBox, answerBox]));
   main.appendChild(el('div.quiz-actions', {}, [correctButton, wrongButton, backButton]));
 
   const question = () => questions[index];
@@ -144,10 +145,22 @@ function openStage({ leagueId, student, questions, onFinished, onRestart }) {
       chip(`✅ ${fa(results.filter(Boolean).length)} درست تا این‌جا`, 'ok'),
       chip(`❌ ${fa(results.filter((value) => value === false).length)} غلط`, 'bad'),
     );
+    const choices = Array.isArray(current.options) ? current.options : [];
+    optionsBox.replaceChildren();
+    optionsBox.hidden = choices.length < 2;
+    if (choices.length >= 2) {
+      choices.forEach((choice, position) => {
+        optionsBox.appendChild(el('div.quiz-option', {}, [
+          el('span.quiz-option__index', { text: fa(position + 1) }),
+          el('span', { text: choice }),
+        ]));
+      });
+    }
+
     answerBox.hidden = true;
     answerBox.replaceChildren();
 
-    // Optionally show the answer the student already typed in their portal.
+    // Optionally show what the student already submitted in their portal.
     answerToken += 1;
     const token = answerToken;
     api.get(`/questions/${current.id}/answers`)
@@ -155,10 +168,18 @@ function openStage({ leagueId, student, questions, onFinished, onRestart }) {
         if (closed || token !== answerToken) return;
         const mine = (payload.items ?? []).find((item) => item.studentId === student.id);
         if (!mine) return;
-        answerBox.replaceChildren(
-          el('div.small.muted', { text: '💬 پاسخ ثبت‌شدهٔ دانش‌آموز' }),
-          el('p', { text: mine.body }),
-        );
+        if (choices.length >= 2 && Number.isInteger(mine.selectedIndex)) {
+          optionsBox.children[mine.selectedIndex]?.classList.add('is-picked');
+          answerBox.replaceChildren(
+            el('div.small.muted', { text: '💬 گزینهٔ ثبت‌شدهٔ دانش‌آموز' }),
+            el('p', { text: `گزینه ${fa(mine.selectedIndex + 1)} — ${mine.body}` }),
+          );
+        } else {
+          answerBox.replaceChildren(
+            el('div.small.muted', { text: '💬 پاسخ ثبت‌شدهٔ دانش‌آموز' }),
+            el('p', { text: mine.body }),
+          );
+        }
         answerBox.hidden = false;
       })
       .catch(() => { /* the question can be graded orally as well */ });

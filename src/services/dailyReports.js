@@ -10,7 +10,14 @@ import { formatJalaliDate } from '../lib/jalali.js';
 import { toPersianDigits } from '../lib/normalize.js';
 import { getLeague } from '../repositories/leagues.js';
 import { contactsList } from './contacts.js';
-import { deliverSms, markMessage, queueMessage, recentMessages, smsConfig } from './sms.js';
+import {
+  deliverSms,
+  markMessage,
+  queueMessage,
+  recentMessages,
+  resolveSmsProvider,
+  smsConfigFor,
+} from './sms.js';
 
 /** UTC window of one local (league timezone) calendar day. */
 function localDayWindow(date) {
@@ -37,6 +44,24 @@ export function buildDailyMessage({ leagueName, studentName, date, lines = [], t
   if (lines.length > MAX_REPORT_LINES) breakdown.push(`و ${toPersianDigits(lines.length - MAX_REPORT_LINES)} مورد دیگر`);
   const detail = breakdown.length ? breakdown.join('، ') : 'امروز تغییری ثبت نشده است';
   return `${leagueName} | گزارش روزانه ${dateText}\n${studentName}: ${detail}\nجمع تغییرات: ${signedFa(totalDelta)}`;
+}
+
+/**
+ * A concrete example shown in the teacher SMS panel even before the first
+ * report is generated. It uses the same formatter as a real message.
+ */
+export function buildSampleDailyMessage({ leagueName = 'لیگ نمونه', date }) {
+  return buildDailyMessage({
+    leagueName,
+    studentName: 'علی رضایی',
+    date,
+    lines: [
+      { columnName: 'ریاضی', delta: 2 },
+      { columnName: 'انضباطی', delta: -1 },
+      { columnName: 'فارسی', delta: 1 },
+    ],
+    totalDelta: 2,
+  });
 }
 
 /** Daily score changes per student, with the exact message that would be sent. */
@@ -92,7 +117,8 @@ export function dailyReport(db, leagueId, date) {
       queued: messages.filter((message) => message.status === 'queued').length,
       failed: messages.filter((message) => message.status === 'failed').length,
     },
-    sms: smsConfig(),
+    sms: smsConfigFor(db, { teacherId: league.teacher_id }),
+    sampleMessage: buildSampleDailyMessage({ leagueName: league.name, date }),
     recent: messages.slice(0, 25),
   };
 }
@@ -104,6 +130,9 @@ export function dailyReport(db, leagueId, date) {
  */
 export async function sendDailyReports(db, { leagueId, date, studentIds, fetchImpl }) {
   const report = dailyReport(db, leagueId, date);
+  const league = getLeague(db, leagueId);
+  if (!league) throw badRequest('LEAGUE_NOT_FOUND', 'لیگ یافت نشد');
+  const credentials = resolveSmsProvider(db, { teacherId: league.teacher_id });
   const selected = new Set(studentIds);
   const chosen = report.items.filter((item) => selected.has(item.studentId));
   if (chosen.length === 0) throw badRequest('NO_STUDENTS', 'هیچ دانش‌آموزی برای ارسال انتخاب نشده است');
@@ -122,7 +151,7 @@ export async function sendDailyReports(db, { leagueId, date, studentIds, fetchIm
       kind: 'daily_report',
       reportDate: date,
     });
-    const outcome = await deliverSms({ mobile: item.parentPhone, text: item.message, fetchImpl });
+    const outcome = await deliverSms({ mobile: item.parentPhone, text: item.message, fetchImpl, credentials });
     if (outcome.ok) {
       markMessage(db, messageId, { status: 'sent', providerMessageId: outcome.providerMessageId });
       results.push({ studentId: item.studentId, name: item.name, status: 'sent', messageId, message: item.message });

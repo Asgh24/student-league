@@ -45,7 +45,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | تابلوی زنده | Full-screen polling leaderboard for a projector |
 | تایمر و ابزار | Countdown / stopwatch with a WebAudio alert |
 | گردونه شانس | Canvas lucky wheel with teacher-editable segments |
-| سوال و پاسخ | Teacher questions, student answers, award points |
+| سوال و پاسخ | Teacher multiple-choice questions (2–10 options + correct answer), legacy text questions, student answers and manual point awards |
 | تکالیف | Homework with due dates and per-student done/not-done |
 | ارزشیابی دروس | Course evaluations: مقطع + پایه, exam title, numeric marks (۰–۲۰) or descriptive levels, per-student mark sheet with quick-fill, and an optional «تنظیمات امتیازدهی» mapping that turns marks into league points |
 | برنامه هفتگی | Saturday→Friday weekly schedule grid |
@@ -59,10 +59,10 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | اشتراک من | Trial/subscription banner, remaining days, admin-editable plans, Zarinpal checkout and payment history; an expired teacher is redirected here instead of seeing a broken dashboard |
 | پنل مدیر | Separate site-owner login: teacher search/filter, manual subscription grants, plan CRUD, revenue and payment ledger, inbox/SMS health |
 | پیام‌ها | Ticket-like teacher↔student inbox with threads, unread counters, read receipts and polling; both sides can reply from the same shared view |
-| پنل پیامک | sms.ir credit/lines, test and bulk sends, league-report outbox and admin campaign retry; without credentials everything stays queued instead of being lost |
+| پنل پیامک | Per-teacher sms.ir API key + line number in the teacher's own panel (encrypted, write-only), credit/lines, test and bulk sends, league-report outbox and admin campaign retry; without credentials everything stays queued instead of being lost |
 | پرداخت‌ها | Zarinpal v4 request/verify (Rial conversion, sandbox support) and a local `mock` gateway for development before a merchant ID exists |
 
-**Student area** – tabs: میزکار, کارنامه, ارزشیابی, حضور و غیاب, تیم من, تاریخچه, رده‌بندی, لایک, پیام‌ها, تنظیمات.
+**Student area** – tabs: میزکار, کارنامه, ارزشیابی, حضور و غیاب, تیم من, تاریخچه, رده‌بندی, لایک, سوال و پاسخ, پیام‌ها, تنظیمات.
 The کارنامه tab carries a profile band, subject + date-range filters, one line per
 recorded score session (subject, teacher topic, date, points, derived quality) and
 the per-subject totals table + chart.
@@ -180,9 +180,9 @@ is only needed if you upgrade Chart.js or the Vazirmatn font package.
 | `LIKES_PER_DAY` | `10` | Likes a student may give per day |
 | `BODY_LIMIT` | `512kb` | JSON body limit |
 | `LOG_LEVEL` | `debug` | `debug` \| `info` \| `warn` \| `error` |
-| `SMS_ENABLED` | auto | Enables real delivery; defaults to `true` only when the key **and** line number are set |
-| `SMSIR_API_KEY` | — | sms.ir REST API key (`X-API-KEY` header) |
-| `SMSIR_LINE_NUMBER` | — | sms.ir sender line number used by `POST /v1/send/bulk` |
+| `SMS_ENABLED` | auto | Server-wide fallback for teachers who have not saved their own settings; defaults to `true` only when the key **and** line number are set |
+| `SMSIR_API_KEY` | — | Optional fallback sms.ir REST API key (`X-API-KEY` header); teachers normally enter their own in the panel |
+| `SMSIR_LINE_NUMBER` | — | Optional fallback sms.ir sender line number used by `POST /v1/send/bulk` |
 | `SMSIR_BASE_URL` | `https://api.sms.ir` | Override for a proxy or test server |
 | `SMS_TIMEOUT_MS` | `15000` | Timeout of one provider request |
 | `BACKUP_DIR` | `$DATA_DIR/backups` | Output directory of `npm run backup` |
@@ -284,7 +284,7 @@ Created and upgraded by versioned migrations on boot (`src/migrations/`).
 
 | Table | Purpose |
 | --- | --- |
-| `users` | Teachers and students; bcrypt hash, role, display name, persian-digits flag, trial/subscription window and plan reference |
+| `users` | Teachers and students; bcrypt hash, role, display name, persian-digits flag, trial/subscription window and plan reference; teachers also hold their encrypted `sms_api_key`, `sms_line_number` and `sms_updated_at` |
 | `admins` | Site-owner accounts stored separately so `/admin/*` can never be reached by a teacher or student session |
 | `subscription_plans` | Admin-editable plans: name, days, Toman price, description, active flag, sort order |
 | `payments` | Subscription ledger: teacher, plan snapshot, amount/days, status, provider, authority/ref id, timestamps and admin note |
@@ -301,7 +301,7 @@ Created and upgraded by versioned migrations on boot (`src/migrations/`).
 | `championships` | Medals/titles; `source` = `manual` or `league_completed` |
 | `attendance` | One row per student × day with `present`/`absent`/`late` |
 | `homework`, `homework_status` | Assignments and per-student done/not-done |
-| `questions`, `answers` | Q&A: teacher questions, student answers, awarded points |
+| `questions`, `answers` | Q&A: teacher questions (optional JSON `options_json` + `correct_index` for multiple-choice, empty for legacy text), student answers (`selected_index` for a chosen option), awarded points |
 | `schedule` | Weekly grid slots (day, period, subject, note) |
 | `files` | Upload metadata; bytes live in `DATA_DIR/uploads` under random names |
 | `raffle_history` | Who was picked, when, and the reason |
@@ -514,11 +514,11 @@ pool only after everyone has been picked.
 | GET | `/homework/:id/status` | — | `{ homework, items: [{ studentId, name, status }] }` |
 | POST | `/homework/:id/status` | `{ studentId, status }` | `{ items }` |
 | POST | `/homework/:id/status/bulk` | `{ status }` | `{ items }` |
-| GET | `/leagues/:id/questions` | — | `{ items }` |
-| POST | `/leagues/:id/questions` | `{ body, points? }` | `201 { question }` |
+| GET | `/leagues/:id/questions` | — | `{ items }` — every item has `type` (`multiple_choice`/`text`), `options[]` and `isOpen`; `correctIndex` is returned **only** to the owning teacher |
+| POST | `/leagues/:id/questions` | `{ body, points?, options[2..10], correctIndex }` | `201 { question }` — multiple-choice; `correctIndex` must point to one of `options` |
 | DELETE | `/questions/:id` | — | `{ ok: true }` |
 | POST | `/questions/:id/close` \| `/open` | — | `{ ok: true }` |
-| GET | `/questions/:id/answers` | — | `{ question, items }` |
+| GET | `/questions/:id/answers` | — | `{ question, items }` — teacher-only; each answer has `selectedIndex` and derived `isCorrect` (or `null` for legacy text questions) |
 | POST | `/answers/:id/award` | `{ points }` | `{ answer: { id, awarded, delta } }` |
 | GET | `/leagues/:id/schedule` | — | `{ slots }` |
 | PUT | `/leagues/:id/schedule` | `{ slots: [{ dayIndex, period, subject, note }] }` | `{ slots }` |
@@ -526,6 +526,9 @@ pool only after everyone has been picked.
 | POST | `/leagues/:id/files` | `multipart/form-data` (`file`, `description?`) | `201 { file }` |
 | GET | `/files/:id/download` | — | file bytes (`Content-Disposition: attachment`) |
 | DELETE | `/files/:id` | — | `{ ok: true }` |
+
+Questions created before the multiple-choice migration have `options: []` and
+`type: "text"`; they stay readable and answerable with a free-text `body`.
 
 ### Course evaluations (teacher)
 
@@ -561,8 +564,8 @@ mapping described above (and only when it is enabled).
 | POST | `/student/likes` | `{ toStudentId, achievement? }` | `201 { like, remainingToday }` |
 | GET | `/student/homework` | — | `{ items (with the caller's status) }` |
 | GET | `/student/evaluations` | — | `{ items[{ id, subject, title, level, grade, kind, scaleMin, scaleMax, heldOn, note, score, label, average, topScore, rank, gradedCount, studentCount, band{ key, label, icon } }], stats{ count, graded, average, bestSubject, subjects[{ subject, average, count }] } }` — only the caller's own marks plus class aggregates (no other student is ever identified) |
-| GET | `/student/questions` | — | `{ items (with the caller's answers) }` |
-| POST | `/student/questions/:id/answers` | `{ body }` | `201 { ok: true }` |
+| GET | `/student/questions` | — | `{ items (with the caller's answers) }` — `options[]` is present, `correctIndex` is **never** sent to students |
+| POST | `/student/questions/:id/answers` | `{ optionIndex }` for multiple-choice, `{ body }` for legacy text | `201 { ok: true }` |
 | GET | `/student/schedule` | — | `{ slots, days[{ index, label }] }` |
 | GET | `/student/files` | — | `{ items }` |
 | PATCH | `/student/settings` | `{ persianDigits }` | `{ ok, persianDigits }` |
@@ -633,6 +636,33 @@ student session.
 | DELETE | `/admin/plans/:id` | — | `{ ok: true }` — soft delete (`active = 0`) |
 | GET | `/admin/payments` | `?search=&status=&page=&limit=` | `{ items, total, page, limit, pages }` |
 
+### SMS settings (teacher)
+
+Each teacher enters their **own** sms.ir API key and sender line in
+«گزارش روزانه ← تنظیمات پیامک من». The settings are scoped to that teacher's
+`users` row, so one teacher can never read or change another teacher's
+credentials. The key is encrypted with AES-256-GCM using a key derived from
+`SESSION_SECRET`; the API returns only `hasApiKey: true|false`, never the key.
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| GET | `/sms/settings` | — | `{ config }` — `configured`, `source` (`teacher`/`server`/`none`), `lineNumber`, `hasApiKey`, `serverConfigured`, `partialOwnSettings`, `own{ hasApiKey, lineNumber, updatedAt }`; never contains the API key |
+| PUT | `/sms/settings` | `{ apiKey?, lineNumber?, clearApiKey? }` | `{ config }` — blank `apiKey` keeps the saved key, `clearApiKey: true` removes it; both fields are required before delivery starts |
+
+If a teacher has saved **either** field, the server account is not used for
+that teacher, even when `SMSIR_*` is configured. This avoids silently mixing
+one teacher's line with another account's key. The server-wide variables remain
+a fallback only for teachers who have not saved anything yet.
+
+Daily reports return `sampleMessage`, the exact text generated by the same
+formatter used for real sends:
+
+```text
+لیگ نمونه | گزارش روزانه ۱۴۰۵/۰۷/۲۹
+علی رضایی: ریاضی +۲، انضباطی -۱، فارسی +۱
+جمع تغییرات: +۲
+```
+
 ### SMS console (site owner)
 
 | Method | Path | Body / query | Response |
@@ -647,8 +677,10 @@ student session.
 | POST | `/admin/sms/campaigns/:id/retry` | — | retry an admin test/bulk campaign row |
 
 Bulk numbers are normalized to `09xxxxxxxxx`, duplicates are removed, and at
-most 100 numbers are accepted. When sms.ir is not configured, rows remain
-`queued`; nothing is silently dropped.
+most 100 numbers are accepted. The admin console uses the server-wide
+`SMSIR_*` settings; teachers use the credentials saved in their own panel.
+When sms.ir is not configured, rows remain `queued`; nothing is silently
+dropped.
 
 ---
 
@@ -695,8 +727,8 @@ npm run lint    # eslint .
 Latest run on this machine (Windows, Node 26.3.0):
 
 ```
- Test Files  27 passed (27)
-      Tests  326 passed (326)
+ Test Files  28 passed (28)
+      Tests  339 passed (339)
 ```
 
 | Suite | Tests | Covers |
@@ -712,7 +744,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `jalali.test.js` | 16 | Gregorian↔Jalali round-trips, leap years (1399/1403 vs 1400), month lengths, reference dates |
 | `uploads.test.js` | 11 | Allowed/blocked extensions, MIME and size checks, filename sanitization, authorization on download |
 | `raffle.test.js` | 11 | Randomness, exclude-previous, pool cycling, history, reset |
-| `tools.test.js` | 16 | Wheel segments, shuffle, timer, live board, homework, Q&A/presentation quiz, schedule, league lifecycle |
+| `tools.test.js` | 19 | Wheel segments, shuffle, timer, live board, homework, multiple-choice + legacy text Q&A, presentation quiz, schedule, league lifecycle |
 | `student.test.js` | 20 | Dashboard series/medals, report card totals + session lines with derived quality and subject/date filters, grade setting, own attendance/history, likes quota, self-like rejection, settings |
 | `evaluations.test.js` | 23 | Evaluation CRUD + column reference, numeric/descriptive marks, scale and label validation, clearing a mark, subject/date filters, no transfer into league points, foreign-teacher and student isolation, own-marks student payload |
 | `reports.test.js` | 7 | Daily parent report grouping, message trimming, authorization and SMS queue/delivery paths |
@@ -721,7 +753,8 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `platform.test.js` | 10 | Teacher signup + 14-day trial, expired access + admin grant, admin/teacher/student separation, teacher create/search/filter, plan CRUD, mock checkout and renewal, Zarinpal request/verify (Rial, codes 100/101) |
 | `messages.test.js` | 12 | Teacher↔student threads, unread/read receipts, replies, ownership isolation, no-login students, empty body, unique conversations, contacts, admin exclusion |
 | `smsAdmin.test.js` | 4 | Admin SMS config, queued test messages without credentials, normalized bulk send, credit, invalid numbers and outbox retry |
-| `frontend.test.js` | 54 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (12 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, modal focus/footer lifecycle |
+| `smsSettings.test.js` | 6 | Per-teacher encrypted sms.ir key/line, write-only API, teacher isolation, teacher credential precedence, incomplete-settings fallback block, validation and sample message |
+| `frontend.test.js` | 58 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (12 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, MCQ option editor, student MCQ/text answering, teacher sms.ir settings card + sample, modal focus/footer lifecycle |
 | `frontendPlatform.test.js` | 8 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, shared inbox thread/composer, admin settings label |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 2 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not) |
@@ -747,6 +780,11 @@ Executed against a live server (`NODE_ENV=development`, fresh `DATA_DIR`, seeded
 | Teacher login → dashboard | ✅ 12 tool tiles, stat cards, league switcher |
 | Individual league table | ✅ 22 students, 8 default columns (step 25), staged `+25` preview, row commit → server-confirmed total |
 | Teams / attendance / raffle / wheel / live board / timer / homework / Q&A / schedule / files / evaluations | ✅ all 11 tool routes render, no console errors |
+| Teacher multiple-choice question | ✅ added/removed options, picked the correct one, saved `۲۵` points; the list shows the choices and marks the correct option |
+| Presentation mode (MCQ) | ✅ started «حالت پخش», the student's screen showed the three choices with no correct-answer marker |
+| Student Q&A | ✅ new «سوال و پاسخ» tab; answered the MCQ (own answer `مشهد`, no `correctIndex` in the API), and submitted a legacy text answer |
+| Teacher answer review | ✅ «پاسخ‌ها» showed `پاسخ صحیح: گزینه ۲ — مشهد` and the student's `گزینه ۲: مشهد · پاسخ صحیح` |
+| Teacher sms.ir settings | ✅ saved a key + line from the teacher's own card, status switched to «حساب شخصی شما», the sample SMS rendered, then the test values were cleared |
 | Attendance bulk "همه حاضر" | ✅ `۰ ثبت‌نشده` → `۲۲ حاضر` |
 | Raffle draw | ✅ winner shown, "21 remaining", pool exclusion works |
 | Logout → login as another user | ✅ (this flow exposed a stale-CSRF bug that is now fixed and tested) |
@@ -756,7 +794,7 @@ Executed against a live server (`NODE_ENV=development`, fresh `DATA_DIR`, seeded
 | Evaluation filters | ✅ subject filter `هدیه` → 1 row, «پاک کردن» → 2 rows |
 | No transfer into league points | ✅ امتیاز کل stayed `۳۳۳` (رتبه `۱۱`) across both evaluations and `score_history` gained no rows |
 | Student ارزشیابی tab | ✅ own mark `۱۸` with `💎 خیلی خوب`, `میانگین کلاس ۱۹.۹۱`, `رتبهٔ ۲۲ از ۲۲`; the descriptive row shows `👍 خوب`; class aggregates only, no classmate named |
-| All 10 student tabs | ✅ render with no errors and no horizontal scroll |
+| All 11 student tabs | ✅ render with no errors and no horizontal scroll |
 | Teacher self-signup | ✅ `ثبت‌نام معلم` shows «۱۴ روز استفادهٔ آزمایشی رایگان», creates the account, logs in and opens an empty workbench |
 | Admin login | ✅ owner opens `#/admin`; dashboard shows teacher/trial/expired/student/league/message totals and the SMS warning when unconfigured |
 | Admin teachers / plans / payments / SMS | ✅ all four views render from the live API with no console errors; plans show the three seeded prices, payments filter and SMS console are usable |
@@ -1034,9 +1072,15 @@ npm run bootstrap -- --force      # reset that account's password (forgotten log
   expecting space to be freed.
 * **No email.** Password recovery is manual (teacher resets student passwords).
 * **SMS requires sms.ir credentials.** Daily reports and admin test/bulk messages are
-  stored in the outbox first; without `SMSIR_API_KEY` and `SMSIR_LINE_NUMBER` they stay
-  `queued` instead of failing. There is no automatic retry worker — after configuring
-  the provider, use «تلاش دوباره» in the admin SMS panel or resend from «گزارش روزانه».
+  stored in the outbox first. Each teacher enters their own API key and line number in
+  «گزارش روزانه ← تنظیمات پیامک من»; the optional `SMSIR_API_KEY` and
+  `SMSIR_LINE_NUMBER` variables are only a fallback for teachers who have saved
+  nothing. Without either source the rows stay `queued` instead of failing. There is
+  no automatic retry worker — after configuring the provider, use «تلاش دوباره» in
+  the admin SMS panel or resend from «گزارش روزانه».
+* **The saved sms.ir key is tied to `SESSION_SECRET`.** Rotating that secret makes
+  existing encrypted keys unreadable, so each teacher must enter their key again.
+  This is intentional: the key is never stored in plaintext.
 * **No self-service billing portal beyond subscriptions.** There are no invoices,
   refunds or proration; the owner can grant days manually and the payment ledger keeps
   the audit trail.

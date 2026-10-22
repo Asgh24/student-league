@@ -17,6 +17,11 @@ afterEach(() => {
   ctx.cleanup();
 });
 
+/** Every new class question is multiple-choice (the legacy text flow is read-only). */
+function mcq(body, points = 0, { options = ['گزینه یک', 'گزینه دو', 'گزینه سه'], correctIndex = 0 } = {}) {
+  return { body, points, options, correctIndex };
+}
+
 describe('homework', () => {
   it('creates an assignment and tracks per student completion', async () => {
     const created = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/homework`, {
@@ -67,27 +72,98 @@ describe('homework', () => {
 });
 
 describe('questions and answers', () => {
-  it('creates a question and collects a student answer', async () => {
-    const created = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: '۲+۲ چند است؟', points: 10 });
+  it('creates a multiple-choice question and collects the selected option', async () => {
+    const created = await client.post(
+      `/api/v1/leagues/${fixture.leagueA.id}/questions`,
+      mcq('۲+۲ چند است؟', 10, { options: ['سه', 'چهار', 'پنج'], correctIndex: 1 }),
+    );
     expect(created.status).toBe(201);
+    expect(created.body.question).toMatchObject({
+      type: 'multiple_choice',
+      options: ['سه', 'چهار', 'پنج'],
+      correctIndex: 1,
+    });
     const questionId = created.body.question.id;
 
     const student = createClient(ctx.db);
     await student.login('student-a', 'student-a1');
-    const answer = await student.post(`/api/v1/student/questions/${questionId}/answers`, { body: 'چهار' });
+    const missing = await student.post(`/api/v1/student/questions/${questionId}/answers`, {});
+    expect(missing.status).toBe(400);
+    expect(missing.body.error.code).toBe('VALIDATION_ERROR');
+
+    const invalid = await student.post(`/api/v1/student/questions/${questionId}/answers`, { optionIndex: 3 });
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.error.code).toBe('OPTION_INVALID');
+
+    const answer = await student.post(`/api/v1/student/questions/${questionId}/answers`, { optionIndex: 1 });
     expect(answer.status).toBe(201);
 
     const list = await client.get(`/api/v1/questions/${questionId}/answers`);
+    expect(list.body.question.correctIndex).toBe(1);
     expect(list.body.items).toHaveLength(1);
-    expect(list.body.items[0].body).toBe('چهار');
+    expect(list.body.items[0]).toMatchObject({
+      body: 'چهار',
+      selectedIndex: 1,
+      isCorrect: true,
+    });
+  });
+
+  it('never exposes the correct option to students but still returns the choices', async () => {
+    const created = await client.post(
+      `/api/v1/leagues/${fixture.leagueA.id}/questions`,
+      mcq('پایتخت ایران؟', 5, { options: ['تهران', 'شیراز'], correctIndex: 0 }),
+    );
+    const student = createClient(ctx.db);
+    await student.login('student-a', 'student-a1');
+    await student.post(`/api/v1/student/questions/${created.body.question.id}/answers`, { optionIndex: 0 });
+
+    const payload = await student.get('/api/v1/student/questions');
+    const question = payload.body.items.find((item) => item.id === created.body.question.id);
+    expect(question.options).toEqual(['تهران', 'شیراز']);
+    expect(question.type).toBe('multiple_choice');
+    expect(question.correctIndex).toBeUndefined();
+    expect(question.myOptionIndex).toBe(0);
+    expect(question.myAnswer).toBe('تهران');
+  });
+
+  it('rejects malformed multiple-choice questions', async () => {
+    const url = `/api/v1/leagues/${fixture.leagueA.id}/questions`;
+    const tooFew = await client.post(url, mcq('سؤال', 0, { options: ['یک'], correctIndex: 0 }));
+    expect(tooFew.status).toBe(400);
+    expect(tooFew.body.error.code).toBe('VALIDATION_ERROR');
+
+    const badCorrect = await client.post(url, mcq('سؤال', 0, { correctIndex: 9 }));
+    expect(badCorrect.status).toBe(400);
+    expect(badCorrect.body.error.code).toBe('VALIDATION_ERROR');
+
+    const blank = await client.post(url, mcq('سؤال', 0, { options: ['یک', ' '], correctIndex: 0 }));
+    expect(blank.status).toBe(400);
+    expect(blank.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('keeps legacy free-text questions answerable', async () => {
+    const info = ctx.db.prepare(`
+      INSERT INTO questions (league_id, teacher_id, body, points, is_open, created_at)
+      VALUES (?, ?, ?, 5, 1, ?)
+    `).run(fixture.leagueA.id, fixture.teacherA.id, 'پرسش قدیمی', new Date().toISOString());
+    const student = createClient(ctx.db);
+    await student.login('student-a', 'student-a1');
+    const answer = await student.post(`/api/v1/student/questions/${info.lastInsertRowid}/answers`, { body: 'پاسخ متنی' });
+    expect(answer.status).toBe(201);
+
+    const payload = await student.get('/api/v1/student/questions');
+    const question = payload.body.items.find((item) => item.id === Number(info.lastInsertRowid));
+    expect(question.type).toBe('text');
+    expect(question.options).toEqual([]);
+    expect(question.myAnswer).toBe('پاسخ متنی');
   });
 
   it('awards points to the discipline column once and corrects them later', async () => {
-    const created = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: 'سوال', points: 15 });
+    const created = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, mcq('سوال', 15));
     const questionId = created.body.question.id;
     const student = createClient(ctx.db);
     await student.login('student-a', 'student-a1');
-    await student.post(`/api/v1/student/questions/${questionId}/answers`, { body: 'پاسخ' });
+    await student.post(`/api/v1/student/questions/${questionId}/answers`, { optionIndex: 1 });
     const answerId = ctx.db.prepare('SELECT id FROM answers WHERE question_id = ?').get(questionId).id;
 
     const first = await client.post(`/api/v1/answers/${answerId}/award`, { points: 30 });
@@ -105,9 +181,9 @@ describe('questions and answers', () => {
   });
 
   it('runs a presentation quiz, scores it and awards the question points once', async () => {
-    const first = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: 'پایتخت ایران؟', points: 10 });
-    const second = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: '۲×۳؟', points: 20 });
-    const third = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: 'آب چیست؟', points: 30 });
+    const first = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, mcq('پایتخت ایران؟', 10));
+    const second = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, mcq('۲×۳؟', 20));
+    const third = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, mcq('آب چیست؟', 30));
 
     const res = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/quiz-sessions`, {
       studentId: fixture.studentsA[0].id,
@@ -145,7 +221,7 @@ describe('questions and answers', () => {
   });
 
   it('validates a presentation quiz and rejects foreign rows', async () => {
-    const own = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: 'سؤال خودی', points: 5 });
+    const own = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, mcq('سؤال خودی', 5));
     const foreign = ctx.db
       .prepare('INSERT INTO questions (league_id, body, points, is_open, created_at) VALUES (?, ?, ?, 1, ?)')
       .run(fixture.leagueB.id, 'سؤال غریبه', 5, new Date().toISOString());
@@ -184,7 +260,7 @@ describe('questions and answers', () => {
   });
 
   it('hides presentation quizzes from other teachers', async () => {
-    const question = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: 'سؤال', points: 5 });
+    const question = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, mcq('سؤال', 5));
     const other = createClient(ctx.db);
     await other.login('teacher-b', 'password-b1');
     const denied = await other.post(`/api/v1/leagues/${fixture.leagueA.id}/quiz-sessions`, {
@@ -200,11 +276,11 @@ describe('questions and answers', () => {
   });
 
   it('closes a question so students can no longer answer', async () => {
-    const created = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, { body: 'بسته شدنی' });
+    const created = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/questions`, mcq('بسته شدنی'));
     await client.post(`/api/v1/questions/${created.body.question.id}/close`, {});
     const student = createClient(ctx.db);
     await student.login('student-a', 'student-a1');
-    const res = await student.post(`/api/v1/student/questions/${created.body.question.id}/answers`, { body: 'دیر رسیدم' });
+    const res = await student.post(`/api/v1/student/questions/${created.body.question.id}/answers`, { optionIndex: 0 });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('QUESTION_CLOSED');
   });

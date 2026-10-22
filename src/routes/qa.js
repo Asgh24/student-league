@@ -6,6 +6,7 @@ import { readSettings } from '../repositories/leagues.js';
 import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
 import { ownedRow, ownedRowQuery } from '../middleware/ownership.js';
 import { findDisciplineColumn } from '../repositories/leagues.js';
+import { serializeQuestion } from '../services/questions.js';
 import { applyScoreDelta } from '../services/scoring.js';
 import { createQuizSession, recentQuizSessions } from '../services/quiz.js';
 
@@ -14,19 +15,37 @@ export function createLeagueQuestionsRouter({ db }) {
   router.use(requireTeacher, loadOwnedLeague(db));
 
   router.get('/', (req, res) => {
-    const items = db.prepare(`
+    const rows = db.prepare(`
       SELECT q.id, q.body, q.points, q.is_open AS isOpen, q.created_at AS createdAt,
+             q.options_json AS optionsJson, q.correct_index AS correctIndex,
              (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) AS answerCount
       FROM questions q WHERE q.league_id = ? ORDER BY q.id DESC
     `).all(req.league.id);
+    const items = rows.map((row) => serializeQuestion(row, { includeCorrectIndex: true }));
     res.json({ items, recent: recentQuizSessions(db, req.league.id) });
   });
 
   router.post('/', validate({ body: schemas.questionCreate }), (req, res) => {
-    const info = db.prepare('INSERT INTO questions (league_id, teacher_id, body, points, is_open, created_at) VALUES (?, ?, ?, ?, 1, ?)')
-      .run(req.league.id, req.user.id, req.body.body, req.body.points, isoNow());
-    const question = db.prepare('SELECT id, body, points, is_open AS isOpen, created_at AS createdAt FROM questions WHERE id = ?').get(info.lastInsertRowid);
-    res.status(201).json({ question: { ...question, answerCount: 0 } });
+    const options = req.body.options.map((option) => option.trim());
+    const info = db.prepare(`
+      INSERT INTO questions
+        (league_id, teacher_id, body, points, is_open, options_json, correct_index, created_at)
+      VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+    `).run(
+      req.league.id,
+      req.user.id,
+      req.body.body,
+      req.body.points,
+      JSON.stringify(options),
+      req.body.correctIndex,
+      isoNow(),
+    );
+    const row = db.prepare(`
+      SELECT id, body, points, is_open AS isOpen, created_at AS createdAt,
+             options_json AS optionsJson, correct_index AS correctIndex
+      FROM questions WHERE id = ?
+    `).get(info.lastInsertRowid);
+    res.status(201).json({ question: { ...serializeQuestion(row, { includeCorrectIndex: true }), answerCount: 0 } });
   });
 
   return router;
@@ -52,12 +71,20 @@ export function createQuestionsRouter({ db }) {
   });
 
   router.get('/:id/answers', ...ownedQuestion, (req, res) => {
-    const items = db.prepare(`
-      SELECT a.id, a.student_id AS studentId, s.name AS studentName, a.body, a.awarded, a.created_at AS createdAt
+    const question = serializeQuestion(req.question, { includeCorrectIndex: true });
+    const rows = db.prepare(`
+      SELECT a.id, a.student_id AS studentId, s.name AS studentName, a.body,
+             a.selected_index AS selectedIndex, a.awarded, a.created_at AS createdAt
       FROM answers a JOIN students s ON s.id = a.student_id
       WHERE a.question_id = ? ORDER BY a.id ASC
     `).all(req.question.id);
-    res.json({ question: { id: req.question.id, body: req.question.body, points: req.question.points }, items });
+    const items = rows.map((answer) => ({
+      ...answer,
+      isCorrect: question.type === 'multiple_choice' && answer.selectedIndex !== null
+        ? answer.selectedIndex === question.correctIndex
+        : null,
+    }));
+    res.json({ question, items });
   });
 
   return router;

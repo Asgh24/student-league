@@ -14,6 +14,7 @@ import { createMetaRouter } from './meta.js';
 import { createLeagueReportsRouter } from './reports.js';
 import { createScheduleRouter } from './schedule.js';
 import { createLeagueSeatingRouter } from './seating.js';
+import { createSmsSettingsRouter } from './sms.js';
 import { createScoresRouter } from './scores.js';
 import { createStudentPortalRouter } from './student.js';
 import { createSubscriptionRouter } from './subscription.js';
@@ -30,6 +31,7 @@ export function createApiRouter(ctx) {
   router.use('/admin', createAdminRouter(ctx));
   router.use('/subscription', createSubscriptionRouter(ctx));
   router.use('/messages', createMessagesRouter(ctx));
+  router.use('/sms', createSmsSettingsRouter(ctx));
 
   // Teacher resources scoped to a league the teacher owns.
   router.use('/leagues/:id/students', createLeagueStudentsRouter(ctx));

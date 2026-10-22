@@ -44,6 +44,7 @@ import { renderStudentDashboard } from './views/student/dashboard.js';
 import { renderStudentEvaluations } from './views/student/evaluations.js';
 import { renderStudentHistory } from './views/student/history.js';
 import { renderStudentLikes } from './views/student/likes.js';
+import { renderStudentQuestions } from './views/student/questions.js';
 import { renderStudentRanking } from './views/student/ranking.js';
 import { renderReportCard } from './views/student/reportcard.js';
 import { renderStudentTeam } from './views/student/team.js';
@@ -126,6 +127,7 @@ function studentNav() {
     ['student/history', '📜', 'تاریخچه'],
     ['student/ranking', '🏅', 'رده‌بندی'],
     ['student/likes', '💜', 'لایک'],
+    ['student/questions', '❓', 'سوال و پاسخ'],
     ['student/messages', '💬', 'پیام‌ها'],
     ['student/settings', '⚙️', 'تنظیمات'],
     ['fun', '🎮', 'سرگرمی'],
@@ -216,6 +218,7 @@ const routes = [
   { path: 'student/history', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentHistory(ctx) },
   { path: 'student/ranking', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentRanking(ctx) },
   { path: 'student/likes', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentLikes(ctx) },
+  { path: 'student/questions', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentQuestions(ctx) },
   { path: 'student/messages', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentMessages(ctx) },
   { path: 'student/settings', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderSettings(ctx) },
 ];

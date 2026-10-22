@@ -54,6 +54,7 @@ const { renderEvaluations } = await import('../public/js/views/evaluations.js');
 const { renderQa } = await import('../public/js/views/qa.js');
 const { renderSeating } = await import('../public/js/views/seating.js');
 const { renderStudentEvaluations } = await import('../public/js/views/student/evaluations.js');
+const { renderStudentQuestions } = await import('../public/js/views/student/questions.js');
 const { renderContacts } = await import('../public/js/views/contacts.js');
 const { renderReports } = await import('../public/js/views/reports.js');
 const { renderFun } = await import('../public/js/views/fun.js');
@@ -870,6 +871,7 @@ describe('course evaluations (teacher view)', () => {
 describe('Q&A presentation mode', () => {
   const question = {
     id: 5, body: 'پایتخت ایران کجاست؟', points: 15, isOpen: true, answerCount: 0,
+    type: 'multiple_choice', options: ['تهران', 'شیراز', 'اصفهان'], correctIndex: 0,
     createdAt: '2026-10-20T10:00:00.000Z',
   };
   const league = { league: { id: 1, name: 'لیگ تست' } };
@@ -914,6 +916,9 @@ describe('Q&A presentation mode', () => {
     const stage = document.querySelector('.quiz-stage');
     expect(stage.textContent).toContain('پایتخت ایران کجاست؟');
     expect(stage.textContent).toContain('سؤال ۱ از ۱');
+    expect(stage.querySelectorAll('.quiz-option')).toHaveLength(3);
+    expect(stage.textContent).toContain('تهران');
+    expect(stage.textContent).toContain('شیراز');
     expect(stage.textContent).toContain('درست');
     expect(stage.textContent).toContain('غلط');
 
@@ -934,6 +939,45 @@ describe('Q&A presentation mode', () => {
 
     [...summary.querySelectorAll('button')].find((node) => node.textContent.includes('بستن')).click();
     expect(document.querySelector('.quiz-stage')).toBeNull();
+  });
+
+  it('builds a question with added/removed options and a chosen correct answer', async () => {
+    mockLoad();
+    api.post.mockResolvedValue({ question: { ...question, id: 6 } });
+
+    await renderQa({ params: { id: '1' } });
+    [...document.querySelectorAll('#view button')]
+      .find((node) => node.textContent.includes('سؤال جدید')).click();
+
+    await vi.waitFor(() => expect(document.querySelector('.option-editor')).not.toBeNull());
+    const add = [...document.querySelectorAll('#modal-root button')]
+      .find((node) => node.textContent.includes('افزودن گزینه'));
+    add.click();
+    add.click();
+    expect(document.querySelectorAll('.option-row')).toHaveLength(6);
+
+    const removeButtons = [...document.querySelectorAll('#modal-root button[aria-label="حذف گزینه"]')];
+    removeButtons.at(-1).click();
+    expect(document.querySelectorAll('.option-row')).toHaveLength(5);
+
+    document.querySelector('#mcq-body').value = 'کدام گزینه درست است؟';
+    document.querySelector('#mcq-points').value = '12';
+    const texts = [...document.querySelectorAll('.option-row input[type="text"]')];
+    texts.forEach((input, index) => {
+      input.value = `گزینه ${index + 1}`;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    document.querySelectorAll('.option-row input[type="radio"]')[3].click();
+
+    [...document.querySelectorAll('#modal-root button')]
+      .find((node) => node.textContent.includes('ثبت سؤال')).click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/leagues/1/questions', {
+      body: 'کدام گزینه درست است؟',
+      points: 12,
+      options: ['گزینه 1', 'گزینه 2', 'گزینه 3', 'گزینه 4', 'گزینه 5'],
+      correctIndex: 3,
+    }));
   });
 
   it('lists the latest presentation results next to the questions', async () => {
@@ -1079,6 +1123,72 @@ describe('student evaluations view', () => {
   });
 });
 
+describe('student class questions', () => {
+  function payload() {
+    return {
+      items: [
+        {
+          id: 1, body: 'پایتخت ایران کدام شهر است؟', points: 25,
+          options: ['تهران', 'مشهد', 'شیراز'], type: 'multiple_choice',
+          isOpen: true, createdAt: '2026-10-22T06:43:00.000Z',
+          myAnswer: null, myOptionIndex: null, myAward: null, answeredAt: null,
+        },
+        {
+          id: 2, body: 'چرا آسمان آبی است؟', points: 10, options: [], type: 'text',
+          isOpen: true, createdAt: '2026-10-21T06:43:00.000Z',
+          myAnswer: null, myOptionIndex: null, myAward: null, answeredAt: null,
+        },
+        {
+          id: 3, body: 'سؤال بسته', points: 5, options: ['الف', 'ب'], type: 'multiple_choice',
+          isOpen: false, createdAt: '2026-10-20T06:43:00.000Z',
+          myAnswer: 'ب', myOptionIndex: 1, myAward: 5, answeredAt: '2026-10-20T07:00:00.000Z',
+        },
+      ],
+    };
+  }
+
+  it('renders choices without the correct answer and submits the selected option', async () => {
+    api.get.mockResolvedValue(payload());
+    api.post.mockResolvedValue({ ok: true });
+    await renderStudentQuestions();
+
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('سوال و پاسخ');
+    expect(view.textContent).toContain('پایتخت ایران کدام شهر است؟');
+    expect(view.textContent).not.toContain('correctIndex');
+    expect(view.querySelectorAll('.question-item')).toHaveLength(3);
+    expect(view.querySelectorAll('.question-choice')).toHaveLength(3);
+    expect(view.textContent).toContain('سؤال بسته');
+
+    const firstForm = view.querySelectorAll('.question-item')[0].querySelector('form');
+    const radios = firstForm.querySelectorAll('input[type="radio"]');
+    expect(radios).toHaveLength(3);
+    radios[1].click();
+    firstForm.querySelector('button[type="submit"]').click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/student/questions/1/answers', {
+      optionIndex: 1,
+    }));
+    expect(api.post).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ correctIndex: expect.anything() }));
+  });
+
+  it('submits a free-text answer for a legacy question', async () => {
+    api.get.mockResolvedValue(payload());
+    api.post.mockResolvedValue({ ok: true });
+    await renderStudentQuestions();
+
+    const view = document.querySelector('#view');
+    const textForm = view.querySelectorAll('.question-item')[1].querySelector('form');
+    const textarea = textForm.querySelector('textarea');
+    textarea.value = 'به خاطر پراکندگی نور';
+    textForm.querySelector('button[type="submit"]').click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/student/questions/2/answers', {
+      body: 'به خاطر پراکندگی نور',
+    }));
+  });
+});
+
 describe('parent contact numbers', () => {
   it('lists the students and saves a normalized parent number', async () => {
     api.get.mockResolvedValue({
@@ -1152,7 +1262,11 @@ describe('daily parent report', () => {
         },
       ],
       summary: { students: 2, changed: 2, withoutParentPhone: 1, sent: 0, queued: 0, failed: 0 },
-      sms: { provider: 'sms.ir', configured: false, lineNumber: '', hasApiKey: false },
+      sms: {
+        provider: 'sms.ir', configured: false, source: 'none', lineNumber: '', hasApiKey: false,
+        own: { hasApiKey: false, lineNumber: '', updatedAt: null }, partialOwnSettings: false,
+      },
+      sampleMessage: 'لیگ تست | گزارش روزانه ۱۴۰۵/۰۷/۲۹\nعلی رضایی: ریاضی +۲، انضباطی -۱\nجمع تغییرات: +۲',
       recent: [],
     };
   }
@@ -1165,7 +1279,11 @@ describe('daily parent report', () => {
     expect(view.textContent).toContain('گزارش روزانه والدین');
     expect(view.querySelector('#report-date')).not.toBeNull();
     expect(view.querySelector('#report-date').querySelectorAll('select')).toHaveLength(3);
-    expect(view.textContent).toContain('سرویس پیامک پیکربندی نشده است');
+    expect(view.textContent).toContain('تنظیمات پیامک من');
+    expect(view.querySelector('#sms-api-key')).not.toBeNull();
+    expect(view.querySelector('#sms-line-number')).not.toBeNull();
+    expect(view.textContent).toContain('نمونهٔ متن پیامکی');
+    expect(view.textContent).toContain('کلید API و شماره خط پنل sms.ir خودتان');
     expect(view.textContent).toContain('انضباطی');
     expect(view.textContent).toContain('آرش آزمون: انضباطی');
     expect(view.textContent).toContain('۱ دانش‌آموز انتخاب شده');
@@ -1173,6 +1291,33 @@ describe('daily parent report', () => {
     const checks = [...view.querySelectorAll('tbody input[type="checkbox"]')];
     expect(checks.map((node) => node.checked)).toEqual([true, false]);
     expect(api.get).toHaveBeenCalledWith(expect.stringMatching(/^\/leagues\/1\/reports\/daily\?date=\d{4}-\d{2}-\d{2}$/));
+  });
+
+  it('saves the teacher own sms.ir credentials and applies them immediately', async () => {
+    api.get.mockResolvedValue(reportPayload());
+    api.put.mockImplementation((url, payload) => {
+      expect(url).toBe('/sms/settings');
+      expect(payload).toEqual({ apiKey: 'teacher-secret', lineNumber: '30009999' });
+      return Promise.resolve({
+        config: {
+          provider: 'sms.ir', configured: true, source: 'teacher', lineNumber: '30009999', hasApiKey: true,
+          own: { hasApiKey: true, lineNumber: '30009999', updatedAt: '2026-10-21T10:00:00.000Z' },
+          partialOwnSettings: false,
+        },
+      });
+    });
+
+    await renderReports({ params: { id: '1' } });
+    const view = document.querySelector('#view');
+    view.querySelector('#sms-api-key').value = 'teacher-secret';
+    view.querySelector('#sms-line-number').value = '30009999';
+    [...view.querySelectorAll('button')]
+      .find((node) => node.textContent.includes('ذخیرهٔ تنظیمات پیامک')).click();
+
+    await vi.waitFor(() => expect(api.put).toHaveBeenCalled());
+    await vi.waitFor(() => expect(document.querySelector('#view').textContent).toContain('خط: 30009999'));
+    expect(document.querySelector('#view').textContent).toContain('با حساب sms.ir خودتان');
+    expect(document.querySelector('#view').textContent).toContain('کلید API: ذخیره‌شده');
   });
 
   it('sends the selected reports and shows the queued result', async () => {

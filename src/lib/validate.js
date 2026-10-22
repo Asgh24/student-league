@@ -129,6 +129,23 @@ export const schemas = {
     before: z.coerce.number().int().positive().optional(),
   }),
 
+  /**
+   * Per-teacher sms.ir settings. Empty API key means "keep the saved key";
+   * `clearApiKey` is the explicit way to remove it. The line number can be
+   * cleared by sending an empty string.
+   */
+  smsSettings: z.object({
+    apiKey: z.string().trim().max(300).optional(),
+    lineNumber: z.string().trim().max(30).refine(
+      (value) => value === '' || /^\d{3,20}$/.test(value),
+      'شماره خط باید فقط شامل رقم باشد',
+    ).optional(),
+    clearApiKey: z.boolean().optional().default(false),
+  }).refine(
+    (value) => value.apiKey !== undefined || value.lineNumber !== undefined || value.clearApiKey,
+    'حداقل یکی از تنظیمات پیامک را وارد کنید',
+  ),
+
   /** Admin SMS panel. Mobiles are normalized by the route. */
   smsTest: z.object({
     mobile: z.string().trim().min(10).max(20),
@@ -355,10 +372,21 @@ export const schemas = {
   questionCreate: z.object({
     body: z.string().trim().min(1, 'متن سوال الزامی است').max(500),
     points: z.coerce.number().int().min(0).max(10000).default(0),
+    options: z.array(z.string().trim().min(1, 'متن گزینه الزامی است').max(200))
+      .min(2, 'حداقل دو گزینه لازم است')
+      .max(10, 'حداکثر ۱۰ گزینه مجاز است'),
+    correctIndex: z.coerce.number().int().min(0, 'گزینه صحیح را انتخاب کنید').max(9),
+  }).refine((value) => value.correctIndex < value.options.length, {
+    message: 'گزینه صحیح باید یکی از گزینه‌ها باشد',
+    path: ['correctIndex'],
   }),
 
+  /** Multiple-choice students send `optionIndex`; legacy text questions send `body`. */
   answerCreate: z.object({
-    body: z.string().trim().min(1, 'متن پاسخ الزامی است').max(1000),
+    body: z.string().trim().min(1, 'متن پاسخ الزامی است').max(1000).optional(),
+    optionIndex: z.coerce.number().int().min(0).max(9).optional(),
+  }).refine((value) => value.body !== undefined || value.optionIndex !== undefined, {
+    message: 'یک گزینه یا متن پاسخ الزامی است',
   }),
 
   answerAward: z.object({

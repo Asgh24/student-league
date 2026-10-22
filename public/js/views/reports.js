@@ -16,6 +16,7 @@ import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { confirmDialog, emptyState, notify } from '../ui.js';
 import { backToWorkbench, button, card, chip, fa, faDateTime, loadingNode, pageHead, statCard } from './common.js';
+import { smsSettingsCard } from './smsSettings.js';
 
 const STATUS_LABELS = {
   sent: { label: 'ارسال شد', kind: 'ok' },
@@ -146,18 +147,15 @@ export async function renderReports({ params }) {
     ]);
   }
 
-  function smsNotice() {
-    if (report.sms.configured) {
-      return card({ title: 'سرویس پیامک', icon: '✅' }, [
-        el('p.small', { text: `sms.ir پیکربندی شده است (خط ${report.sms.lineNumber}). پیامک‌ها مستقیماً برای والدین ارسال می‌شوند.` }),
-      ]);
-    }
-    return card({ title: 'سرویس پیامک پیکربندی نشده است', icon: '⚠️' }, [
-      el('p.small', {
-        text: 'برای ارسال واقعی، کلید API و شماره خط sms.ir را در فایل .env تنظیم کنید: SMSIR_API_KEY و SMSIR_LINE_NUMBER. تا آن زمان پیامک‌ها در «صف ارسال» سایت ذخیره می‌شوند و از بین نمی‌روند.',
-      }),
-      el('p.small.muted', { text: 'مستندات: https://sms.ir/rest-api/ — ارسال از مسیر POST /v1/send/bulk انجام می‌شود.' }),
-    ]);
+  function smsSettings() {
+    return smsSettingsCard({
+      config: report.sms ?? {},
+      sampleMessage: report.sampleMessage ?? '',
+      onSaved: (config) => {
+        report.sms = config;
+        paint();
+      },
+    });
   }
 
   function reportTable() {
@@ -277,7 +275,7 @@ export async function renderReports({ params }) {
       report = lastResult;
       const counts = lastResult.counts ?? {};
       if (counts.sent) notify.ok(`${fa(counts.sent)} پیامک ارسال شد`);
-      if (counts.queued) notify.info(`${fa(counts.queued)} پیامک در صف ذخیره شد (سرویس پیامک پیکربندی نشده)`);
+      if (counts.queued) notify.info(`${fa(counts.queued)} پیامک در صف ذخیره شد (کلید و خط sms.ir را در تنظیمات پیامک کامل کنید)`);
       if (counts.failed) notify.error(`${fa(counts.failed)} پیامک ناموفق بود`);
       if (counts.skipped) notify.warn(`${fa(counts.skipped)} دانش‌آموز شماره والد ندارد`);
       paint();
@@ -313,7 +311,7 @@ export async function renderReports({ params }) {
         statCard({ label: 'در صف ارسال', value: fa(summary.queued ?? 0), icon: '📬' }),
       ]),
       dateCard(),
-      smsNotice(),
+      smsSettings(),
       card({ title: 'انتخاب دانش‌آموزان', icon: '☑️' }, [
         el('div.row', { style: { flexWrap: 'wrap', marginBottom: '8px' } }, [
           button('فقط دارای تغییر', { kind: 'ghost', icon: '📝', onClick: () => selectWhere((item) => item.changes > 0) }),

@@ -8,6 +8,7 @@ import { requireStudent } from '../middleware/auth.js';
 import { setPersianDigits } from '../repositories/users.js';
 import { readSettings } from '../repositories/leagues.js';
 import { listForStudent } from '../services/evaluations.js';
+import { parseStoredOptions, serializeQuestion } from '../services/questions.js';
 import { readSchedule } from './schedule.js';
 import {
   dashboard,
@@ -153,13 +154,24 @@ export function createStudentPortalRouter({ db }) {
 
   router.get('/questions', (req, res) => {
     const student = contextOf(db, req);
-    const items = db.prepare(`
+    const rows = db.prepare(`
       SELECT q.id, q.body, q.points, q.is_open AS isOpen, q.created_at AS createdAt,
-             a.body AS myAnswer, a.awarded AS myAward, a.created_at AS answeredAt
+             q.options_json AS optionsJson,
+             a.body AS myAnswer, a.selected_index AS myOptionIndex,
+             a.awarded AS myAward, a.created_at AS answeredAt
       FROM questions q
       LEFT JOIN answers a ON a.question_id = q.id AND a.student_id = ?
       WHERE q.league_id = ? ORDER BY q.id DESC
     `).all(student.id, student.leagueId);
+    // Students only receive the choices, never `correctIndex`, until the
+    // teacher reviews the answers.
+    const items = rows.map((row) => ({
+      ...serializeQuestion(row),
+      myAnswer: row.myAnswer ?? null,
+      myOptionIndex: row.myOptionIndex ?? null,
+      myAward: row.myAward ?? null,
+      answeredAt: row.answeredAt ?? null,
+    }));
     res.json({ items });
   });
 
@@ -171,10 +183,32 @@ export function createStudentPortalRouter({ db }) {
       : null;
     if (!question) throw notFound('سوال یافت نشد');
     if (!question.is_open) throw badRequest('QUESTION_CLOSED', 'این سوال بسته شده است');
+
+    const options = parseStoredOptions(question.options_json);
+    let body;
+    let selectedIndex = null;
+    if (options.length >= 2) {
+      if (req.body.optionIndex === undefined) {
+        throw badRequest('OPTION_REQUIRED', 'یکی از گزینه‌ها را انتخاب کنید');
+      }
+      if (req.body.optionIndex >= options.length) {
+        throw badRequest('OPTION_INVALID', 'گزینه انتخاب‌شده معتبر نیست');
+      }
+      selectedIndex = req.body.optionIndex;
+      body = options[selectedIndex];
+    } else {
+      if (!req.body.body) throw badRequest('ANSWER_REQUIRED', 'متن پاسخ الزامی است');
+      body = req.body.body;
+    }
+
     db.prepare(`
-      INSERT INTO answers (question_id, student_id, body, awarded, created_at) VALUES (?, ?, ?, 0, ?)
-      ON CONFLICT (question_id, student_id) DO UPDATE SET body = excluded.body, created_at = excluded.created_at
-    `).run(question.id, student.id, req.body.body, isoNow());
+      INSERT INTO answers (question_id, student_id, body, selected_index, awarded, created_at)
+      VALUES (?, ?, ?, ?, 0, ?)
+      ON CONFLICT (question_id, student_id) DO UPDATE SET
+        body = excluded.body,
+        selected_index = excluded.selected_index,
+        created_at = excluded.created_at
+    `).run(question.id, student.id, body, selectedIndex, isoNow());
     res.status(201).json({ ok: true });
   });
 
