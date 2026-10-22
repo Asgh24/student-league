@@ -143,6 +143,17 @@ is only needed if you upgrade Chart.js or the Vazirmatn font package.
 
 ## Environment variables
 
+Environment loading order (later sources never overwrite an existing variable):
+
+1. Variables injected by the shell, Docker or the PaaS panel.
+2. `ENV_FILE` or `DOTENV_CONFIG_PATH`, when set, selects one explicit file.
+3. In production, `production.env` next to `server.js` is read when it exists.
+4. Otherwise `.env` is read (local development and legacy deployments).
+
+`production.env` and `.env` are both git-ignored. On a PaaS the panel variables
+are safer because the file has to be uploaded separately; on a VPS you can keep
+`production.env` beside `server.js` or rename it to `.env`.
+
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `NODE_ENV` | `development` | Set to `production` on a server (enables secure cookies, hides stack traces) |
@@ -924,6 +935,7 @@ signals through `tini` for graceful shutdown, and has a `HEALTHCHECK` that polls
 git clone <your-repo> /opt/league && cd /opt/league
 npm ci --omit=dev
 cp .env.example .env      # set NODE_ENV=production, SESSION_SECRET, DATA_DIR, TRUST_PROXY=true
+# or upload production.env beside server.js; production mode loads it automatically
 npm start                 # or: node server.js
 ```
 

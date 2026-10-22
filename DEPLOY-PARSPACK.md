@@ -172,8 +172,14 @@ LOG_LEVEL=info
 ```
 
 Everything else has a sane default; the complete list is in `.env.example` and in the
-README's environment table. You can also upload a file named exactly `.env` instead of
-typing each variable — `.env` is git-ignored, so it never ends up in the repository.
+README's environment table. Instead of typing each variable you can upload a file named
+exactly `.env`; in production the app reads `production.env` beside `server.js` when that
+file exists, otherwise it reads `.env`. Both names are git-ignored, so they never end up in
+the repository, and panel variables always take precedence over values in either file.
+
+If the boot log says `SESSION_SECRET must be set ... in production`, the process did not
+receive the file or the panel variables. Confirm the file was uploaded to the directory
+that contains `server.js`, or copy the values into the panel, then redeploy.
 
 ---
 

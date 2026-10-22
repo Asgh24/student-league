@@ -1,7 +1,43 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
+
+/**
+ * Loads environment variables before any configuration getter is read.
+ *
+ * Precedence:
+ *   1. Real process environment (PaaS panel, Docker, shell) always wins, because
+ *      dotenv never overrides an existing variable by default.
+ *   2. `ENV_FILE` / `DOTENV_CONFIG_PATH` select one explicit file (tests use the
+ *      latter to keep a developer's local `.env` out of test runs).
+ *   3. Production reads `production.env` when it exists; otherwise `.env` is
+ *      used, which keeps local and legacy deployments working.
+ *
+ * `production.env` stays git-ignored: it only helps when the file is actually
+ * uploaded to the server. Panel environment variables remain the preferred way.
+ */
+function loadEnvironment() {
+  const explicitFile = process.env.ENV_FILE || process.env.DOTENV_CONFIG_PATH;
+  if (explicitFile) {
+    const resolved = path.resolve(explicitFile);
+    if (process.env.ENV_FILE && !fs.existsSync(resolved)) {
+      throw new Error(`ENV_FILE does not exist: ${resolved}`);
+    }
+    dotenv.config({ path: resolved, quiet: true });
+    return;
+  }
+
+  const productionFile = path.resolve('production.env');
+  if (process.env.NODE_ENV === 'production' && fs.existsSync(productionFile)) {
+    dotenv.config({ path: productionFile, quiet: true });
+    return;
+  }
+
+  dotenv.config({ quiet: true });
+}
+
+loadEnvironment();
 
 function bool(value, fallback) {
   if (value === undefined || value === '') return fallback;
