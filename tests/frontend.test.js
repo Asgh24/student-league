@@ -1320,6 +1320,43 @@ describe('daily parent report', () => {
     expect(document.querySelector('#view').textContent).toContain('کلید API: ذخیره‌شده');
   });
 
+  it('opens the sms setup guide with screenshots and closes it', async () => {
+    api.get.mockResolvedValue(reportPayload());
+    await renderReports({ params: { id: '1' } });
+
+    const help = document.querySelector('#sms-help-button');
+    expect(help).not.toBeNull();
+    expect(help.textContent).toContain('راهنمایی راه‌اندازی سامانه پیامکی');
+    help.click();
+
+    await vi.waitFor(() => expect(document.querySelector('#modal-root .modal')).not.toBeNull());
+    const modal = document.querySelector('#modal-root .modal');
+    expect(modal.classList.contains('modal--sms-guide')).toBe(true);
+    expect(modal.getAttribute('role')).toBe('dialog');
+    expect(modal.textContent).toContain('راهنمایی راه‌اندازی سامانه پیامکی');
+    expect(modal.textContent).toContain('لیست کلیدهای API');
+    expect(modal.textContent).toContain('افزودن کلید جدید');
+    expect(modal.textContent).toContain('شماره‌های من');
+    expect(modal.textContent).toContain('۵۰۰۰۴۳۰');
+
+    const images = [...modal.querySelectorAll('img.sms-guide__image')];
+    expect(images.map((image) => image.getAttribute('src'))).toEqual([
+      '/img/sms-help/api-keys-list.png',
+      '/img/sms-help/api-key-details.png',
+      '/img/sms-help/line-numbers.png',
+    ]);
+    expect(images.every((image) => image.getAttribute('alt'))).toBe(true);
+    expect(modal.closest('.modal-backdrop').classList.contains('modal-backdrop--sms-guide')).toBe(true);
+
+    const topClose = modal.querySelector('#sms-guide-close');
+    expect(topClose).not.toBeNull();
+    expect(topClose.getAttribute('aria-label')).toContain('بستن');
+    const close = [...modal.querySelectorAll('button')].find((node) => node.textContent.trim() === 'بستن');
+    expect(close).not.toBeUndefined();
+    topClose.click();
+    await vi.waitFor(() => expect(document.querySelector('#modal-root .modal')).toBeNull());
+  });
+
   it('sends the selected reports and shows the queued result', async () => {
     api.get.mockResolvedValue(reportPayload());
     api.post.mockResolvedValue({

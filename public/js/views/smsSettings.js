@@ -11,6 +11,7 @@ import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
 import { notify } from '../ui.js';
 import { button, card, chip, faDate, field } from './common.js';
+import { smsSetupGuideButton } from './smsHelp.js';
 
 function statusText(config) {
   if (config.source === 'teacher' && config.configured) {
@@ -122,7 +123,12 @@ export function smsSettingsCard({
     ])
     : null;
 
-  return card({ title, icon: '📱' }, [
+  return card({
+    title,
+    icon: '📱',
+    className: 'card--sms-settings',
+    actions: [smsSetupGuideButton()],
+  }, [
     statusChips,
     el('p.small', { text: statusText(config) }),
     el('p.small.muted', {}, [

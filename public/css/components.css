@@ -681,6 +681,135 @@ td.delta-cell.is-negative {
   flex-wrap: wrap;
 }
 
+/* ------------------------------------------------------- sms setup guide */
+.card--sms-settings .card__title {
+  flex-wrap: wrap;
+}
+.modal-backdrop--sms-guide {
+  background: rgba(8, 12, 30, 0.78);
+  backdrop-filter: blur(5px);
+}
+.modal--sms-guide {
+  position: relative;
+  width: min(940px, 100%);
+  max-height: 90vh;
+  padding: 20px 22px;
+}
+.modal--sms-guide .modal__title {
+  padding-inline-end: 42px;
+}
+.sms-guide__close {
+  position: absolute;
+  inset-inline-end: 12px;
+  top: 12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+.sms-guide__close:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.sms-guide {
+  display: grid;
+  gap: 14px;
+}
+.sms-guide__intro {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  line-height: 1.9;
+}
+.sms-guide__step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.sms-guide__number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: #fff;
+  font-weight: 800;
+  line-height: 1;
+}
+.sms-guide__content {
+  min-width: 0;
+}
+.sms-guide__title {
+  margin: 3px 0 5px;
+  font-size: 1rem;
+}
+.sms-guide__text {
+  margin: 0;
+  line-height: 1.9;
+}
+.sms-guide__figure {
+  margin: 10px 0 0;
+}
+.sms-guide__zoom {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+.sms-guide__zoom:hover {
+  border-color: var(--brand-2);
+}
+.sms-guide__image {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.sms-guide__figure figcaption {
+  margin-top: 6px;
+  line-height: 1.7;
+}
+.sms-guide__note {
+  padding: 11px 13px;
+  border: 1px solid #fcd34d;
+  border-radius: var(--radius-sm);
+  background: #fffbeb;
+  color: #92400e;
+  line-height: 1.8;
+}
+
+@media (max-width: 640px) {
+  .modal--sms-guide {
+    max-height: 92vh;
+    padding: 16px;
+  }
+  .sms-guide__step {
+    grid-template-columns: 1fr;
+  }
+  .sms-guide__number {
+    width: 28px;
+    height: 28px;
+  }
+}
+
 /* ---------------------------------------------------------------- misc */
 .empty {
   text-align: center;

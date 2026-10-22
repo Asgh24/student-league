@@ -59,7 +59,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | اشتراک من | Trial/subscription banner, remaining days, admin-editable plans, Zarinpal checkout and payment history; an expired teacher is redirected here instead of seeing a broken dashboard |
 | پنل مدیر | Separate site-owner login: teacher search/filter, manual subscription grants, plan CRUD, revenue and payment ledger, inbox/SMS health |
 | پیام‌ها | Ticket-like teacher↔student inbox with threads, unread counters, read receipts and polling; both sides can reply from the same shared view |
-| پنل پیامک | Per-teacher sms.ir API key + line number in the teacher's own panel (encrypted, write-only), credit/lines, test and bulk sends, league-report outbox and admin campaign retry; without credentials everything stays queued instead of being lost |
+| پنل پیامک | Per-teacher sms.ir API key + line number in the teacher's own panel (encrypted, write-only), a built-in «راهنمایی راه‌اندازی سامانه پیامکی» guide with annotated screenshots, credit/lines, test and bulk sends, league-report outbox and admin campaign retry; without credentials everything stays queued instead of being lost |
 | پرداخت‌ها | Zarinpal v4 request/verify (Rial conversion, sandbox support) and a local `mock` gateway for development before a merchant ID exists |
 
 **Student area** – tabs: میزکار, کارنامه, ارزشیابی, حضور و غیاب, تیم من, تاریخچه, رده‌بندی, لایک, سوال و پاسخ, پیام‌ها, تنظیمات.
@@ -644,6 +644,12 @@ Each teacher enters their **own** sms.ir API key and sender line in
 credentials. The key is encrypted with AES-256-GCM using a key derived from
 `SESSION_SECRET`; the API returns only `hasApiKey: true|false`, never the key.
 
+The card's «راهنمایی راه‌اندازی سامانه پیامکی» button opens a modal with four
+steps and the local screenshots in `public/img/sms-help/`: finding
+«لیست کلیدهای API», creating a key, copying it and saving, reading the active
+line from «شماره‌های من», and entering both values in the teacher panel. The
+guide works offline; the API key in the sample screenshot is redacted.
+
 | Method | Path | Body | Response |
 | --- | --- | --- | --- |
 | GET | `/sms/settings` | — | `{ config }` — `configured`, `source` (`teacher`/`server`/`none`), `lineNumber`, `hasApiKey`, `serverConfigured`, `partialOwnSettings`, `own{ hasApiKey, lineNumber, updatedAt }`; never contains the API key |
@@ -728,7 +734,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 
 ```
  Test Files  28 passed (28)
-      Tests  339 passed (339)
+      Tests  340 passed (340)
 ```
 
 | Suite | Tests | Covers |
@@ -754,7 +760,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `messages.test.js` | 12 | Teacher↔student threads, unread/read receipts, replies, ownership isolation, no-login students, empty body, unique conversations, contacts, admin exclusion |
 | `smsAdmin.test.js` | 4 | Admin SMS config, queued test messages without credentials, normalized bulk send, credit, invalid numbers and outbox retry |
 | `smsSettings.test.js` | 6 | Per-teacher encrypted sms.ir key/line, write-only API, teacher isolation, teacher credential precedence, incomplete-settings fallback block, validation and sample message |
-| `frontend.test.js` | 58 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (12 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, MCQ option editor, student MCQ/text answering, teacher sms.ir settings card + sample, modal focus/footer lifecycle |
+| `frontend.test.js` | 59 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (12 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, MCQ option editor, student MCQ/text answering, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, modal focus/footer lifecycle |
 | `frontendPlatform.test.js` | 8 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, shared inbox thread/composer, admin settings label |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 2 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not) |
@@ -785,6 +791,7 @@ Executed against a live server (`NODE_ENV=development`, fresh `DATA_DIR`, seeded
 | Student Q&A | ✅ new «سوال و پاسخ» tab; answered the MCQ (own answer `مشهد`, no `correctIndex` in the API), and submitted a legacy text answer |
 | Teacher answer review | ✅ «پاسخ‌ها» showed `پاسخ صحیح: گزینه ۲ — مشهد` and the student's `گزینه ۲: مشهد · پاسخ صحیح` |
 | Teacher sms.ir settings | ✅ saved a key + line from the teacher's own card, status switched to «حساب شخصی شما», the sample SMS rendered, then the test values were cleared |
+| SMS setup guide | ✅ «راهنمایی راه‌اندازی سامانه پیامکی» opened a modal with a dark backdrop, all three screenshots, four steps and a working «بستن» button |
 | Attendance bulk "همه حاضر" | ✅ `۰ ثبت‌نشده` → `۲۲ حاضر` |
 | Raffle draw | ✅ winner shown, "21 remaining", pool exclusion works |
 | Logout → login as another user | ✅ (this flow exposed a stale-CSRF bug that is now fixed and tested) |
