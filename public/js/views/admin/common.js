@@ -11,6 +11,7 @@ const TABS = [
   ['admin/payments', '🧾', 'پرداخت‌ها'],
   ['admin/payment-settings', '💳', 'کارت و پرداخت'],
   ['admin/sms', '📨', 'پنل پیامک'],
+  ['admin/backup', '🗄️', 'بکاپ و بازیابی'],
 ];
 
 export function adminTabs(active) {

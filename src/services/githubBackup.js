@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import Database from 'better-sqlite3';
 import { config } from '../config.js';
 import { createGithubClient, isNotFound } from '../lib/github.js';
 import { openDatabase } from '../db.js';
@@ -19,6 +20,7 @@ import { openDatabase } from '../db.js';
  * so a public target repository is refused unless it is explicitly allowed.
  */
 export const MANIFEST_NAME = 'latest.json';
+export const RESTORE_MARKER_NAME = 'restore-request.json';
 
 export function isConfigured(cfg = config.githubBackup) {
   return Boolean(cfg.repo && cfg.token);
@@ -73,8 +75,18 @@ export async function readRemoteFile(client, cfg, name) {
   try {
     const entry = await client.getContents(cfg.repo, joinRemote(cfg.dir, name), cfg.branch);
     if (!entry || Array.isArray(entry)) return null;
-    if (entry.encoding && entry.encoding !== 'base64') return { name, sha: entry.sha, buffer: null };
-    return { name, sha: entry.sha, buffer: Buffer.from(entry.content ?? '', 'base64') };
+    // The Contents API only inlines files up to 1 MB. Larger snapshots report
+    // `encoding: "none"` and must be read through the Git Blob API.
+    if (entry.encoding === 'base64' && entry.content) {
+      return { name, sha: entry.sha, buffer: Buffer.from(entry.content, 'base64') };
+    }
+    if (entry.sha && typeof client.getBlob === 'function') {
+      const blob = await client.getBlob(cfg.repo, entry.sha);
+      if (blob?.encoding === 'base64' && blob.content) {
+        return { name, sha: entry.sha, buffer: Buffer.from(blob.content, 'base64') };
+      }
+    }
+    return { name, sha: entry.sha, buffer: null };
   } catch (err) {
     if (isNotFound(err)) return null;
     throw err;
@@ -230,6 +242,228 @@ export function databaseHasSchema(db) {
 }
 
 /**
+ * True when the database has no application data yet (even if the schema was
+ * created by a previous boot or by `npm run migrate`). A schema-only file is
+ * exactly the state left behind by a deploy that crashed before bootstrap, so
+ * the GitHub snapshot should still be allowed to replace it.
+ */
+export function databaseIsEmpty(db) {
+  if (!databaseHasSchema(db)) return true;
+  try {
+    const users = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+    const leagues = db.prepare('SELECT COUNT(*) AS n FROM leagues').get().n;
+    return users === 0 && leagues === 0;
+  } catch {
+    // A partial or corrupt schema is never safe to overwrite automatically.
+    return false;
+  }
+}
+
+/** Prevents a remote file name from escaping the backup directory. */
+export function normalizeSnapshotName(name) {
+  const value = String(name ?? '');
+  const base = path.basename(value);
+  if (base !== value || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.db$/.test(base)) {
+    throw new Error(`invalid snapshot file name: ${value || '(empty)'}`);
+  }
+  return base;
+}
+
+function markerFileFor(databaseFile) {
+  return path.join(path.dirname(databaseFile), RESTORE_MARKER_NAME);
+}
+
+function removeSidecars(file) {
+  for (const suffix of ['-wal', '-shm']) {
+    try {
+      fs.rmSync(`${file}${suffix}`, { force: true });
+    } catch {
+      /* best effort */
+    }
+  }
+}
+
+/** Opens a snapshot read-only and verifies it is a complete SQLite app database. */
+function validateSqliteSnapshot(file) {
+  let db;
+  try {
+    db = new Database(file, { readonly: true, fileMustExist: true });
+    const check = db.pragma('quick_check', { simple: true });
+    if (check !== 'ok') throw new Error(`SQLite integrity check failed: ${check}`);
+    const row = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users' LIMIT 1")
+      .get();
+    if (!row) throw new Error('snapshot does not contain the application schema');
+  } finally {
+    try {
+      db?.close();
+    } catch {
+      /* ignore */
+    }
+    removeSidecars(file);
+  }
+}
+
+/** Reads the staged-restore marker without throwing when it is absent or invalid. */
+export async function readRestoreMarker({ databaseFile = config.dbFile } = {}) {
+  try {
+    const data = JSON.parse(await fsp.readFile(markerFileFor(databaseFile), 'utf8'));
+    return data && typeof data === 'object' ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Removes a staged snapshot and its marker. */
+export async function cancelStagedRestore({ databaseFile = config.dbFile } = {}) {
+  const marker = await readRestoreMarker({ databaseFile });
+  if (marker?.stagedFile) {
+    await fsp.rm(marker.stagedFile, { force: true }).catch(() => {});
+    removeSidecars(marker.stagedFile);
+  }
+  await fsp.rm(markerFileFor(databaseFile), { force: true }).catch(() => {});
+  return { canceled: Boolean(marker) };
+}
+
+/**
+ * Downloads a snapshot (the newest by default, or a named one) and stages it for
+ * the next boot. The live database is never modified here: replacing SQLite
+ * files under open statements is not safe, so `applyStagedRestore` runs before
+ * the next `openDatabase()`.
+ */
+export async function stageRestore({
+  cfg = config.githubBackup,
+  client = createClientFor(cfg),
+  databaseFile = config.dbFile,
+  fileName = null,
+  log = () => {},
+  now = new Date(),
+} = {}) {
+  if (!isConfigured(cfg)) {
+    throw new Error(`GitHub backup is not configured (missing ${missingSettings(cfg).join(', ')})`);
+  }
+
+  let manifest = null;
+  let target;
+  if (fileName) {
+    target = normalizeSnapshotName(fileName);
+    const snapshots = await listSnapshots(client, cfg);
+    if (!snapshots.some((entry) => entry.name === target)) {
+      return { staged: false, reason: 'snapshot-not-found', file: target };
+    }
+  } else {
+    const remote = await readManifest(client, cfg);
+    if (!remote?.manifest?.file) return { staged: false, reason: 'no-manifest' };
+    target = normalizeSnapshotName(remote.manifest.file);
+    manifest = remote.manifest;
+  }
+
+  const remoteFile = await readRemoteFile(client, cfg, target);
+  if (!remoteFile?.buffer) return { staged: false, reason: 'snapshot-missing', file: target };
+  if (remoteFile.buffer.length > cfg.maxBytes) {
+    throw new Error(
+      `snapshot ${target} is ${(remoteFile.buffer.length / 1024 / 1024).toFixed(1)} MB, above BACKUP_GITHUB_MAX_MB=${Math.round(cfg.maxBytes / 1024 / 1024)}`,
+    );
+  }
+
+  const sha256 = crypto.createHash('sha256').update(remoteFile.buffer).digest('hex');
+  if (manifest?.sha256 && sha256 !== manifest.sha256) {
+    throw new Error(`checksum mismatch for ${target}: expected ${manifest.sha256}, got ${sha256}`);
+  }
+
+  await fsp.mkdir(path.dirname(databaseFile), { recursive: true });
+  const markerFile = markerFileFor(databaseFile);
+  const previousMarker = await readRestoreMarker({ databaseFile });
+  if (previousMarker?.stagedFile && previousMarker.stagedFile !== databaseFile) {
+    await fsp.rm(previousMarker.stagedFile, { force: true }).catch(() => {});
+    removeSidecars(previousMarker.stagedFile);
+  }
+
+  const stagedFile = path.join(path.dirname(databaseFile), `.restore-${sha256.slice(0, 16)}.db`);
+  removeSidecars(stagedFile);
+  await fsp.writeFile(stagedFile, remoteFile.buffer);
+  try {
+    validateSqliteSnapshot(stagedFile);
+  } catch (err) {
+    await fsp.rm(stagedFile, { force: true }).catch(() => {});
+    removeSidecars(stagedFile);
+    throw new Error(`downloaded snapshot ${target} is not a valid application database: ${String(err?.message || err)}`);
+  }
+
+  const marker = {
+    stagedFile,
+    sourceFile: target,
+    bytes: remoteFile.buffer.length,
+    sha256,
+    createdAt: manifest?.createdAt ?? null,
+    requestedAt: now.toISOString(),
+  };
+  const tempMarker = `${markerFile}.tmp`;
+  await fsp.writeFile(tempMarker, `${JSON.stringify(marker, null, 2)}\n`, { mode: 0o600 });
+  await fsp.rename(tempMarker, markerFile);
+  log('database restore staged for next boot', {
+    ...describeConfig(cfg),
+    file: target,
+    bytes: marker.bytes,
+    sha256,
+  });
+  return { staged: true, ...marker, markerFile };
+}
+
+/**
+ * Applies a marker written by `stageRestore`. Must run before the database is
+ * opened; the previous file is kept until the rename succeeds, then removed.
+ */
+export async function applyStagedRestore({ databaseFile = config.dbFile, log = () => {} } = {}) {
+  const marker = await readRestoreMarker({ databaseFile });
+  if (!marker) return { applied: false, reason: 'no-marker' };
+
+  const markerFile = markerFileFor(databaseFile);
+  const stagedFile = path.resolve(String(marker.stagedFile || ''));
+  const allowedDir = path.dirname(path.resolve(databaseFile));
+  if (path.dirname(stagedFile) !== allowedDir || !stagedFile.endsWith('.db')) {
+    await fsp.rm(markerFile, { force: true }).catch(() => {});
+    return { applied: false, reason: 'invalid-marker' };
+  }
+  if (!fs.existsSync(stagedFile)) {
+    await fsp.rm(markerFile, { force: true }).catch(() => {});
+    return { applied: false, reason: 'staged-file-missing' };
+  }
+
+  const bytes = await fsp.readFile(stagedFile);
+  const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+  if (marker.sha256 && sha256 !== marker.sha256) {
+    await cancelStagedRestore({ databaseFile });
+    return { applied: false, reason: 'checksum-mismatch' };
+  }
+  try {
+    validateSqliteSnapshot(stagedFile);
+  } catch (err) {
+    await cancelStagedRestore({ databaseFile });
+    return { applied: false, reason: 'invalid-snapshot', error: String(err?.message || err) };
+  }
+
+  const previousFile = `${databaseFile}.before-restore`;
+  removeSidecars(databaseFile);
+  await fsp.rm(previousFile, { force: true }).catch(() => {});
+  if (fs.existsSync(databaseFile)) await fsp.rename(databaseFile, previousFile);
+  try {
+    await fsp.rename(stagedFile, databaseFile);
+  } catch (err) {
+    if (fs.existsSync(previousFile)) await fsp.rename(previousFile, databaseFile).catch(() => {});
+    throw err;
+  }
+  await fsp.rm(previousFile, { force: true }).catch(() => {});
+  await fsp.rm(markerFile, { force: true }).catch(() => {});
+  log('staged database restore applied', {
+    file: marker.sourceFile ?? null,
+    bytes: bytes.length,
+    sha256,
+  });
+  return { applied: true, manifest: marker, sha256 };
+}
+
+/**
  * Downloads the snapshot named in the remote manifest and replaces the local
  * database file. The bytes are fetched and checksummed before anything is
  * deleted, so a failed download leaves the local database untouched.
@@ -261,9 +495,10 @@ export async function restoreFromGithub({ cfg = config.githubBackup, client = cr
 }
 
 /**
- * Boot-time recovery: only an empty database (no application tables at all) is
- * replaced, which is exactly the "container was recreated" case. Anything else
- * is left alone so a real database is never overwritten by an old snapshot.
+ * Boot-time recovery: a database with no users or leagues is treated as empty,
+ * which covers both a wiped container and a schema-only file left by a deploy
+ * that stopped before bootstrap. A real database is never overwritten by an old
+ * snapshot.
  */
 export async function restoreOnBoot({ db, cfg = config.githubBackup, databaseFile = config.dbFile, log = () => {}, open = openDatabase, client = null } = {}) {
   if (!cfg.restoreOnEmpty) return { restored: false, db, reason: 'disabled' };
@@ -271,7 +506,7 @@ export async function restoreOnBoot({ db, cfg = config.githubBackup, databaseFil
     if (cfg.enabled) log('GitHub restore skipped: BACKUP_GITHUB_REPO and BACKUP_GITHUB_TOKEN are not both set');
     return { restored: false, db, reason: 'not-configured' };
   }
-  if (databaseHasSchema(db)) return { restored: false, db, reason: 'local-database-has-data' };
+  if (!databaseIsEmpty(db)) return { restored: false, db, reason: 'local-database-has-data' };
 
   const api = client ?? createClientFor(cfg);
   db.close();

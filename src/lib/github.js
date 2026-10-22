@@ -78,6 +78,12 @@ export function createGithubClient({ token = '', apiBaseUrl = DEFAULT_API_BASE_U
       const query = ref ? `?ref=${encodeURIComponent(ref)}` : '';
       return request('GET', `/repos/${repo}/contents/${encodeRepoPath(repoPath)}${query}`);
     },
+    /**
+     * Raw Git blob (`{ content, encoding: 'base64' }`). The Contents API omits
+     * `content` for files over 1 MB, so snapshots must be fetched through this
+     * endpoint to make large backups restorable.
+     */
+    getBlob: (repo, sha) => request('GET', `/repos/${repo}/git/blobs/${encodeURIComponent(sha)}`),
     putFile: (repo, repoPath, { contentBase64, message, sha, branch }) =>
       request('PUT', `/repos/${repo}/contents/${encodeRepoPath(repoPath)}`, {
         message,

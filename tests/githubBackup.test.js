@@ -10,17 +10,22 @@ import { migrations } from '../src/migrations/index.js';
 import { createLeague } from '../src/repositories/leagues.js';
 import { createUser } from '../src/repositories/users.js';
 import {
+  applyStagedRestore,
   backupStamp,
   backupStatus,
+  cancelStagedRestore,
   createClientFor,
+  databaseIsEmpty,
   isConfigured,
   listSnapshots,
   MANIFEST_NAME,
   missingSettings,
   pushBackup,
   readManifest,
+  readRemoteFile,
   restoreFromGithub,
   restoreOnBoot,
+  stageRestore,
 } from '../src/services/githubBackup.js';
 import { createBackupScheduler, msUntilDue, readState, writeState } from '../src/services/backupScheduler.js';
 
@@ -29,7 +34,7 @@ import { createBackupScheduler, msUntilDue, readState, writeState } from '../src
  * (repository lookup + the Contents API). It stores real base64 blobs, so a
  * push and a restore round trip are exercised end to end with no network.
  */
-function createFakeGithub({ owner = 'Asgh24', name = 'league-backups', privateRepo = true } = {}) {
+function createFakeGithub({ owner = 'Asgh24', name = 'league-backups', privateRepo = true, largeFileThreshold = 1024 * 1024 } = {}) {
   const full = `${owner}/${name}`;
   const files = new Map();
   const commits = [];
@@ -45,6 +50,16 @@ function createFakeGithub({ owner = 'Asgh24', name = 'league-backups', privateRe
 
     if (pathname === `/repos/${full}`) return json(200, { full_name: full, private: privateRepo, default_branch: 'main' });
 
+    // The Blob API is how snapshots above the Contents API's 1 MB inline limit
+    // are fetched. It takes the blob SHA, not a path.
+    const blobPrefix = `/repos/${full}/git/blobs/`;
+    if (pathname.startsWith(blobPrefix)) {
+      const sha = decodeURIComponent(pathname.slice(blobPrefix.length));
+      const entry = [...files.values()].find((file) => file.sha === sha);
+      if (!entry) return json(404, { message: 'Not Found' });
+      return json(200, { sha, encoding: 'base64', size: entry.buffer.length, content: entry.buffer.toString('base64') });
+    }
+
     const prefix = `/repos/${full}/contents/`;
     if (!pathname.startsWith(prefix)) return json(404, { message: 'Not Found' });
     const filePath = decodeURIComponent(pathname.slice(prefix.length));
@@ -52,7 +67,16 @@ function createFakeGithub({ owner = 'Asgh24', name = 'league-backups', privateRe
     if (method === 'GET') {
       if (files.has(filePath)) {
         const entry = files.get(filePath);
-        return json(200, { name: filePath.split('/').pop(), path: filePath, sha: entry.sha, type: 'file', encoding: 'base64', size: entry.buffer.length, content: entry.buffer.toString('base64') });
+        const inline = entry.buffer.length <= largeFileThreshold || !filePath.endsWith('.db');
+        return json(200, {
+          name: filePath.split('/').pop(),
+          path: filePath,
+          sha: entry.sha,
+          type: 'file',
+          encoding: inline ? 'base64' : 'none',
+          size: entry.buffer.length,
+          ...(inline ? { content: entry.buffer.toString('base64') } : {}),
+        });
       }
       const childPrefix = `${filePath}/`;
       const children = [...files.keys()].filter((key) => key.startsWith(childPrefix));
@@ -274,6 +298,8 @@ describe('github backup push', () => {
     useFake(fake);
     const cfg = testCfg({ repo: fake.full });
     const { db } = openTestDb();
+    const teacher = createUser(db, { username: 'local-teacher', password: 'long-password', role: 'teacher', displayName: 'معلم محلی' });
+    createLeague(db, teacher.id, 'لیگ محلی');
     const callsBefore = fake.calls.length;
 
     const result = await restoreOnBoot({ db, cfg, log: () => {} });
@@ -281,6 +307,84 @@ describe('github backup push', () => {
     expect(result).toMatchObject({ restored: false, reason: 'local-database-has-data' });
     expect(result.db).toBe(db);
     expect(fake.calls.length).toBe(callsBefore);
+  });
+
+  it('treats a schema-only database as empty and restores it', async () => {
+    const fake = createFakeGithub();
+    useFake(fake);
+    const cfg = testCfg({ repo: fake.full });
+    const source = openTestDb();
+    const teacher = createUser(source.db, { username: 'teacher', password: 'long-password', role: 'teacher', displayName: 'معلم' });
+    createLeague(source.db, teacher.id, 'لیگ بازیابی‌شده');
+    await pushBackup({ db: source.db, cfg, log: () => {} });
+    closeQuietly(source.db);
+
+    const target = openTestDb('schema-only');
+    expect(databaseIsEmpty(target.db)).toBe(true);
+    const result = await restoreOnBoot({ db: target.db, cfg, databaseFile: target.file, log: () => {}, open: openDatabase });
+    expect(result.restored).toBe(true);
+    cleanups.push(() => closeQuietly(result.db));
+    expect(result.db.prepare('SELECT name FROM leagues').all().map((row) => row.name)).toEqual(['لیگ بازیابی‌شده']);
+  });
+
+  it('stages a snapshot for the next boot instead of swapping a live connection', async () => {
+    const fake = createFakeGithub();
+    useFake(fake);
+    const cfg = testCfg({ repo: fake.full });
+    const source = openTestDb();
+    const teacher = createUser(source.db, { username: 'teacher', password: 'long-password', role: 'teacher', displayName: 'معلم' });
+    createLeague(source.db, teacher.id, 'لیگ مرحله‌ای');
+    await pushBackup({ db: source.db, cfg, log: () => {} });
+    closeQuietly(source.db);
+
+    const target = openEmptyDb();
+    const staged = await stageRestore({ cfg, databaseFile: target.file, log: () => {} });
+    expect(staged.staged).toBe(true);
+    expect(staged.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(fs.existsSync(staged.stagedFile)).toBe(true);
+    // The live database is still the empty one.
+    expect(target.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()).toEqual([]);
+
+    closeQuietly(target.db);
+    const applied = await applyStagedRestore({ databaseFile: target.file, log: () => {} });
+    expect(applied.applied).toBe(true);
+    expect(fs.existsSync(staged.stagedFile)).toBe(false);
+
+    const restored = openDatabase(target.file);
+    cleanups.push(() => closeQuietly(restored));
+    expect(restored.prepare('SELECT name FROM leagues').all().map((row) => row.name)).toEqual(['لیگ مرحله‌ای']);
+  });
+
+  it('cancels a staged restore and leaves the local database untouched', async () => {
+    const fake = createFakeGithub();
+    useFake(fake);
+    const cfg = testCfg({ repo: fake.full });
+    const source = openTestDb();
+    await pushBackup({ db: source.db, cfg, log: () => {} });
+    closeQuietly(source.db);
+
+    const target = openEmptyDb();
+    const staged = await stageRestore({ cfg, databaseFile: target.file, log: () => {} });
+    expect(staged.staged).toBe(true);
+    const canceled = await cancelStagedRestore({ databaseFile: target.file });
+    expect(canceled.canceled).toBe(true);
+    expect(fs.existsSync(staged.stagedFile)).toBe(false);
+
+    const applied = await applyStagedRestore({ databaseFile: target.file, log: () => {} });
+    expect(applied).toMatchObject({ applied: false, reason: 'no-marker' });
+    expect(target.db.prepare('SELECT 1 AS ok').get().ok).toBe(1);
+  });
+
+  it('downloads snapshots over the Contents API inline limit through the Blob API', async () => {
+    const fake = createFakeGithub({ largeFileThreshold: 10 });
+    useFake(fake);
+    const cfg = testCfg({ repo: fake.full });
+    const { db } = openTestDb();
+    await pushBackup({ db, cfg, log: () => {}, now: new Date('2026-10-18T08:00:00Z') });
+
+    const file = await readRemoteFile(createClientFor(cfg), cfg, 'league-20261018T080000Z.db');
+    expect(file.buffer.subarray(0, 16).toString('utf8')).toBe('SQLite format 3\u0000');
+    expect(fake.calls.some((call) => call.pathname.includes('/git/blobs/'))).toBe(true);
   });
 
   it('leaves the local file alone when the remote checksum does not match', async () => {

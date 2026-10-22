@@ -7,6 +7,7 @@ import { config } from '../config.js';
 import { findAdminByUsername } from '../repositories/admins.js';
 import { createUser, findByUsername, findById, publicUser } from '../repositories/users.js';
 import { requireAdmin } from '../middleware/auth.js';
+import { createAdminBackupRouter } from './adminBackup.js';
 import { createAdminSmsRouter } from './adminSms.js';
 import {
   approveCardPayment,
@@ -382,6 +383,7 @@ export function createAdminRouter({ db }) {
   });
 
   router.use('/sms', createAdminSmsRouter({ db }));
+  router.use('/backup', createAdminBackupRouter({ db }));
 
   return router;
 }

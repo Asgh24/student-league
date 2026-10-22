@@ -127,6 +127,7 @@ export async function renderAdminDashboard() {
           tile({ icon: '🧾', label: 'پرداخت‌ها', href: 'admin/payments' }),
           tile({ icon: '💳', label: 'کارت و پرداخت', href: 'admin/payment-settings' }),
           tile({ icon: '📨', label: 'پنل پیامک', href: 'admin/sms' }),
+          tile({ icon: '🗄️', label: 'بکاپ و بازیابی', href: 'admin/backup' }),
         ]),
       ]),
     ]),

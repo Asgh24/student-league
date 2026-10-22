@@ -39,6 +39,7 @@ Decide one value before you start:
 | --- | --- | --- |
 | `DATA_DIR` | The mount path Parspack gives the persistent disk | `/data` or `/home/app/data` |
 | `SESSION_SECRET` | Generate it yourself (see below) | 64 hex characters |
+| `SECRETS_KEY` | Generate a separate value; set once and never change | 64 hex characters |
 | Node version | Node.js **22 or 24** (see the `better-sqlite3` note) | `22-ubi9` / `24-ubi9` |
 
 ```bash
@@ -144,6 +145,7 @@ APP_NAME=لیگ جامع دانش‌آموزی
 
 DATA_DIR=/data                 # the mounted persistent disk
 SESSION_SECRET=<64 random hex characters>          # SECRET
+SECRETS_KEY=<64 random hex characters>             # SECRET — set once, never change
 TRUST_PROXY=true               # the platform terminates TLS in front of the app
 APP_TZ_OFFSET_MINUTES=210      # Iran Standard Time (UTC+03:30)
 
@@ -297,12 +299,15 @@ When more than `BACKUP_GITHUB_KEEP` snapshots exist the oldest are deleted
 
 `RESTORE_FROM_GITHUB_ON_EMPTY_LOCAL=true` (default):
 
-- **On boot only**, and **only when the local database has no application tables at all**
-  (fresh container, missing file). A database that already has data is never replaced, so
-  an old snapshot can never overwrite a real one.
+- **On boot only**, and **only when the local database has no users and no leagues**
+  (fresh container, missing file, or a schema-only file left by a crashed deploy). A
+  database that already has data is never replaced automatically, so an old snapshot can
+  never overwrite a real one.
 - The snapshot is downloaded, its SHA-256 is checked against the manifest, and only then
   is the local file replaced. A failed download or checksum mismatch leaves the local file
   untouched and the app starts empty with an error in the log.
+- Snapshots above 1 MB are read through the GitHub Git Blob API automatically; no extra
+  configuration is needed.
 - Expected log after a wiped container:
 
   ```json
@@ -313,7 +318,18 @@ When more than `BACKUP_GITHUB_KEEP` snapshots exist the oldest are deleted
   the feature is inert until you configure it. Set
   `RESTORE_FROM_GITHUB_ON_EMPTY_LOCAL=false` if you only want uploads.
 
-**Manual restore** (a database that exists but is damaged, or a specific older snapshot):
+**Manual backup and restore from the owner panel** (`#/admin/backup`):
+
+- **بکاپ همین حالا** uploads a snapshot immediately, even if the schedule is off.
+- **دانلود بکاپ محلی** downloads a consistent SQLite file for an offline copy.
+- **بازیابی آخرین بکاپ** (or a specific snapshot) downloads and verifies it, then stages
+  it for the **next service restart**. Restart the service once from the ParsPack panel;
+  the staged file is applied before the database is opened. A pending restore can be
+  canceled from the same page.
+- The page shows the last successful backup, remote snapshot count, local DB and uploads
+  size, and any GitHub error without exposing the token.
+
+**Manual restore from a downloaded file** (a database that exists but is damaged):
 
 ```bash
 # 1. pick the snapshot in the backup repository and download it inside the app terminal
@@ -330,7 +346,8 @@ cp /tmp/league-20261019T145242Z.db "$DATA_DIR/league.db"
 **not** in the snapshot — the same limitation as the local `npm run backup`. In practice,
 copy that folder to your own storage, or accept re-uploading those files after a container
 reset. The rest of the app (leagues, students, scores, attendance, evaluations) is fully
-covered.
+covered. Teacher-saved sms.ir/Groq keys are inside the database and come back with the
+snapshot, but only if `SECRETS_KEY` is unchanged.
 
 ---
 
@@ -408,7 +425,7 @@ refresh is never required for correctness.
 
 - [ ] App created from GitHub `main`, Node `22-ubi9`/`24-ubi9`, start command `node server.js`.
 - [ ] Persistent disk mounted at `DATA_DIR`.
-- [ ] `NODE_ENV=production`, `SESSION_SECRET`, `TRUST_PROXY=true` set (secrets as secret type).
+- [ ] `NODE_ENV=production`, `SESSION_SECRET`, `SECRETS_KEY`, `TRUST_PROXY=true` set (secrets as secret type). Do not change `SECRETS_KEY` after teachers save SMS/AI keys.
 - [ ] `SEED_ENABLED=false`.
 - [ ] `https://<domain>/healthz` returns 200.
 - [ ] First login with the bootstrapped teacher, password changed in **تنظیمات**.

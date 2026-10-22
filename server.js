@@ -8,13 +8,21 @@ import { createSessionStore, startSessionSweep } from './src/middleware/session.
 import { runSeed } from './src/seed.js';
 import { runAdminBootstrap, runBootstrap } from './src/bootstrap.js';
 import { APP_VERSION } from './src/version.js';
-import { createClientFor, isConfigured, pushBackup, restoreOnBoot } from './src/services/githubBackup.js';
+import { createClientFor, isConfigured, pushBackup, applyStagedRestore, restoreOnBoot } from './src/services/githubBackup.js';
 import { createBackupScheduler } from './src/services/backupScheduler.js';
 
 const logBackup = (message, fields) => logger.info(message, fields);
 
 async function boot() {
   ensureDirs();
+
+  // A manual restore is staged from the admin panel and applied here, before any
+  // connection is opened: SQLite files cannot be swapped under live statements.
+  const staged = await applyStagedRestore({ log: logBackup });
+  if (!staged.applied && staged.reason && staged.reason !== 'no-marker') {
+    logger.warn('staged database restore was not applied', staged);
+  }
+
   let db = openDatabase();
 
   // Recovery runs before the first migration writes to an empty file: a PaaS

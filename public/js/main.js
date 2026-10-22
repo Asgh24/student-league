@@ -51,6 +51,7 @@ import { renderReportCard } from './views/student/reportcard.js';
 import { renderStudentTeam } from './views/student/team.js';
 
 import { renderAdminDashboard } from './views/admin/dashboard.js';
+import { renderAdminBackup } from './views/admin/backup.js';
 import { renderAdminPaymentSettings } from './views/admin/paymentSettings.js';
 import { renderAdminPayments } from './views/admin/payments.js';
 import { renderAdminPlans } from './views/admin/plans.js';
@@ -111,6 +112,7 @@ function adminNav() {
     ['admin/payments', '🧾', 'پرداخت‌ها'],
     ['admin/payment-settings', '💳', 'کارت و پرداخت'],
     ['admin/sms', '📨', 'پنل پیامک'],
+    ['admin/backup', '🗄️', 'بکاپ و بازیابی'],
     ['admin/settings', '⚙️', 'تنظیمات'],
   ];
   return [
@@ -219,6 +221,7 @@ const routes = [
   { path: 'admin/payments', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminPayments(ctx) },
   { path: 'admin/payment-settings', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminPaymentSettings(ctx) },
   { path: 'admin/sms', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminSms(ctx) },
+  { path: 'admin/backup', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminBackup(ctx) },
   { path: 'admin/settings', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderSettings(ctx) },
   { path: 'fun', guard: () => (state.user ? undefined : 'login'), view: () => renderFun() },
   { path: 'student', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentDashboard(ctx) },

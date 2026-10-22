@@ -57,7 +57,8 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | --- | --- |
 | ثبت‌نام معلم | Self-service signup on the login screen; every new teacher starts a configurable **14-day trial** with all tools unlocked |
 | اشتراک من | Trial/subscription banner, remaining days, admin-editable plans, Zarinpal checkout and payment history; an expired teacher is redirected here instead of seeing a broken dashboard |
-| پنل مدیر | Separate site-owner login: teacher search/filter, manual subscription grants, plan CRUD, revenue and payment ledger, inbox/SMS health |
+| پنل مدیر | Separate site-owner login: teacher search/filter, manual subscription grants, plan CRUD, revenue and payment ledger, inbox/SMS health, and a backup/restore console |
+| بکاپ و بازیابی | Owner-only manual GitHub backup, consistent local DB download, remote snapshot list, staged restore with checksum verification and cancel; auto-restores an empty/schema-only DB on boot |
 | پیام‌ها | Ticket-like teacher↔student inbox with threads, unread counters, read receipts and polling; both sides can reply from the same shared view |
 | پنل پیامک | Per-teacher sms.ir API key + line number in the teacher's own panel (encrypted, write-only), a built-in «راهنمایی راه‌اندازی سامانه پیامکی» guide with annotated screenshots, credit/lines, test and bulk sends, league-report outbox and admin campaign retry; without credentials everything stays queued instead of being lost |
 | دستیار هوش مصنوعی | In the Q&A page, drafts multiple-choice quizzes/questionnaires through Groq (`openai/gpt-oss-20b`), shows a reviewable preview and bulk-saves only the selected questions; supports a server-wide default key plus an encrypted, write-only personal teacher key |
@@ -161,6 +162,7 @@ is only needed if you upgrade Chart.js or the Vazirmatn font package.
 | `ZARINPAL_TIMEOUT_MS` | `15000` | Timeout of one Zarinpal request |
 | `DATA_DIR` | `./data` | **Must be a persistent volume.** Holds the database, `uploads/` and `backups/` |
 | `SESSION_SECRET` | — | **Required in production**, at least 16 characters |
+| `SECRETS_KEY` | falls back to `SESSION_SECRET` | Stable AES key for teacher-saved sms.ir/Groq keys. Set once; changing it makes restored encrypted keys unreadable |
 | `SESSION_COOKIE_NAME` | `scl.sid` | Session cookie name |
 | `SESSION_MAX_AGE_MS` | `86400000` | Session lifetime: 24 hours from login (activity does not extend it) |
 | `TRUST_PROXY` | `false` | `true` behind a reverse proxy / PaaS load balancer so `secure` cookies and client IPs work |
@@ -204,7 +206,7 @@ is only needed if you upgrade Chart.js or the Vazirmatn font package.
 | `BACKUP_GITHUB_MAX_MB` | `50` | Refuse snapshots above this size (GitHub rejects >100 MB) |
 | `BACKUP_GITHUB_ALLOW_PUBLIC` | `false` | Permit a public target repo (the snapshot holds student data) |
 | `BACKUP_GITHUB_API_URL` | `https://api.github.com` | For tests or GitHub Enterprise |
-| `RESTORE_FROM_GITHUB_ON_EMPTY_LOCAL` | `true` | Replace an **empty** local database with the newest snapshot on boot |
+| `RESTORE_FROM_GITHUB_ON_EMPTY_LOCAL` | `true` | On boot, replace a database with **no users and no leagues** (including a schema-only file) with the newest snapshot |
 
 Generate a secret:
 
@@ -688,6 +690,12 @@ student session.
 | GET | `/admin/payments/:id/receipt` | — | private receipt image; admin session required |
 | POST | `/admin/payments/:id/approve` | `{ note? }` | `{ payment, subscription, alreadyPaid }` — extends access once |
 | POST | `/admin/payments/:id/reject` | `{ reason? }` | `{ payment, alreadyReviewed }` — keeps the ledger row as `canceled` |
+| GET | `/admin/backup` | — | configured/enabled flags, missing env vars, local DB/uploads sizes, remote snapshots + manifest, scheduler state, pending restore |
+| POST | `/admin/backup/run` | — | `201 { backup }` — push a snapshot to GitHub now (manual, works while the schedule is off) |
+| GET | `/admin/backup/download` | — | private attachment containing a consistent local SQLite snapshot |
+| POST | `/admin/backup/restore` | `{ file? }` | `202 { staged, restartRequired }` — download/verify the newest or named snapshot and stage it for the next boot |
+| DELETE | `/admin/backup/restore` | — | `{ canceled }` — discard a staged restore |
+| GET | `/admin/backup/status` | — | remote snapshot count/newest/manifest without the local dashboard payload |
 
 ### SMS settings (teacher)
 
@@ -695,7 +703,10 @@ Each teacher enters their **own** sms.ir API key and sender line in
 «گزارش روزانه ← تنظیمات پیامک من». The settings are scoped to that teacher's
 `users` row, so one teacher can never read or change another teacher's
 credentials. The key is encrypted with AES-256-GCM using a key derived from
-`SESSION_SECRET`; the API returns only `hasApiKey: true|false`, never the key.
+`SECRETS_KEY` (or `SESSION_SECRET` when `SECRETS_KEY` is unset); the API returns
+only `hasApiKey: true|false`, never the key. Because the ciphertext lives in the
+`users` table, it is included in every database backup; the matching
+`SECRETS_KEY` is what makes it readable after a restore.
 
 The card's «راهنمایی راه‌اندازی سامانه پیامکی» button opens a modal with four
 steps and the local screenshots in `public/img/sms-help/`: finding
@@ -762,8 +773,10 @@ dropped.
   reached through a spoofed `X-Forwarded-For`, so set it only behind a real proxy.
 * **SQL** — parameterized statements only, no string-built SQL.
 * **Provider secrets** — sms.ir and Groq keys are encrypted with AES-256-GCM
-  using a key derived from `SESSION_SECRET`, scoped to the owning teacher and
-  never returned by an API; rotating the secret requires re-entering them.
+  using a stable key derived from `SECRETS_KEY` (falling back to
+  `SESSION_SECRET` for older rows), scoped to the owning teacher and never
+  returned by an API. `SECRETS_KEY` is intentionally separate from the session
+  secret so rotating sessions does not break restored credentials.
 * **XSS** — the frontend builds DOM nodes and inserts user text as `textContent`
   (`public/js/dom.js`); `innerHTML` is never fed with user data.
 * **Headers** — helmet with a strict CSP (`script-src 'self'`, no inline scripts,
@@ -789,8 +802,8 @@ npm run lint    # eslint .
 Latest run on this machine (Windows, Node 26.3.0):
 
 ```
- Test Files  32 passed (32)
-      Tests  375 passed (375)
+ Test Files  35 passed (35)
+      Tests  387 passed (387)
 ```
 
 | Suite | Tests | Covers |
@@ -824,7 +837,10 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `frontendPlatform.test.js` | 8 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, shared inbox thread/composer, admin settings label |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 2 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not) |
-| `githubBackup.test.js` | 22 | Off-site backups against an in-memory GitHub Contents API: upload + manifest checksum, full push→restore round trip, retention/pruning, public-repo refusal, size limit, missing repo and 404 handling, checksum-mismatch safety, restore skipped for a non-empty database, scheduler due-time/retry/state handling with the real logger object |
+| `githubBackup.test.js` | 26 | Off-site backups against an in-memory GitHub Contents/Blob API: upload + manifest checksum, Blob download above 1 MB, full push→restore round trip, retention/pruning, public-repo refusal, size limit, missing repo and 404 handling, checksum-mismatch safety, schema-only/empty detection, staged restore + cancel, scheduler due-time/retry/state handling |
+| `adminBackup.test.js` | 3 | Admin-only backup status, unconfigured deployment, manual GitHub push, snapshot listing, staged restore/cancel, private local SQLite download |
+| `secrets.test.js` | 3 | Stable `SECRETS_KEY` across session rotation, legacy session-secret fallback, tamper rejection |
+| `frontendBackup.test.js` | 2 | Backup page renders missing-env guidance, disables manual backup, lists remote snapshots and the local download link |
 | `bootstrap.test.js` | 7 | First teacher account: creation, password verification, skip when accounts exist, `--force` reset, refusal of short/demo-default passwords, production-vs-development default |
 | `hardening.test.js` | 12 | Anonymous requests create no session row, logout clears the configured cookie, login performs a bcrypt comparison for unknown users, `/healthz` integrity scan is cached, expired sessions are swept, `TRUST_PROXY` fails closed |
 
@@ -1032,7 +1048,8 @@ recreated on any redeploy. With `BACKUP_GITHUB_ENABLED=true` the server snapshot
 itself on an interval, uploads the file to a **private** GitHub repository through
 the Contents API (`<dir>/league-<stamp>.db` plus a `latest.json` manifest holding
 the size, SHA-256, creation time, app version and schema migration count), and
-prunes older snapshots down to `BACKUP_GITHUB_KEEP`.
+prunes older snapshots down to `BACKUP_GITHUB_KEEP`. Snapshots above 1 MB are
+read back through the Git Blob API, so larger databases remain restorable.
 
 The snapshot contains student data, so the uploader **refuses a public
 repository** unless `BACKUP_GITHUB_ALLOW_PUBLIC=true` is set deliberately.
@@ -1047,18 +1064,34 @@ npm run backup:status        # count, newest snapshot, last checksum
 ```
 
 Automatic recovery: with `RESTORE_FROM_GITHUB_ON_EMPTY_LOCAL=true` (default) the
-server checks at boot whether the local database has **any** application table. If
-it has none — a fresh volume, a wiped container — the newest snapshot is
-downloaded, checksum-verified and put in place before the migrations run:
+server checks at boot whether the local database has **no users and no leagues**.
+That covers a fresh volume, a wiped container and a schema-only file left by a
+deploy that stopped before bootstrap. The newest snapshot is downloaded,
+checksum-verified and put in place **before migrations run**:
 
 ```json
 {"msg":"database restored from GitHub","file":"league-20261019T145242Z.db","bytes":417792,"sha256":"da39…0d49"}
 ```
 
-A database that already has data is never replaced, so an old snapshot cannot
-overwrite a live term. A failed download or a checksum mismatch leaves the local
-file untouched and only logs the error. To restore a specific older snapshot,
-download it from the repository and follow the local restore steps above.
+A database that already has users or leagues is never replaced automatically, so
+an old snapshot cannot overwrite a live term. A failed download or a checksum
+mismatch leaves the local file untouched and only logs the error.
+
+The same features are available in the owner panel at **#/admin/backup**:
+
+* **بکاپ همین حالا** — push a snapshot immediately, even if the schedule is off.
+* **دانلود بکاپ محلی** — download a consistent SQLite file for an offline copy.
+* **بازیابی آخرین بکاپ** or a specific snapshot — download and verify it, then
+  stage it for the **next service restart**. A live SQLite connection is never
+  swapped under running statements, so after clicking the button restart the
+  service once (systemd, pm2 or the hosting panel). The staged restore is applied
+  before any database connection is opened. A pending restore can be canceled.
+
+Teacher-saved sms.ir and Groq keys are stored in `users.sms_api_key` /
+`users.groq_api_key` as AES-256-GCM ciphertext, so they are included in every
+database snapshot. They decrypt only with the same `SECRETS_KEY` (falling back to
+`SESSION_SECRET` for older rows). Set `SECRETS_KEY` once and never change it when
+you rely on backups.
 
 Retention and retention state: the newest 7 snapshots are kept by default
 (`BACKUP_GITHUB_KEEP`), the interval is `BACKUP_GITHUB_INTERVAL_MINUTES` (default
@@ -1135,9 +1168,10 @@ npm run bootstrap -- --force      # reset that account's password (forgotten log
 * **Uploads are not virus-scanned.** Size, extension and MIME are validated and the
   bytes are never executed, but a scanner is up to your infrastructure.
 * **Backup snapshots cover the database, not `uploads/`.** Each snapshot is a full copy of
-  the database, so a long retention window fills the backup repository over time; Git also
-  keeps every uploaded version in history, so prune with `BACKUP_GITHUB_KEEP` rather than
-  expecting space to be freed.
+  the database (including encrypted SMS/Groq keys), so a long retention window fills the
+  backup repository over time; Git also keeps every uploaded version in history, so prune
+  with `BACKUP_GITHUB_KEEP` rather than expecting space to be freed. Keep `SECRETS_KEY`
+  unchanged or restored provider keys cannot be decrypted.
 * **No email.** Password recovery is manual (teacher resets student passwords).
 * **AI generation needs a Groq key.** The Q&A assistant works only after
   `GROQ_API_KEY` or a teacher's personal key is saved. It is non-streaming,

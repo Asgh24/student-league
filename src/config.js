@@ -56,6 +56,16 @@ export const config = {
     }
     return 'dev-only-insecure-session-secret-please-change';
   },
+  /**
+   * Stable key for encrypting provider secrets stored in SQLite (teacher sms.ir
+   * and Groq keys). Keep this separate from SESSION_SECRET so rotating a session
+   * secret does not make restored backups undecryptable. Falls back to the
+   * session secret for older deployments that never set SECRETS_KEY.
+   */
+  get secretsKey() {
+    const key = process.env.SECRETS_KEY;
+    return key && key.length >= 16 ? key : this.sessionSecret;
+  },
   get sessionCookieName() {
     return process.env.SESSION_COOKIE_NAME || 'scl.sid';
   },
