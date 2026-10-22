@@ -886,6 +886,15 @@ describe('Q&A presentation mode', () => {
     });
   }
 
+  function clickStageButton(label) {
+    const stage = document.querySelector('.quiz-stage');
+    const node = [...stage.querySelectorAll('button')]
+      .find((button) => button.textContent.includes(label));
+    expect(node, `stage button «${label}» not found`).toBeTruthy();
+    node.click();
+    return node;
+  }
+
   it('plays a one-question quiz, shows the score and posts the result', async () => {
     mockLoad();
     api.post.mockResolvedValue({
@@ -939,6 +948,66 @@ describe('Q&A presentation mode', () => {
 
     [...summary.querySelectorAll('button')].find((node) => node.textContent.includes('بستن')).click();
     expect(document.querySelector('.quiz-stage')).toBeNull();
+  });
+
+  it('records every question for the student selected with the random next-student button', async () => {
+    const secondQuestion = {
+      ...question, id: 6, body: 'حاصل ۲ + ۲ چند است؟', points: 20,
+    };
+    const students = [
+      { id: 11, name: 'آرش آزمون' },
+      { id: 12, name: 'بهار بنفش' },
+    ];
+    api.get.mockImplementation((url) => {
+      if (url === '/leagues/1') return Promise.resolve(league);
+      if (url === '/leagues/1/questions') return Promise.resolve({ items: [question, secondQuestion], recent: [] });
+      if (url === '/leagues/1/students') return Promise.resolve({ items: students });
+      if (url === '/questions/5/answers' || url === '/questions/6/answers') return Promise.resolve({ items: [] });
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+    api.post.mockResolvedValue({
+      session: {
+        id: 1, studentId: 12, studentName: 'بهار بنفش', total: 1, correct: 1, percent: 100,
+        awardedPoints: 15, createdAt: '2026-10-20T10:05:00.000Z', items: [],
+      },
+      requestedPoints: 15,
+      pointsApplied: true,
+    });
+
+    await renderQa({ params: { id: '1' } });
+    const view = document.querySelector('#view');
+    [...view.querySelectorAll('button')].find((node) => node.textContent.includes('حالت پخش')).click();
+    await vi.waitFor(() => expect(document.querySelector('#f-count')).not.toBeNull());
+    document.querySelector('#f-count').value = '2';
+    [...document.querySelectorAll('#modal-root button')]
+      .find((node) => node.textContent.includes('شروع پخش')).click();
+    await vi.waitFor(() => expect(document.querySelector('.quiz-stage')).not.toBeNull());
+
+    const stage = document.querySelector('.quiz-stage');
+    const firstBody = stage.querySelector('.quiz-question__body').textContent;
+    const firstId = firstBody === question.body ? 5 : 6;
+    const secondId = firstId === 5 ? 6 : 5;
+
+    // The first question switches to the other student before it is graded.
+    clickStageButton('دانش‌آموز بعدی');
+    expect(stage.querySelector('.quiz-stage__who').textContent).toContain('بهار بنفش');
+    clickStageButton('درست');
+
+    await vi.waitFor(() => expect(stage.querySelector('.quiz-question__body').textContent).not.toBe(firstBody));
+
+    // The second question switches back to the starting student.
+    clickStageButton('دانش‌آموز بعدی');
+    expect(stage.querySelector('.quiz-stage__who').textContent).toContain('آرش آزمون');
+    clickStageButton('غلط');
+
+    const quizCalls = () => api.post.mock.calls.filter(([url]) => url === '/leagues/1/quiz-sessions');
+    await vi.waitFor(() => expect(quizCalls()).toHaveLength(2));
+
+    const byStudent = new Map(quizCalls().map(([, body]) => [body.studentId, body]));
+    expect(byStudent.get(12).items).toEqual([{ questionId: firstId, correct: true }]);
+    expect(byStudent.get(11).items).toEqual([{ questionId: secondId, correct: false }]);
+    expect(document.querySelector('.quiz-groups').textContent).toContain('بهار بنفش');
+    expect(document.querySelector('.quiz-groups').textContent).toContain('آرش آزمون');
   });
 
   it('builds a question with added/removed options and a chosen correct answer', async () => {

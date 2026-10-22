@@ -166,6 +166,23 @@ describe('AI Q&A assistant UI', () => {
     expect(document.body.textContent).toContain('کلید شخصی حذف شد');
   });
 
+  it('offers a visible control for changing an already saved API key', async () => {
+    api.get.mockResolvedValueOnce({
+      config: config({
+        source: 'teacher',
+        own: { hasApiKey: true, updatedAt: '2026-10-20T10:00:00.000Z' },
+      }),
+    });
+
+    await openAiAssistant({ leagueId: 4, reload: vi.fn() });
+
+    const details = document.querySelector('details.ai-key');
+    expect(details.open).toBe(false);
+    clickButton('تغییر کلید API');
+    expect(details.open).toBe(true);
+    expect(document.activeElement).toBe(document.querySelector('#ai-groq-key'));
+  });
+
   it('shows a validation message when the topic is too short and keeps the preview empty', async () => {
     api.get.mockResolvedValueOnce({ config: config() });
     const reload = vi.fn();

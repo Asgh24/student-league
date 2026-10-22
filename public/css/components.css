@@ -701,6 +701,14 @@ td.delta-cell.is-negative {
   background: rgba(124, 122, 163, 0.05);
   padding: 10px 12px;
 }
+.ai-key__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
 .ai-key__summary {
   display: flex;
   align-items: center;
@@ -1930,6 +1938,9 @@ body.quiz-open {
 .quiz-btn--wrong:hover {
   filter: brightness(1.07);
 }
+.quiz-next-student {
+  min-height: 58px;
+}
 .quiz-summary {
   width: min(820px, 100%);
   margin: 0 auto;
@@ -1949,6 +1960,29 @@ body.quiz-open {
   font-weight: 900;
   color: var(--brand);
   line-height: 1.2;
+}
+.quiz-groups {
+  display: grid;
+  gap: 8px;
+}
+.quiz-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.quiz-group__name {
+  font-weight: 800;
+}
+.quiz-group__score {
+  margin-inline-start: auto;
+  color: var(--brand);
+  font-weight: 800;
 }
 .quiz-result-list {
   display: grid;

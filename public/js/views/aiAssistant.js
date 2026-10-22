@@ -87,8 +87,7 @@ export async function openAiAssistant({ leagueId, leagueName = '', reload = asyn
     const details = el('details.ai-key');
     if (!config?.own?.hasApiKey) details.open = true;
     const summary = el('summary.ai-key__summary', {}, [
-      el('span', { text: 'کلید API Groq' }),
-      sourceChip(config),
+      el('span', { text: 'تنظیمات کلید Groq' }),
     ]);
     details.appendChild(summary);
 
@@ -99,6 +98,21 @@ export async function openAiAssistant({ leagueId, leagueName = '', reload = asyn
       autocomplete: 'off',
       placeholder: config?.own?.hasApiKey ? 'کلید جدید را وارد کنید (اختیاری)' : 'gsk_...',
     });
+    const changeKeyButton = button(config?.own?.hasApiKey ? 'تغییر کلید API' : 'تنظیم کلید API', {
+      kind: 'soft',
+      icon: '🔑',
+      onClick: () => {
+        details.open = true;
+        keyInput.focus();
+      },
+    });
+    const toolbar = el('div.ai-key__toolbar', {}, [
+      el('div.row', { style: { gap: '6px', alignItems: 'center' } }, [
+        el('span.small.muted', { text: 'کلید دستیار هوش مصنوعی' }),
+        sourceChip(config),
+      ]),
+      changeKeyButton,
+    ]);
     const clearInput = el('input', { id: 'ai-clear-key', type: 'checkbox' });
     const keyStatus = el('p.small.ai-status', { role: 'status' });
     const saveKeyButton = button('ذخیره کلید', {
@@ -169,7 +183,7 @@ export async function openAiAssistant({ leagueId, leagueName = '', reload = asyn
     ]));
     children.push(keyStatus);
     details.append(...children);
-    keyPanel.appendChild(details);
+    keyPanel.append(toolbar, details);
   }
 
   function renderPreview(questions) {
