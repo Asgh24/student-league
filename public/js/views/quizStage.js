@@ -69,7 +69,7 @@ export async function startQuiz({ leagueId, questions, students, onFinished }) {
 
   const values = await formDialog({
     title: 'حالت پخش',
-    description: 'سؤالات به‌صورت تصادفی نمایش داده می‌شوند. در هر سؤال می‌توانید با دکمهٔ «دانش‌آموز تصادفی بعدی» پاسخ‌دهنده را عوض کنید؛ نمره همیشه برای همان دانش‌آموز ثبت می‌شود.',
+    description: 'سؤالات به‌صورت تصادفی نمایش داده می‌شوند. گزینه‌ای را که دانش‌آموز انتخاب کرده بزنید تا درستی یا نادرستی خودکار مشخص شود. با دکمهٔ «دانش‌آموز تصادفی بعدی» هم پاسخ‌دهنده را عوض کنید؛ نمره همیشه برای همان دانش‌آموز ثبت می‌شود.',
     submitLabel: 'شروع پخش',
     fields: [
       {
@@ -122,6 +122,9 @@ function openStage({ leagueId, student, students, questions, onFinished, onResta
   const whoName = el('strong', { text: activeStudent.name });
   const questionBody = el('h2.quiz-question__body');
   const questionMeta = el('div.row', { style: { gap: '6px', justifyContent: 'center', flexWrap: 'wrap' } });
+  const pickHint = el('p.small.muted.quiz-pick-hint', {
+    text: 'گزینه‌ای را که دانش‌آموز انتخاب کرده بزنید؛ درستی یا نادرستی خودکار مشخص می‌شود.',
+  });
   const optionsBox = el('div.quiz-options', { hidden: 'true' });
   const answerBox = el('div.quiz-answer', { hidden: 'true' });
   const summary = el('div.quiz-summary', { hidden: 'true' });
@@ -135,6 +138,12 @@ function openStage({ leagueId, student, students, questions, onFinished, onResta
 
   const correctButton = bigButton('✅ درست', 'correct', () => answer(true));
   const wrongButton = bigButton('❌ غلط', 'wrong', () => answer(false));
+  const nextQuestionLabel = el('span', { text: 'سؤال بعدی ➡️' });
+  const nextQuestionButton = el('button.btn.btn--soft.quiz-next-question', {
+    type: 'button',
+    hidden: 'true',
+    onclick: () => advance(),
+  }, [nextQuestionLabel]);
   const nextStudentButton = el('button.btn.btn--soft.quiz-next-student', {
     type: 'button',
     title: students.length < 2
@@ -172,10 +181,11 @@ function openStage({ leagueId, student, students, questions, onFinished, onResta
     summary,
   ]);
 
-  main.appendChild(el('div.quiz-question', {}, [questionBody, questionMeta, optionsBox, answerBox]));
+  main.appendChild(el('div.quiz-question', {}, [questionBody, questionMeta, pickHint, optionsBox, answerBox]));
   main.appendChild(el('div.quiz-actions', {}, [
     correctButton,
     wrongButton,
+    nextQuestionButton,
     nextStudentButton,
     backButton,
   ]));
@@ -225,18 +235,66 @@ function openStage({ leagueId, student, students, questions, onFinished, onResta
       .catch(() => { /* the question can be graded orally as well */ });
   }
 
+  function isAutoGraded(current) {
+    return Array.isArray(current.options)
+      && current.options.length >= 2
+      && Number.isInteger(current.correctIndex);
+  }
+
+  function paintFeedback(current, assignment) {
+    const choices = Array.isArray(current.options) ? current.options : [];
+    const correctIndex = Number.isInteger(current.correctIndex) ? current.correctIndex : null;
+
+    [...optionsBox.children].forEach((node, position) => {
+      if (position === assignment.selectedIndex) {
+        node.classList.add(assignment.correct ? 'is-correct' : 'is-wrong');
+      } else if (!assignment.correct && correctIndex !== null && position === correctIndex) {
+        // Also show the right answer when the selected option was wrong.
+        node.classList.add('is-correct');
+      }
+    });
+
+    const verdict = assignment.correct
+      ? `✅ ${assignment.studentName} درست پاسخ داد`
+      : `❌ ${assignment.studentName} نادرست پاسخ داد`;
+    const parts = [el('div.small.muted', { text: verdict })];
+    if (Number.isInteger(assignment.selectedIndex)) {
+      const chosen = choices[assignment.selectedIndex] ?? '';
+      parts.push(el('p', { text: `گزینه انتخاب‌شده: ${fa(assignment.selectedIndex + 1)} — ${chosen}` }));
+      if (!assignment.correct && correctIndex !== null) {
+        parts.push(el('p.small.muted', {
+          text: `پاسخ صحیح: گزینه ${fa(correctIndex + 1)} — ${choices[correctIndex] ?? ''}`,
+        }));
+      }
+    }
+    answerBox.replaceChildren(...parts);
+    answerBox.hidden = false;
+  }
+
+  function focusAnswerControl() {
+    if (assignments[index]) {
+      nextQuestionButton.focus();
+      return;
+    }
+    const firstOption = optionsBox.querySelector('button.quiz-option:not(:disabled)');
+    if (firstOption) firstOption.focus();
+    else correctButton.focus();
+  }
+
   function render() {
     summary.hidden = true;
     main.hidden = false;
     whoName.textContent = activeStudent.name;
-    nextStudentButton.disabled = students.length < 2;
     paintProgress();
     backButton.disabled = index === 0;
 
     const current = question();
+    const assignment = assignments[index];
     const answered = assignments.filter((value) => value !== null);
     const correctCount = answered.filter((value) => value.correct).length;
     const wrongCount = answered.filter((value) => !value.correct).length;
+    const choices = Array.isArray(current.options) ? current.options : [];
+    const autoGraded = isAutoGraded(current);
 
     questionBody.textContent = current.body;
     questionMeta.replaceChildren(
@@ -244,33 +302,76 @@ function openStage({ leagueId, student, students, questions, onFinished, onResta
       chip(`✅ ${fa(correctCount)} درست تا این‌جا`, 'ok'),
       chip(`❌ ${fa(wrongCount)} غلط`, 'bad'),
     );
-    const choices = Array.isArray(current.options) ? current.options : [];
+    pickHint.hidden = !autoGraded || Boolean(assignment);
     optionsBox.replaceChildren();
     optionsBox.hidden = choices.length < 2;
     if (choices.length >= 2) {
       choices.forEach((choice, position) => {
-        optionsBox.appendChild(el('div.quiz-option', {}, [
+        const option = el('button.quiz-option', { type: 'button' }, [
           el('span.quiz-option__index', { text: fa(position + 1) }),
           el('span', { text: choice }),
-        ]));
+        ]);
+        if (autoGraded && !assignment) {
+          option.addEventListener('click', () => chooseOption(position));
+        } else {
+          option.disabled = true;
+        }
+        optionsBox.appendChild(option);
       });
     }
 
-    loadSubmittedAnswer();
-    correctButton.focus();
+    // Multiple-choice questions are graded by the selected option; free-text
+    // legacy questions keep the oral correct/wrong controls.
+    correctButton.hidden = autoGraded || Boolean(assignment);
+    wrongButton.hidden = autoGraded || Boolean(assignment);
+    nextQuestionButton.hidden = !assignment;
+    nextQuestionLabel.textContent = index + 1 >= questions.length
+      ? '✅ پایان و ثبت نمره'
+      : 'سؤال بعدی ➡️';
+    nextStudentButton.disabled = students.length < 2 || Boolean(assignment);
+
+    if (assignment) {
+      // A pending portal-answer fetch must not repaint a graded question.
+      answerToken += 1;
+      paintFeedback(current, assignment);
+    } else {
+      loadSubmittedAnswer();
+    }
+    focusAnswerControl();
   }
 
   /**
-   * Freezes the active student into this question before advancing. Everything
-   * that is saved later reads this snapshot, never the mutable active student.
+   * Freezes the active student and the selected choice into this question.
+   * Everything saved later reads this snapshot, never the mutable active student.
    */
+  function chooseOption(position) {
+    if (closed || !summary.hidden || assignments[index]) return;
+    const current = question();
+    const choices = Array.isArray(current.options) ? current.options : [];
+    if (!isAutoGraded(current) || position < 0 || position >= choices.length) return;
+    assignments[index] = {
+      studentId: activeStudent.id,
+      studentName: activeStudent.name,
+      correct: Number(current.correctIndex) === position,
+      selectedIndex: position,
+    };
+    render();
+  }
+
+  /** Oral fallback for legacy free-text questions without options. */
   function answer(correct) {
-    if (closed || !summary.hidden) return;
+    if (closed || !summary.hidden || assignments[index]) return;
     assignments[index] = {
       studentId: activeStudent.id,
       studentName: activeStudent.name,
       correct: correct === true,
+      selectedIndex: null,
     };
+    render();
+  }
+
+  function advance() {
+    if (closed || !summary.hidden || !assignments[index]) return;
     if (index + 1 >= questions.length) {
       void finish();
       return;
@@ -289,7 +390,7 @@ function openStage({ leagueId, student, students, questions, onFinished, onResta
     activeStudent = picked;
     whoName.textContent = picked.name;
     loadSubmittedAnswer();
-    correctButton.focus();
+    focusAnswerControl();
   }
 
   function back() {
@@ -468,15 +569,29 @@ function openStage({ leagueId, student, students, questions, onFinished, onResta
       return;
     }
     if (!summary.hidden) return;
+    if (event.key === 'Backspace') {
+      event.preventDefault();
+      back();
+      return;
+    }
+    if (assignments[index]) return;
+
+    const current = question();
+    const choices = Array.isArray(current.options) ? current.options : [];
+    if (isAutoGraded(current)) {
+      const position = Number(event.key);
+      if (Number.isInteger(position) && position >= 1 && position <= choices.length) {
+        event.preventDefault();
+        chooseOption(position - 1);
+      }
+      return;
+    }
     if (event.key === '1' || event.key === 'ArrowLeft') {
       event.preventDefault();
       answer(true);
     } else if (event.key === '2' || event.key === 'ArrowRight') {
       event.preventDefault();
       answer(false);
-    } else if (event.key === 'Backspace') {
-      event.preventDefault();
-      back();
     }
   }
 

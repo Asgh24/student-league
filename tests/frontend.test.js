@@ -895,6 +895,13 @@ describe('Q&A presentation mode', () => {
     return node;
   }
 
+  function clickStageOption(position) {
+    const options = [...document.querySelectorAll('.quiz-stage .quiz-option')];
+    expect(options[position], `stage option ${position + 1} not found`).toBeTruthy();
+    options[position].click();
+    return options[position];
+  }
+
   it('plays a one-question quiz, shows the score and posts the result', async () => {
     mockLoad();
     api.post.mockResolvedValue({
@@ -928,10 +935,14 @@ describe('Q&A presentation mode', () => {
     expect(stage.querySelectorAll('.quiz-option')).toHaveLength(3);
     expect(stage.textContent).toContain('تهران');
     expect(stage.textContent).toContain('شیراز');
-    expect(stage.textContent).toContain('درست');
-    expect(stage.textContent).toContain('غلط');
+    expect(stage.querySelector('.quiz-btn--correct').hidden).toBe(true);
+    expect(stage.querySelector('.quiz-btn--wrong').hidden).toBe(true);
 
-    [...stage.querySelectorAll('button')].find((node) => node.textContent.includes('درست')).click();
+    // Clicking the chosen option grades it automatically: option 1 is correct.
+    clickStageOption(0);
+    expect(stage.querySelectorAll('.quiz-option')[0].classList.contains('is-correct')).toBe(true);
+    expect(stage.querySelector('.quiz-answer').textContent).toContain('درست پاسخ داد');
+    clickStageButton('پایان و ثبت نمره');
 
     await vi.waitFor(() => expect(api.post).toHaveBeenCalled());
     expect(api.post).toHaveBeenCalledWith('/leagues/1/quiz-sessions', {
@@ -991,14 +1002,19 @@ describe('Q&A presentation mode', () => {
     // The first question switches to the other student before it is graded.
     clickStageButton('دانش‌آموز بعدی');
     expect(stage.querySelector('.quiz-stage__who').textContent).toContain('بهار بنفش');
-    clickStageButton('درست');
+    clickStageOption(0);
+    clickStageButton('سؤال بعدی');
 
     await vi.waitFor(() => expect(stage.querySelector('.quiz-question__body').textContent).not.toBe(firstBody));
 
-    // The second question switches back to the starting student.
+    // The second question switches back to the starting student and is wrong.
     clickStageButton('دانش‌آموز بعدی');
     expect(stage.querySelector('.quiz-stage__who').textContent).toContain('آرش آزمون');
-    clickStageButton('غلط');
+    clickStageOption(1);
+    const options = [...stage.querySelectorAll('.quiz-option')];
+    expect(options[1].classList.contains('is-wrong')).toBe(true);
+    expect(options[0].classList.contains('is-correct')).toBe(true);
+    clickStageButton('پایان و ثبت نمره');
 
     const quizCalls = () => api.post.mock.calls.filter(([url]) => url === '/leagues/1/quiz-sessions');
     await vi.waitFor(() => expect(quizCalls()).toHaveLength(2));
