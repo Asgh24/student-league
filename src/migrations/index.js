@@ -8,6 +8,7 @@ import * as contactsReports from './007_contacts_reports.js';
 import * as platform from './008_platform.js';
 import * as mcqQuestions from './009_mcq_questions.js';
 import * as teacherSmsSettings from './010_teacher_sms_settings.js';
+import * as teacherGroqSettings from './011_teacher_groq_settings.js';
 
 /** Ordered list of migrations applied automatically on boot. */
 export const migrations = [
@@ -21,4 +22,5 @@ export const migrations = [
   platform,
   mcqQuestions,
   teacherSmsSettings,
+  teacherGroqSettings,
 ];

@@ -186,6 +186,20 @@ export const config = {
       timeoutMs: Math.max(1000, int(process.env.SMS_TIMEOUT_MS, 15000)),
     };
   },
+  /**
+   * Groq credentials for the Q&A assistant (https://groq.com). A teacher can
+   * save a personal key in their own panel; `GROQ_API_KEY` is the shared
+   * default used only when that teacher has not saved one.
+   */
+  get groq() {
+    return {
+      apiKey: (process.env.GROQ_API_KEY || '').trim(),
+      baseUrl: (process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1').replace(/\/+$/, ''),
+      model: (process.env.GROQ_MODEL || '').trim() || 'openai/gpt-oss-20b',
+      timeoutMs: Math.max(1000, int(process.env.GROQ_TIMEOUT_MS, 45000)),
+      maxCompletionTokens: Math.max(512, int(process.env.GROQ_MAX_COMPLETION_TOKENS, 4096)),
+    };
+  },
 };
 
 export const ALLOWED_UPLOAD_EXTENSIONS = [

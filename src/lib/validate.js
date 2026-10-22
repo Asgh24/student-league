@@ -1,6 +1,19 @@
 import { z } from 'zod';
 import { validationError } from './errors.js';
 
+/** Shared by single-question creation and reviewed AI bulk inserts. */
+const questionCreateSchema = z.object({
+  body: z.string().trim().min(1, 'متن سوال الزامی است').max(500),
+  points: z.coerce.number().int().min(0).max(10000).default(0),
+  options: z.array(z.string().trim().min(1, 'متن گزینه الزامی است').max(200))
+    .min(2, 'حداقل دو گزینه لازم است')
+    .max(10, 'حداکثر ۱۰ گزینه مجاز است'),
+  correctIndex: z.coerce.number().int().min(0, 'گزینه صحیح را انتخاب کنید').max(9),
+}).refine((value) => value.correctIndex < value.options.length, {
+  message: 'گزینه صحیح باید یکی از گزینه‌ها باشد',
+  path: ['correctIndex'],
+});
+
 /**
  * Express 5 exposes `req.query` through a prototype getter, so the parsed value
  * is installed as an own, writable property instead of a plain assignment.
@@ -145,6 +158,26 @@ export const schemas = {
     (value) => value.apiKey !== undefined || value.lineNumber !== undefined || value.clearApiKey,
     'حداقل یکی از تنظیمات پیامک را وارد کنید',
   ),
+
+  /**
+   * Per-teacher Groq settings. Sending an empty/omitted `apiKey` keeps the
+   * saved key; `clearApiKey` removes it and falls back to the server key.
+   */
+  aiSettings: z.object({
+    apiKey: z.string().trim().max(300).optional(),
+    clearApiKey: z.boolean().optional().default(false),
+  }).refine(
+    (value) => (value.apiKey !== undefined && value.apiKey !== '') || value.clearApiKey,
+    'کلید API یا درخواست حذف آن را وارد کنید',
+  ),
+
+  /** Ask the AI assistant to create a multiple-choice quiz or questionnaire. */
+  aiQuestions: z.object({
+    topic: z.string().trim().min(3, 'موضوع آزمون را وارد کنید').max(300),
+    count: z.coerce.number().int().min(1).max(10).default(5),
+    difficulty: z.enum(['easy', 'medium', 'hard']).default('medium'),
+    notes: z.string().trim().max(1000).optional().default(''),
+  }),
 
   /** Admin SMS panel. Mobiles are normalized by the route. */
   smsTest: z.object({
@@ -369,16 +402,13 @@ export const schemas = {
     status: z.enum(['done', 'not_done']),
   }),
 
-  questionCreate: z.object({
-    body: z.string().trim().min(1, 'متن سوال الزامی است').max(500),
-    points: z.coerce.number().int().min(0).max(10000).default(0),
-    options: z.array(z.string().trim().min(1, 'متن گزینه الزامی است').max(200))
-      .min(2, 'حداقل دو گزینه لازم است')
-      .max(10, 'حداکثر ۱۰ گزینه مجاز است'),
-    correctIndex: z.coerce.number().int().min(0, 'گزینه صحیح را انتخاب کنید').max(9),
-  }).refine((value) => value.correctIndex < value.options.length, {
-    message: 'گزینه صحیح باید یکی از گزینه‌ها باشد',
-    path: ['correctIndex'],
+  questionCreate: questionCreateSchema,
+
+  /** Saves a reviewed batch of AI-generated (or manually submitted) MCQs. */
+  questionBulkCreate: z.object({
+    questions: z.array(questionCreateSchema)
+      .min(1, 'حداقل یک سؤال لازم است')
+      .max(10, 'حداکثر ۱۰ سؤال در هر بار ذخیره مجاز است'),
   }),
 
   /** Multiple-choice students send `optionIndex`; legacy text questions send `body`. */

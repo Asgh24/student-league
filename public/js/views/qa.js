@@ -7,6 +7,7 @@ import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { confirmDialog, emptyState, notify, openModal } from '../ui.js';
 import { backToWorkbench, button, card, chip, fa, faDateTime, field, grid, iconButton, loadingNode, pageHead } from './common.js';
+import { openAiAssistant } from './aiAssistant.js';
 import { startQuiz } from './quizStage.js';
 
 /** Modal with a teacher-managed option list and one correct choice. */
@@ -383,6 +384,11 @@ export async function renderQa({ params }) {
             icon: '▶️',
             disabled: items.length === 0,
             onClick: () => openQuiz(leagueId, items, load),
+          }),
+          button('دستیار هوش مصنوعی', {
+            kind: 'soft',
+            icon: '🤖',
+            onClick: () => openAiAssistant({ leagueId, leagueName: league.league.name, reload: load }),
           }),
           button('سؤال جدید', { icon: '➕', onClick: () => createQuestion(leagueId, load) }),
           el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' }),

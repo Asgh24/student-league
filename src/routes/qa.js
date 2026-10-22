@@ -25,6 +25,37 @@ export function createLeagueQuestionsRouter({ db }) {
     res.json({ items, recent: recentQuizSessions(db, req.league.id) });
   });
 
+  router.post('/bulk', validate({ body: schemas.questionBulkCreate }), (req, res) => {
+    const insert = db.prepare(`
+      INSERT INTO questions
+        (league_id, teacher_id, body, points, is_open, options_json, correct_index, created_at)
+      VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+    `);
+    const ids = db.transaction(() => req.body.questions.map((question) => {
+      const info = insert.run(
+        req.league.id,
+        req.user.id,
+        question.body,
+        question.points,
+        JSON.stringify(question.options.map((option) => option.trim())),
+        question.correctIndex,
+        isoNow(),
+      );
+      return Number(info.lastInsertRowid);
+    }))();
+
+    const rows = db.prepare(`
+      SELECT id, body, points, is_open AS isOpen, created_at AS createdAt,
+             options_json AS optionsJson, correct_index AS correctIndex
+      FROM questions WHERE id IN (${ids.map(() => '?').join(', ')}) ORDER BY id ASC
+    `).all(...ids);
+    const items = rows.map((row) => ({
+      ...serializeQuestion(row, { includeCorrectIndex: true }),
+      answerCount: 0,
+    }));
+    res.status(201).json({ items });
+  });
+
   router.post('/', validate({ body: schemas.questionCreate }), (req, res) => {
     const options = req.body.options.map((option) => option.trim());
     const info = db.prepare(`

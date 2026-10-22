@@ -681,6 +681,158 @@ td.delta-cell.is-negative {
   flex-wrap: wrap;
 }
 
+/* ------------------------------------------------------- AI Q&A assistant */
+.modal--ai {
+  width: min(840px, 100%);
+  max-height: 90vh;
+}
+.ai-assistant {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ai-assistant__intro {
+  margin: 0;
+  line-height: 1.9;
+}
+.ai-settings {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(124, 122, 163, 0.05);
+  padding: 10px 12px;
+}
+.ai-key__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.ai-key__summary::marker {
+  color: var(--brand-2);
+}
+.ai-key .field {
+  margin-top: 10px;
+}
+.ai-key__actions {
+  margin: 8px 0;
+}
+.ai-key__notes p {
+  margin: 3px 0;
+}
+.ai-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.ai-check input {
+  accent-color: var(--brand-2);
+}
+.ai-generator {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ai-section__title {
+  margin: 0;
+  font-size: 1rem;
+}
+.ai-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ai-form__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.ai-status:empty {
+  display: none;
+}
+.ai-status {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.8;
+}
+.ai-preview:empty {
+  display: none;
+}
+.ai-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px dashed var(--line);
+  padding-top: 12px;
+}
+.ai-preview__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ai-preview__head p {
+  margin: 3px 0 0;
+}
+.ai-preview__tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ai-preview__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ai-question {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: var(--surface);
+}
+.ai-question__pick {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  padding-top: 2px;
+  cursor: pointer;
+}
+.ai-question__pick input {
+  accent-color: var(--brand-2);
+  margin-top: 3px;
+}
+.ai-question__body {
+  margin: 0 0 4px;
+  font-weight: 700;
+  line-height: 1.9;
+}
+.ai-question__meta {
+  gap: 6px;
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+.ai-preview__actions {
+  display: flex;
+  justify-content: flex-start;
+}
+@media (max-width: 620px) {
+  .ai-form__row {
+    grid-template-columns: 1fr;
+  }
+  .modal--ai {
+    padding: 14px;
+  }
+}
+
 /* ------------------------------------------------------- sms setup guide */
 .card--sms-settings .card__title {
   flex-wrap: wrap;

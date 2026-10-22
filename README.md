@@ -60,6 +60,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | پنل مدیر | Separate site-owner login: teacher search/filter, manual subscription grants, plan CRUD, revenue and payment ledger, inbox/SMS health |
 | پیام‌ها | Ticket-like teacher↔student inbox with threads, unread counters, read receipts and polling; both sides can reply from the same shared view |
 | پنل پیامک | Per-teacher sms.ir API key + line number in the teacher's own panel (encrypted, write-only), a built-in «راهنمایی راه‌اندازی سامانه پیامکی» guide with annotated screenshots, credit/lines, test and bulk sends, league-report outbox and admin campaign retry; without credentials everything stays queued instead of being lost |
+| دستیار هوش مصنوعی | In the Q&A page, drafts multiple-choice quizzes/questionnaires through Groq (`openai/gpt-oss-20b`), shows a reviewable preview and bulk-saves only the selected questions; supports a server-wide default key plus an encrypted, write-only personal teacher key |
 | پرداخت‌ها | Zarinpal v4 request/verify (Rial conversion, sandbox support) and a local `mock` gateway for development before a merchant ID exists |
 
 **Student area** – tabs: میزکار, کارنامه, ارزشیابی, حضور و غیاب, تیم من, تاریخچه, رده‌بندی, لایک, سوال و پاسخ, پیام‌ها, تنظیمات.
@@ -180,6 +181,11 @@ is only needed if you upgrade Chart.js or the Vazirmatn font package.
 | `LIKES_PER_DAY` | `10` | Likes a student may give per day |
 | `BODY_LIMIT` | `512kb` | JSON body limit |
 | `LOG_LEVEL` | `debug` | `debug` \| `info` \| `warn` \| `error` |
+| `GROQ_API_KEY` | — | Shared default Groq key for the Q&A AI assistant; teachers can override it with an encrypted personal key |
+| `GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | Groq-compatible API base URL |
+| `GROQ_MODEL` | `openai/gpt-oss-20b` | Model used to draft multiple-choice questions |
+| `GROQ_TIMEOUT_MS` | `45000` | Timeout of one generation request |
+| `GROQ_MAX_COMPLETION_TOKENS` | `4096` | Upper bound for one generated batch |
 | `SMS_ENABLED` | auto | Server-wide fallback for teachers who have not saved their own settings; defaults to `true` only when the key **and** line number are set |
 | `SMSIR_API_KEY` | — | Optional fallback sms.ir REST API key (`X-API-KEY` header); teachers normally enter their own in the panel |
 | `SMSIR_LINE_NUMBER` | — | Optional fallback sms.ir sender line number used by `POST /v1/send/bulk` |
@@ -284,7 +290,7 @@ Created and upgraded by versioned migrations on boot (`src/migrations/`).
 
 | Table | Purpose |
 | --- | --- |
-| `users` | Teachers and students; bcrypt hash, role, display name, persian-digits flag, trial/subscription window and plan reference; teachers also hold their encrypted `sms_api_key`, `sms_line_number` and `sms_updated_at` |
+| `users` | Teachers and students; bcrypt hash, role, display name, persian-digits flag, trial/subscription window and plan reference; teachers also hold their encrypted `sms_api_key`, `sms_line_number`, `sms_updated_at`, `groq_api_key` and `groq_updated_at` |
 | `admins` | Site-owner accounts stored separately so `/admin/*` can never be reached by a teacher or student session |
 | `subscription_plans` | Admin-editable plans: name, days, Toman price, description, active flag, sort order |
 | `payments` | Subscription ledger: teacher, plan snapshot, amount/days, status, provider, authority/ref id, timestamps and admin note |
@@ -516,6 +522,7 @@ pool only after everyone has been picked.
 | POST | `/homework/:id/status/bulk` | `{ status }` | `{ items }` |
 | GET | `/leagues/:id/questions` | — | `{ items }` — every item has `type` (`multiple_choice`/`text`), `options[]` and `isOpen`; `correctIndex` is returned **only** to the owning teacher |
 | POST | `/leagues/:id/questions` | `{ body, points?, options[2..10], correctIndex }` | `201 { question }` — multiple-choice; `correctIndex` must point to one of `options` |
+| POST | `/leagues/:id/questions/bulk` | `{ questions: [{ body, points?, options[2..10], correctIndex }] }` (1–10) | `201 { items }` — one transaction, used after the AI preview is reviewed |
 | DELETE | `/questions/:id` | — | `{ ok: true }` |
 | POST | `/questions/:id/close` \| `/open` | — | `{ ok: true }` |
 | GET | `/questions/:id/answers` | — | `{ question, items }` — teacher-only; each answer has `selectedIndex` and derived `isCorrect` (or `null` for legacy text questions) |
@@ -529,6 +536,28 @@ pool only after everyone has been picked.
 
 Questions created before the multiple-choice migration have `options: []` and
 `type: "text"`; they stay readable and answerable with a free-text `body`.
+
+### Q&A AI assistant (teacher)
+
+The «دستیار هوش مصنوعی» button on the Q&A page drafts a multiple-choice quiz
+or questionnaire with Groq. Generation is a **preview only**: nothing is
+written until the teacher selects questions and the UI calls the bulk endpoint
+above. The assistant uses `GROQ_API_KEY` as a shared default; a teacher can save
+an encrypted personal key, which takes precedence. A cleared personal key falls
+back to the server key. Keys are never returned by the API.
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| GET | `/ai/settings` | — | `{ config }` — `configured`, `source` (`teacher`/`server`/`none`), `model`, `serverConfigured`, `own{ hasApiKey, updatedAt }`; never contains the key |
+| PUT | `/ai/settings` | `{ apiKey?, clearApiKey? }` | `{ config }` — a blank `apiKey` keeps the saved key; `clearApiKey: true` removes it |
+| POST | `/leagues/:id/ai/questions` | `{ topic, count?, difficulty?, notes? }` | `{ questions: [{ body, options[], correctIndex, points }], meta }` — preview only, never saved |
+
+`count` is 1–10 (default 5), `difficulty` is `easy`/`medium`/`hard` (default
+`medium`), and generated questions are normalized to the normal MCQ shape with
+exactly one in-range correct option. Missing keys return
+`503 AI_NOT_CONFIGURED`; provider/JSON failures return
+`502 AI_PROVIDER_ERROR` or `502 AI_INVALID_RESPONSE`. Tests mock Groq's HTTP
+API, so the suite does not spend credits or require a real key.
 
 ### Course evaluations (teacher)
 
@@ -708,6 +737,9 @@ dropped.
   limiter. `TRUST_PROXY` is off by default: a directly exposed server cannot be
   reached through a spoofed `X-Forwarded-For`, so set it only behind a real proxy.
 * **SQL** — parameterized statements only, no string-built SQL.
+* **Provider secrets** — sms.ir and Groq keys are encrypted with AES-256-GCM
+  using a key derived from `SESSION_SECRET`, scoped to the owning teacher and
+  never returned by an API; rotating the secret requires re-entering them.
 * **XSS** — the frontend builds DOM nodes and inserts user text as `textContent`
   (`public/js/dom.js`); `innerHTML` is never fed with user data.
 * **Headers** — helmet with a strict CSP (`script-src 'self'`, no inline scripts,
@@ -733,8 +765,8 @@ npm run lint    # eslint .
 Latest run on this machine (Windows, Node 26.3.0):
 
 ```
- Test Files  28 passed (28)
-      Tests  340 passed (340)
+ Test Files  30 passed (30)
+      Tests  352 passed (352)
 ```
 
 | Suite | Tests | Covers |
@@ -760,6 +792,8 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `messages.test.js` | 12 | Teacher↔student threads, unread/read receipts, replies, ownership isolation, no-login students, empty body, unique conversations, contacts, admin exclusion |
 | `smsAdmin.test.js` | 4 | Admin SMS config, queued test messages without credentials, normalized bulk send, credit, invalid numbers and outbox retry |
 | `smsSettings.test.js` | 6 | Per-teacher encrypted sms.ir key/line, write-only API, teacher isolation, teacher credential precedence, incomplete-settings fallback block, validation and sample message |
+| `ai.test.js` | 9 | Per-teacher encrypted Groq key and server fallback, write-only settings, mocked Groq call/shape, invalid or failed responses, foreign-league isolation, preview-only generation, reviewed bulk save |
+| `aiAssistantFrontend.test.js` | 3 | AI modal key save/clear, disabled generation without a key, preview selection, bulk-save hand-off and reload, topic validation |
 | `frontend.test.js` | 59 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (12 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, MCQ option editor, student MCQ/text answering, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, modal focus/footer lifecycle |
 | `frontendPlatform.test.js` | 8 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, shared inbox thread/composer, admin settings label |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
@@ -792,6 +826,7 @@ Executed against a live server (`NODE_ENV=development`, fresh `DATA_DIR`, seeded
 | Teacher answer review | ✅ «پاسخ‌ها» showed `پاسخ صحیح: گزینه ۲ — مشهد` and the student's `گزینه ۲: مشهد · پاسخ صحیح` |
 | Teacher sms.ir settings | ✅ saved a key + line from the teacher's own card, status switched to «حساب شخصی شما», the sample SMS rendered, then the test values were cleared |
 | SMS setup guide | ✅ «راهنمایی راه‌اندازی سامانه پیامکی» opened a modal with a dark backdrop, all three screenshots, four steps and a working «بستن» button |
+| Q&A AI assistant | ⏳ key save/clear, preview selection and bulk-save hand-off are covered by automated tests; a live Groq call waits for `GROQ_API_KEY` |
 | Attendance bulk "همه حاضر" | ✅ `۰ ثبت‌نشده` → `۲۲ حاضر` |
 | Raffle draw | ✅ winner shown, "21 remaining", pool exclusion works |
 | Logout → login as another user | ✅ (this flow exposed a stale-CSRF bug that is now fixed and tested) |
@@ -1078,6 +1113,11 @@ npm run bootstrap -- --force      # reset that account's password (forgotten log
   keeps every uploaded version in history, so prune with `BACKUP_GITHUB_KEEP` rather than
   expecting space to be freed.
 * **No email.** Password recovery is manual (teacher resets student passwords).
+* **AI generation needs a Groq key.** The Q&A assistant works only after
+  `GROQ_API_KEY` or a teacher's personal key is saved. It is non-streaming,
+  limited to 1–10 questions per request, and validates the model's JSON before
+  showing a preview. Tests mock the provider; verify a live call after setting a
+  real key. Generated content should always be reviewed by the teacher.
 * **SMS requires sms.ir credentials.** Daily reports and admin test/bulk messages are
   stored in the outbox first. Each teacher enters their own API key and line number in
   «گزارش روزانه ← تنظیمات پیامک من»; the optional `SMSIR_API_KEY` and
