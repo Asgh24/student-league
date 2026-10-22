@@ -1,6 +1,7 @@
 /** Application bootstrap: shell wiring, route table and session restoration. */
 
 import { logout as apiLogout, me as apiMe, meta as apiMeta, setCsrfToken } from './api.js';
+import { refreshAdminPendingBadge, startAdminBadgePolling } from './adminBadge.js';
 import { el } from './dom.js';
 import { errorMessage } from './format.js';
 import { createRouter, currentPath } from './router.js';
@@ -50,6 +51,7 @@ import { renderReportCard } from './views/student/reportcard.js';
 import { renderStudentTeam } from './views/student/team.js';
 
 import { renderAdminDashboard } from './views/admin/dashboard.js';
+import { renderAdminPaymentSettings } from './views/admin/paymentSettings.js';
 import { renderAdminPayments } from './views/admin/payments.js';
 import { renderAdminPlans } from './views/admin/plans.js';
 import { renderAdminSms } from './views/admin/sms.js';
@@ -107,12 +109,19 @@ function adminNav() {
     ['admin/teachers', '👩‍🏫', 'معلمان'],
     ['admin/plans', '🛍️', 'طرح‌های اشتراک'],
     ['admin/payments', '🧾', 'پرداخت‌ها'],
+    ['admin/payment-settings', '💳', 'کارت و پرداخت'],
     ['admin/sms', '📨', 'پنل پیامک'],
     ['admin/settings', '⚙️', 'تنظیمات'],
   ];
   return [
     { group: 'پنل مدیر' },
-    ...tabs.map(([href, icon, label]) => ({ label, icon, href, active: active === href })),
+    ...tabs.map(([href, icon, label]) => ({
+      label,
+      icon,
+      href,
+      active: active === href,
+      badge: href === 'admin/payments' ? state.adminPendingPayments : undefined,
+    })),
   ];
 }
 
@@ -173,6 +182,7 @@ function renderShell() {
   if (!isTeacher()) setLeaguePill(null);
   renderDrawerNav(isAdmin() ? adminNav() : isTeacher() ? teacherNav() : studentNav());
   renderDrawerFoot(logoutButton());
+  if (isAdmin()) void refreshAdminPendingBadge();
 }
 
 const routes = [
@@ -207,6 +217,7 @@ const routes = [
   { path: 'admin/teachers', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminTeachers(ctx) },
   { path: 'admin/plans', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminPlans(ctx) },
   { path: 'admin/payments', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminPayments(ctx) },
+  { path: 'admin/payment-settings', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminPaymentSettings(ctx) },
   { path: 'admin/sms', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminSms(ctx) },
   { path: 'admin/settings', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderSettings(ctx) },
   { path: 'fun', guard: () => (state.user ? undefined : 'login'), view: () => renderFun() },
@@ -276,6 +287,7 @@ async function boot() {
   if (state.leagueId === null) setLeagueId(storedLeagueId());
 
   renderShell();
+  startAdminBadgePolling();
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason;
     if (reason && reason.name === 'ApiError' && reason.status !== 0) return;

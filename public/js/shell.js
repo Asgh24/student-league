@@ -1,6 +1,7 @@
 /** Access to the static shell markup (topbar, drawer, view container). */
 
 import { mount } from './dom.js';
+import { number } from './format.js';
 import { state } from './store.js';
 
 const byId = (id) => document.getElementById(id);
@@ -93,6 +94,14 @@ export function renderDrawerNav(items) {
     link.href = `#/${String(item.href).replace(/^#?\/?/, '')}`;
     link.textContent = `${item.icon ? `${item.icon} ` : ''}${item.label}`;
     if (item.active) link.classList.add('is-active');
+    if (item.badge !== undefined) {
+      const badge = document.createElement('span');
+      badge.className = 'nav-badge';
+      badge.dataset.adminPending = '';
+      badge.textContent = item.badge > 0 ? number(item.badge, state.persianDigits) : '';
+      badge.hidden = !item.badge;
+      link.appendChild(badge);
+    }
     nav.appendChild(link);
   }
 }

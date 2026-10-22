@@ -154,7 +154,7 @@ is only needed if you upgrade Chart.js or the Vazirmatn font package.
 | `ADMIN_USERNAME` | `admin` | Site-owner login name |
 | `ADMIN_PASSWORD` | `admin1234` in development only | **Required in production** before the admin account is created |
 | `ADMIN_NAME` | `مدیر سامانه` | Display name in the owner panel |
-| `PAYMENT_PROVIDER` | `mock` in development, `zarinpal` in production | `mock` renders a local no-money checkout; `zarinpal` calls the official v4 API |
+| `PAYMENT_PROVIDER` | `mock` in development, `zarinpal` in production | `card` enables manual card-to-card receipts; `mock` renders a local no-money checkout; `zarinpal` calls the official v4 API |
 | `ZARINPAL_MERCHANT_ID` | — | Merchant ID from the Zarinpal panel; required for real payments |
 | `ZARINPAL_SANDBOX` | `false` | Use `sandbox.zarinpal.com` for testing |
 | `ZARINPAL_BASE_URL` | auto | Override `payment.zarinpal.com` / `sandbox.zarinpal.com` |
@@ -178,6 +178,7 @@ is only needed if you upgrade Chart.js or the Vazirmatn font package.
 | `API_RATE_LIMIT` | `1200` | API requests per window per IP |
 | `RATE_WINDOW_MS` | `900000` | Rate-limit window (15 minutes) |
 | `MAX_UPLOAD_BYTES` | `10485760` | Upload size limit (10 MB) |
+| `MAX_RECEIPT_BYTES` | `5242880` | Card-receipt image limit (5 MB, capped by `MAX_UPLOAD_BYTES`) |
 | `LIKES_PER_DAY` | `10` | Likes a student may give per day |
 | `BODY_LIMIT` | `512kb` | JSON body limit |
 | `LOG_LEVEL` | `debug` | `debug` \| `info` \| `warn` \| `error` |
@@ -293,7 +294,8 @@ Created and upgraded by versioned migrations on boot (`src/migrations/`).
 | `users` | Teachers and students; bcrypt hash, role, display name, persian-digits flag, trial/subscription window and plan reference; teachers also hold their encrypted `sms_api_key`, `sms_line_number`, `sms_updated_at`, `groq_api_key` and `groq_updated_at` |
 | `admins` | Site-owner accounts stored separately so `/admin/*` can never be reached by a teacher or student session |
 | `subscription_plans` | Admin-editable plans: name, days, Toman price, description, active flag, sort order |
-| `payments` | Subscription ledger: teacher, plan snapshot, amount/days, status, provider, authority/ref id, timestamps and admin note |
+| `payments` | Subscription ledger: teacher, plan snapshot, amount/days, status, provider, authority/ref id, timestamps, admin note, card receipt text/image metadata and review fields |
+| `payment_settings` | Single row with the admin-published destination card number/holder/bank/instructions |
 | `conversations` | One teacher↔student thread (`UNIQUE(teacher_id, student_id)`) with subject and last-message time |
 | `messages` | Thread messages with sender role and `read_at` for unread counts |
 | `sms_campaigns` | Admin test/bulk SMS rows (queued/sent/failed), kept separately from league-report outbox rows |
@@ -612,9 +614,25 @@ accessible so the teacher can renew.
 
 | Method | Path | Body | Response |
 | --- | --- | --- | --- |
-| GET | `/subscription/status` | — | `{ subscription{ status, active, daysLeft, endsAt, source }, plans[], payments[], paymentProvider{ provider, configured, label, sandbox }, trialDays }` |
+| GET | `/subscription/status` | — | `{ subscription{ status, active, daysLeft, endsAt, source }, plans[], payments[], paymentProvider{ provider, configured, label, sandbox, card }, receiptMaxBytes, trialDays }` |
 | POST | `/subscription/checkout` | `{ planId }` | `201 { payment, provider, redirectUrl }` — `mock` local page or Zarinpal `StartPay` URL |
+| POST | `/subscription/card-checkout` | multipart: `planId`, `receiptText?`, `receipt` image? | `201 { payment, provider, message }` — one pending card receipt per teacher |
 | GET | `/subscription/payments/:id` | — | `{ payment }` (only the caller's payment) |
+| GET | `/subscription/payments/:id/receipt` | — | the caller's private receipt image (authenticated, `nosniff`) |
+| DELETE | `/subscription/payments/:id` | — | cancels the caller's own pending card receipt so a corrected one can be sent |
+
+With `PAYMENT_PROVIDER=card`, the admin publishes the destination card in
+«کارت و پرداخت». The teacher transfers the plan price outside the app, submits a
+text and/or image receipt, and the payment stays `pending`. The admin payments
+tab shows a numeric badge, a receipt preview, and approve/reject actions.
+Approval runs in one SQLite transaction: it claims the pending payment, snapshots
+the plan duration from the receipt row, extends the teacher's access exactly
+once, and records the review. The plan is added to the effective end date, so a
+remaining trial is preserved rather than replaced; unlimited accounts cannot
+submit a card receipt. Repeating an approval returns `alreadyPaid` without
+extending again. Receipt images live under
+`DATA_DIR/uploads/payment-receipts/` and are **never** served by the static file
+handler.
 
 Public callbacks live **outside** `/api/v1` and do not use CSRF or JSON:
 
@@ -663,7 +681,13 @@ student session.
 | POST | `/admin/plans` | `{ name, days, price, description?, active?, sortOrder? }` | `201 { item }` |
 | PATCH | `/admin/plans/:id` | any plan field | `{ item }` |
 | DELETE | `/admin/plans/:id` | — | `{ ok: true }` — soft delete (`active = 0`) |
-| GET | `/admin/payments` | `?search=&status=&page=&limit=` | `{ items, total, page, limit, pages }` |
+| GET | `/admin/payments` | `?search=&status=&page=&limit=` | `{ items, total, page, limit, pages, pendingReceipts }` — pending card receipts come first |
+| GET | `/admin/payments/pending-count` | — | `{ count }` for the numeric navigation badge |
+| GET | `/admin/payment-settings` | — | `{ settings, configured, provider }` |
+| PUT | `/admin/payment-settings` | `{ cardNumber, cardHolder, bankName?, instructions? }` | `{ settings, configured, provider }` |
+| GET | `/admin/payments/:id/receipt` | — | private receipt image; admin session required |
+| POST | `/admin/payments/:id/approve` | `{ note? }` | `{ payment, subscription, alreadyPaid }` — extends access once |
+| POST | `/admin/payments/:id/reject` | `{ reason? }` | `{ payment, alreadyReviewed }` — keeps the ledger row as `canceled` |
 
 ### SMS settings (teacher)
 
@@ -765,8 +789,8 @@ npm run lint    # eslint .
 Latest run on this machine (Windows, Node 26.3.0):
 
 ```
- Test Files  30 passed (30)
-      Tests  352 passed (352)
+ Test Files  32 passed (32)
+      Tests  375 passed (375)
 ```
 
 | Suite | Tests | Covers |
@@ -789,6 +813,8 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `contacts.test.js` | 5 | Parent/student phone normalization, validation, clearing and teacher isolation |
 | `seating.test.js` | 6 | Seating plan persistence, random reshuffle, clearing, teacher-only access |
 | `platform.test.js` | 10 | Teacher signup + 14-day trial, expired access + admin grant, admin/teacher/student separation, teacher create/search/filter, plan CRUD, mock checkout and renewal, Zarinpal request/verify (Rial, codes 100/101) |
+| `cardPayments.test.js` | 14 | Admin card settings/normalization, one pending receipt per teacher, exact-duration approval with idempotent re-approval, remaining-trial preservation, unlimited-account guards, no cross-teacher access, private receipt streaming/signature checks, reject/cancel/retry, missing-receipt and non-card guards |
+| `frontendCardPayments.test.js` | 7 | Teacher card details + receipt modal upload, disabled purchase during review, unlimited-account notice, unconfigured-card warning, admin settings form, receipt preview/approve actions, numeric navigation badge |
 | `messages.test.js` | 12 | Teacher↔student threads, unread/read receipts, replies, ownership isolation, no-login students, empty body, unique conversations, contacts, admin exclusion |
 | `smsAdmin.test.js` | 4 | Admin SMS config, queued test messages without credentials, normalized bulk send, credit, invalid numbers and outbox retry |
 | `smsSettings.test.js` | 6 | Per-teacher encrypted sms.ir key/line, write-only API, teacher isolation, teacher credential precedence, incomplete-settings fallback block, validation and sample message |

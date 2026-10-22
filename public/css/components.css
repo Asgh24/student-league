@@ -1046,6 +1046,39 @@ td.delta-cell.is-negative {
   font-size: 0.76rem;
 }
 
+/* ------------------------------------------------------ card payments */
+.receipt-card-number {
+  display: block;
+  margin: 6px 0;
+  font-size: clamp(1.25rem, 5vw, 1.8rem);
+  letter-spacing: 0.14em;
+  direction: ltr;
+  text-align: center;
+  word-spacing: 0.25em;
+}
+.receipt-box {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.receipt-box p {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+.receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.receipt-file {
+  font-size: 0.82rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 /* ---------------------------------------------------------- admin panel */
 .admin-tabs {
   margin-bottom: 16px;
@@ -1206,6 +1239,17 @@ td.delta-cell.is-negative {
   overflow-wrap: anywhere;
 }
 .payment-row .row {
+  gap: 6px;
+}
+.payment-row.is-pending {
+  border-color: rgba(245, 158, 11, 0.55);
+  background: #fffdf5;
+}
+.payment-row__actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
 }
 
@@ -1452,6 +1496,10 @@ td.delta-cell.is-negative {
     flex-direction: column;
     gap: 4px;
   }
+  .payment-row__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
   .inbox {
     grid-template-columns: minmax(0, 1fr);
     min-height: 0;
@@ -1544,6 +1592,28 @@ td.delta-cell.is-negative {
   background: linear-gradient(90deg, var(--brand), var(--brand-2));
   color: #fff;
   border-color: transparent;
+}
+.tab__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-inline-start: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bad);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.tab.is-active .tab__badge {
+  background: #fff;
+  color: var(--bad);
+}
+.tab__badge[hidden] {
+  display: none;
 }
 
 .meter {

@@ -1,5 +1,6 @@
+import fs from 'node:fs';
 import { Router } from 'express';
-import { conflict, notFound } from '../lib/errors.js';
+import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { isoNow, paginate } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
 import { config } from '../config.js';
@@ -7,6 +8,18 @@ import { findAdminByUsername } from '../repositories/admins.js';
 import { createUser, findByUsername, findById, publicUser } from '../repositories/users.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { createAdminSmsRouter } from './adminSms.js';
+import {
+  approveCardPayment,
+  countPendingCardPayments,
+  rejectCardPayment,
+} from '../services/manualPayments.js';
+import {
+  getCardSettings,
+  isCardConfigured,
+  saveCardSettings,
+} from '../services/paymentSettings.js';
+import { paymentProviderInfo } from '../services/payments.js';
+import { resolveReceiptPath } from '../services/receipts.js';
 import {
   ensureTrialEnd,
   extendTeacherSubscription,
@@ -85,6 +98,8 @@ export function createAdminRouter({ db }) {
       FROM payments WHERE status = 'paid' AND paid_at >= ?
     `).get(since);
     const pending = db.prepare("SELECT COUNT(*) AS n FROM payments WHERE status = 'pending'").get().n;
+    const pendingReceipts = countPendingCardPayments(db);
+    const cards = getCardSettings(db);
     const leagues = db.prepare('SELECT COUNT(*) AS n FROM leagues').get().n;
     const students = db.prepare('SELECT COUNT(*) AS n FROM students').get().n;
     const threads = db.prepare('SELECT COUNT(*) AS n FROM conversations').get().n;
@@ -103,7 +118,7 @@ export function createAdminRouter({ db }) {
         last30Days: recentRevenue.total,
         last30Count: recentRevenue.count,
       },
-      payments: { pending },
+      payments: { pending, pendingReceipts },
       leagues,
       students,
       messages: { threads, messages },
@@ -112,6 +127,30 @@ export function createAdminRouter({ db }) {
       recentPayments,
       trialDays: config.trialDays,
       paymentProvider: config.payments.provider,
+      cardConfigured: isCardConfigured(cards),
+    });
+  });
+
+  /** Destination card for manual card-to-card transfers. */
+  router.get('/payment-settings', (_req, res) => {
+    const settings = getCardSettings(db);
+    res.json({
+      settings,
+      configured: isCardConfigured(settings),
+      provider: paymentProviderInfo(db),
+    });
+  });
+
+  router.put('/payment-settings', validate({ body: schemas.paymentSettings }), (req, res) => {
+    const settings = saveCardSettings(db, {
+      ...req.body,
+      adminId: req.user.id,
+      now: isoNow(),
+    });
+    res.json({
+      settings,
+      configured: isCardConfigured(settings),
+      provider: paymentProviderInfo(db),
     });
   });
 
@@ -257,6 +296,10 @@ export function createAdminRouter({ db }) {
     res.json({ ok: true });
   });
 
+  router.get('/payments/pending-count', (_req, res) => {
+    res.json({ count: countPendingCardPayments(db) });
+  });
+
   router.get('/payments', (req, res) => {
     const { page, limit, offset } = paginate(req.query, { defaultLimit: 50, maxLimit: 200 });
     const status = ['pending', 'paid', 'failed', 'canceled'].includes(String(req.query.status ?? ''))
@@ -276,9 +319,66 @@ export function createAdminRouter({ db }) {
       SELECT p.*, u.display_name AS teacher_name
       FROM payments p JOIN users u ON u.id = p.teacher_id
       ${where}
-      ORDER BY p.id DESC LIMIT ? OFFSET ?
+      ORDER BY CASE WHEN p.provider = 'card' AND p.status = 'pending' THEN 0 ELSE 1 END,
+               p.id DESC
+      LIMIT ? OFFSET ?
     `).all(...params, limit, offset).map(paymentJson);
-    res.json({ items, total, page, limit, pages: Math.max(1, Math.ceil(total / limit)) });
+    res.json({
+      items,
+      total,
+      page,
+      limit,
+      pages: Math.max(1, Math.ceil(total / limit)),
+      pendingReceipts: countPendingCardPayments(db),
+    });
+  });
+
+  /** Receipt images are private; only an authenticated admin can stream them. */
+  router.get('/payments/:id/receipt', (req, res) => {
+    const id = Number.parseInt(req.params.id, 10);
+    const payment = Number.isFinite(id)
+      ? db.prepare('SELECT * FROM payments WHERE id = ?').get(id)
+      : null;
+    if (!payment || payment.provider !== 'card' || !payment.receipt_file) {
+      throw notFound('تصویر رسید یافت نشد');
+    }
+    const resolved = resolveReceiptPath(payment.receipt_file);
+    if (!resolved || !fs.existsSync(resolved)) throw notFound('تصویر رسید یافت نشد');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Content-Disposition', 'inline');
+    res.type(payment.receipt_mime || 'application/octet-stream');
+    return res.sendFile(resolved);
+  });
+
+  router.post('/payments/:id/approve', validate({ body: schemas.adminPaymentReview }), (req, res) => {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) throw notFound('پرداخت یافت نشد');
+    const result = approveCardPayment(db, id, { adminId: req.user.id, note: req.body.note });
+    if (!result.ok) {
+      if (result.reason === 'not-found') throw notFound('پرداخت یافت نشد');
+      if (result.reason === 'not-card-payment') throw badRequest('NOT_CARD_PAYMENT', 'این پرداخت کارت به کارت نیست');
+      if (result.reason === 'receipt-missing') throw conflict('RECEIPT_MISSING', 'این پرداخت رسید قابل بررسی ندارد');
+      throw conflict('PAYMENT_NOT_PENDING', 'این پرداخت دیگر در انتظار بررسی نیست');
+    }
+    res.json({
+      payment: result.payment,
+      subscription: result.access,
+      alreadyPaid: result.alreadyPaid,
+    });
+  });
+
+  router.post('/payments/:id/reject', validate({ body: schemas.adminPaymentReject }), (req, res) => {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) throw notFound('پرداخت یافت نشد');
+    const result = rejectCardPayment(db, id, { adminId: req.user.id, reason: req.body.reason });
+    if (!result.ok) {
+      if (result.reason === 'not-found') throw notFound('پرداخت یافت نشد');
+      if (result.reason === 'not-card-payment') throw badRequest('NOT_CARD_PAYMENT', 'این پرداخت کارت به کارت نیست');
+      if (result.reason === 'already-paid') throw conflict('PAYMENT_ALREADY_PAID', 'این پرداخت قبلاً تأیید شده است');
+      throw conflict('PAYMENT_NOT_PENDING', 'این پرداخت دیگر در انتظار بررسی نیست');
+    }
+    res.json({ payment: result.payment, alreadyReviewed: result.alreadyReviewed });
   });
 
   router.use('/sms', createAdminSmsRouter({ db }));

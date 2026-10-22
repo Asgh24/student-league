@@ -16,6 +16,7 @@ export const state = {
   user: null,
   leagueId: null,
   persianDigits: true,
+  adminPendingPayments: 0,
 };
 
 export function subscribe(listener) {
@@ -39,8 +40,17 @@ export function setMeta(meta) {
   emit();
 }
 
+/** Numeric badge shown on the admin payments icon in the drawer and tabs. */
+export function setAdminPendingPayments(value) {
+  const next = Math.max(0, Number.parseInt(value ?? 0, 10) || 0);
+  if (next === state.adminPendingPayments) return;
+  state.adminPendingPayments = next;
+  emit();
+}
+
 export function setUser(user) {
   state.user = user ?? null;
+  if (user?.role !== 'admin') state.adminPendingPayments = 0;
   state.persianDigits = user ? user.persianDigits !== false : true;
   if (user?.role !== 'teacher' && user?.role !== 'student') state.leagueId = null;
   emit();

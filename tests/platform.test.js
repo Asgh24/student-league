@@ -191,6 +191,12 @@ describe('subscription checkout', () => {
     expect(status.body.paymentProvider.provider).toBe('mock');
     const monthly = status.body.plans.find((plan) => plan.days === 30);
 
+    const unlimited = await teacher.post('/api/v1/subscription/checkout', { planId: monthly.id });
+    expect(unlimited.status).toBe(400);
+    expect(unlimited.body.error.code).toBe('UNLIMITED_ACCESS');
+    ctx.db.prepare('UPDATE users SET trial_ends_at = ? WHERE id = ?')
+      .run(new Date(Date.now() + 7 * 86400000).toISOString(), fixture.teacherA.id);
+
     const checkout = await teacher.post('/api/v1/subscription/checkout', { planId: monthly.id });
     expect(checkout.status).toBe(201);
     expect(checkout.body.payment.status).toBe('pending');

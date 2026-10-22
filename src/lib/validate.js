@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { validationError } from './errors.js';
+import { toAsciiDigits } from './normalize.js';
 
 /** Shared by single-question creation and reviewed AI bulk inserts. */
 const questionCreateSchema = z.object({
@@ -94,6 +95,31 @@ export const schemas = {
 
   subscriptionCheckout: z.object({
     planId: z.coerce.number().int().positive(),
+  }),
+
+  /** Card-to-card receipt; the image itself is handled by multer. */
+  cardCheckout: z.object({
+    planId: z.coerce.number().int().positive(),
+    receiptText: z.string().trim().max(500, 'متن رسید حداکثر ۵۰۰ نویسه است').optional().default(''),
+  }),
+
+  /** Destination card shown to teachers for manual transfers. */
+  paymentSettings: z.object({
+    cardNumber: z.preprocess(
+      (value) => toAsciiDigits(String(value ?? '')).replace(/[\s-]/g, ''),
+      z.string().regex(/^\d{8,30}$/, 'شماره کارت باید بین ۸ تا ۳۰ رقم باشد'),
+    ),
+    cardHolder: z.string().trim().min(2, 'نام صاحب کارت الزامی است').max(80),
+    bankName: z.string().trim().max(60).optional().default(''),
+    instructions: z.string().trim().max(500).optional().default(''),
+  }),
+
+  adminPaymentReview: z.object({
+    note: z.string().trim().max(500).optional().default(''),
+  }),
+
+  adminPaymentReject: z.object({
+    reason: z.string().trim().max(500).optional().default(''),
   }),
 
   adminTeacherCreate: z.object({

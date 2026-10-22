@@ -88,6 +88,11 @@ export function paymentJson(row) {
     cardPan: row.card_pan,
     error: row.error,
     note: row.note,
+    receiptText: row.receipt_text ?? '',
+    hasReceiptImage: Boolean(row.receipt_file),
+    receiptName: row.receipt_name ?? '',
+    reviewedAt: row.reviewed_at ?? null,
+    reviewNote: row.review_note ?? '',
     createdAt: row.created_at,
     paidAt: row.paid_at,
     startsAt: row.starts_at,
@@ -102,9 +107,10 @@ export function recentPayments(db, teacherId, limit = 30) {
 }
 
 /**
- * Adds `days` to the later of "now" and the current subscription end. Renewals
- * bought before expiry therefore extend the existing window instead of resetting
- * it. Runs inside the caller's transaction (or starts one).
+ * Adds `days` to the later of "now", the current subscription end, and the
+ * current trial end. Renewals bought before expiry therefore extend the
+ * existing window instead of resetting or discarding it. Runs inside the
+ * caller's transaction (or starts one).
  */
 export function extendTeacherSubscription(db, {
   teacherId,
@@ -116,7 +122,25 @@ export function extendTeacherSubscription(db, {
 }) {
   const teacher = findById(db, teacherId);
   if (!teacher || teacher.role !== 'teacher') return null;
-  const currentEnd = Math.max(now, timeOf(teacher.subscription_ends_at) ?? 0);
+  const subEnd = timeOf(teacher.subscription_ends_at);
+  const trialEnd = timeOf(teacher.trial_ends_at);
+  // NULL + NULL is the legacy/permanent unlimited account. A payment must never
+  // silently replace that with a shorter fixed-term subscription.
+  if (subEnd === null && trialEnd === null) {
+    return {
+      teacherId,
+      planName,
+      days,
+      startsAt: null,
+      endsAt: null,
+      access: teacherAccess(teacher),
+      unlimited: true,
+    };
+  }
+  // Buying during a trial must add the plan to the access the teacher already
+  // has, not silently replace the remaining trial days. The effective end is
+  // whichever of the paid subscription and the trial ends later.
+  const currentEnd = Math.max(now, subEnd ?? 0, trialEnd ?? 0);
   const newEnd = new Date(currentEnd + days * DAY_MS).toISOString();
   const startedAt = new Date(now).toISOString();
   db.prepare(`

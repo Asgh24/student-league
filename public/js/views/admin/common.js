@@ -2,21 +2,43 @@
 
 import { el } from '../../dom.js';
 import { state } from '../../store.js';
-import { chip } from '../common.js';
+import { chip, fa } from '../common.js';
 
 const TABS = [
   ['admin', '📊', 'داشبورد'],
   ['admin/teachers', '👩‍🏫', 'معلمان'],
   ['admin/plans', '🛍️', 'طرح‌ها'],
   ['admin/payments', '🧾', 'پرداخت‌ها'],
+  ['admin/payment-settings', '💳', 'کارت و پرداخت'],
   ['admin/sms', '📨', 'پنل پیامک'],
 ];
 
 export function adminTabs(active) {
-  return el('nav.tabs.admin-tabs', { 'aria-label': 'بخش‌های پنل مدیر' }, TABS.map(([href, icon, label]) => el(`a.tab${href === active ? '.is-active' : ''}`, {
-    href: `#/${href}`,
-    text: `${icon} ${label}`,
-  })));
+  return el('nav.tabs.admin-tabs', { 'aria-label': 'بخش‌های پنل مدیر' }, TABS.map(([href, icon, label]) => {
+    const children = [el('span', { text: `${icon} ${label}` })];
+    if (href === 'admin/payments') {
+      const pending = state.adminPendingPayments;
+      children.push(el('span.tab__badge', {
+        'data-admin-pending': '',
+        text: pending > 0 ? fa(pending) : '',
+        hidden: pending === 0,
+        'aria-label': 'رسیدهای در انتظار بررسی',
+      }));
+    }
+    return el(`a.tab${href === active ? '.is-active' : ''}`, { href: `#/${href}` }, children);
+  }));
+}
+
+export function pendingReceiptNotice(count, { filtered = false } = {}) {
+  if (!count) return null;
+  return el('div.demo-banner.demo-banner--warn', { role: 'status' }, [
+    el('strong', { text: `🔔 ${fa(count)} رسید کارت به کارت در انتظار بررسی است` }),
+    el('p.small', {
+      text: filtered
+        ? 'برای دیدن و بررسی آن‌ها، روی «فقط رسیدهای در انتظار» بزنید.'
+        : 'رسیدهای در انتظار در بالای همین فهرست نمایش داده می‌شوند.',
+    }),
+  ]);
 }
 
 export function money(value) {

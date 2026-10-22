@@ -123,6 +123,12 @@ export const config = {
       apiPerWindow: int(process.env.API_RATE_LIMIT, 1200),
       windowMs: int(process.env.RATE_WINDOW_MS, 15 * 60 * 1000),
       maxUploadBytes: int(process.env.MAX_UPLOAD_BYTES, 10 * 1024 * 1024),
+      // Receipts are shown inline in the admin panel, so keep them small enough
+      // for a phone screenshot even when the generic upload limit is larger.
+      maxReceiptBytes: Math.min(
+        int(process.env.MAX_UPLOAD_BYTES, 10 * 1024 * 1024),
+        Math.max(1024 * 1024, int(process.env.MAX_RECEIPT_BYTES, 5 * 1024 * 1024)),
+      ),
       likesPerDay: int(process.env.LIKES_PER_DAY, 10),
       bodyLimit: process.env.BODY_LIMIT || '512kb',
     };
@@ -153,15 +159,16 @@ export const config = {
     };
   },
   /**
-   * Payment gateway. Zarinpal is the production default because its v4
-   * request/verify API needs no SDK. `mock` renders a local checkout page so the
-   * entire subscription flow can be exercised before a merchant ID exists.
+   * Payment provider. Zarinpal is the production default because its v4
+   * request/verify API needs no SDK. `mock` renders a local checkout page, and
+   * `card` uses the manual card-to-card flow configured in the admin panel.
    */
   get payments() {
-    const provider = String(process.env.PAYMENT_PROVIDER || (this.isProd ? 'zarinpal' : 'mock')).toLowerCase();
+    const requested = String(process.env.PAYMENT_PROVIDER || (this.isProd ? 'zarinpal' : 'mock')).toLowerCase();
+    const provider = ['zarinpal', 'mock', 'card'].includes(requested) ? requested : 'mock';
     const sandbox = bool(process.env.ZARINPAL_SANDBOX, false);
     return {
-      provider: provider === 'zarinpal' ? 'zarinpal' : 'mock',
+      provider,
       zarinpal: {
         merchantId: (process.env.ZARINPAL_MERCHANT_ID || '').trim(),
         sandbox,

@@ -1,6 +1,7 @@
 /** Site-owner dashboard: subscriptions, revenue, inbox and SMS health. */
 
 import { api } from '../../api.js';
+import { updateAdminPendingBadge } from '../../adminBadge.js';
 import { el } from '../../dom.js';
 import { errorMessage } from '../../format.js';
 import { renderView, setTopbarTitle } from '../../shell.js';
@@ -8,19 +9,32 @@ import { emptyState } from '../../ui.js';
 import { button, card, fa, faDateTime, pageHead, statCard, tile } from '../common.js';
 import { adminTabs, money, statusChip } from './common.js';
 
+function providerLabel(data) {
+  if (data.paymentProvider === 'card') return data.cardConfigured ? 'کارت به کارت' : 'کارت به کارت (تنظیم نشده)';
+  return data.paymentProvider === 'zarinpal' ? 'زرین‌پال' : 'پرداخت آزمایشی';
+}
+
 function revenueCard(data) {
+  const pendingReceipts = data.payments.pendingReceipts ?? 0;
   return card({ title: 'فروش و اشتراک', icon: '💳' }, [
     el('div.grid.grid--stats', {}, [
       statCard({ label: 'درآمد کل (تومان)', value: money(data.revenue.total), icon: '💰' }),
       statCard({ label: 'درآمد ۳۰ روز اخیر', value: money(data.revenue.last30Days), kind: 'ok', icon: '📈' }),
       statCard({ label: 'پرداخت موفق', value: fa(data.revenue.count), icon: '🧾' }),
-      statCard({ label: 'در انتظار پرداخت', value: fa(data.payments.pending), kind: data.payments.pending ? 'warn' : '', icon: '⏳' }),
+      statCard({ label: 'رسید در انتظار', value: fa(pendingReceipts), kind: pendingReceipts ? 'warn' : '', icon: '⏳' }),
     ]),
     el('p.small.muted', {
-      text: `درگاه فعال: ${data.paymentProvider === 'zarinpal' ? 'زرین‌پال' : 'پرداخت آزمایشی'} · دورهٔ آزمایشی معلمان جدید: ${fa(data.trialDays)} روز`,
+      text: `روش پرداخت فعال: ${providerLabel(data)} · دورهٔ آزمایشی معلمان جدید: ${fa(data.trialDays)} روز`,
     }),
+    data.paymentProvider === 'card' && !data.cardConfigured
+      ? el('div.demo-banner.demo-banner--warn', {}, [
+        el('strong', { text: 'شماره کارت مقصد ثبت نشده است' }),
+        el('p.small', { text: 'تا قبل از تکمیل اطلاعات کارت، معلمان نمی‌توانند رسید کارت به کارت ارسال کنند.' }),
+      ])
+      : null,
     el('div.row', {}, [
       button('مدیریت پرداخت‌ها', { kind: 'soft', icon: '🧾', onClick: () => { window.location.hash = '#/admin/payments'; } }),
+      button('کارت و پرداخت', { kind: 'soft', icon: '💳', onClick: () => { window.location.hash = '#/admin/payment-settings'; } }),
       button('مدیریت معلمان', { kind: 'soft', icon: '👩‍🏫', onClick: () => { window.location.hash = '#/admin/teachers'; } }),
     ]),
   ]);
@@ -35,7 +49,11 @@ function recentPaymentsCard(payments) {
           statusChip(payment.status),
           el('p.small.muted', { text: `${payment.planName || 'اشتراک'} · ${money(payment.amount)} تومان · ${faDateTime(payment.createdAt)}` }),
         ]),
-        payment.provider === 'manual' ? el('span.chip.chip--muted', { text: 'تمدید دستی' }) : null,
+        payment.provider === 'manual'
+          ? el('span.chip.chip--muted', { text: 'تمدید دستی' })
+          : payment.provider === 'card'
+            ? el('span.chip.chip--muted', { text: 'کارت به کارت' })
+            : null,
       ])))
       : emptyState({ icon: '🧾', title: 'هنوز پرداختی ثبت نشده است' }),
   ]);
@@ -80,6 +98,7 @@ export async function renderAdminDashboard() {
     return undefined;
   }
 
+  updateAdminPendingBadge(data.payments.pendingReceipts ?? 0);
   const teachers = data.teachers;
   body.textContent = '';
   body.append(
@@ -106,6 +125,7 @@ export async function renderAdminDashboard() {
           tile({ icon: '👩‍🏫', label: 'معلمان', href: 'admin/teachers' }),
           tile({ icon: '🛍️', label: 'طرح‌های اشتراک', href: 'admin/plans' }),
           tile({ icon: '🧾', label: 'پرداخت‌ها', href: 'admin/payments' }),
+          tile({ icon: '💳', label: 'کارت و پرداخت', href: 'admin/payment-settings' }),
           tile({ icon: '📨', label: 'پنل پیامک', href: 'admin/sms' }),
         ]),
       ]),

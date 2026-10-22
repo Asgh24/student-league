@@ -11,6 +11,7 @@
  */
 
 import { config } from '../config.js';
+import { getCardSettings, isCardConfigured } from './paymentSettings.js';
 
 function timeoutSignal(ms) {
   return globalThis.AbortSignal?.timeout?.(ms);
@@ -39,14 +40,26 @@ async function postJson(url, body, { fetchImpl, timeoutMs }) {
   return { response, payload };
 }
 
-export function paymentProviderInfo() {
+export function paymentProviderInfo(db = null) {
   const payments = config.payments;
-  const configured = payments.provider === 'mock' || Boolean(payments.zarinpal.merchantId);
+  const card = db ? getCardSettings(db) : null;
+  const cardReady = isCardConfigured(card);
+  const configured = payments.provider === 'card'
+    ? cardReady
+    : payments.provider === 'mock' || Boolean(payments.zarinpal.merchantId);
+
+  const label = payments.provider === 'zarinpal'
+    ? 'زرین‌پال'
+    : payments.provider === 'card'
+      ? 'کارت به کارت'
+      : 'پرداخت آزمایشی (Mock)';
+
   return {
     provider: payments.provider,
     configured,
-    label: payments.provider === 'zarinpal' ? 'زرین‌پال' : 'پرداخت آزمایشی (Mock)',
+    label,
     sandbox: payments.provider === 'zarinpal' ? payments.zarinpal.sandbox : true,
+    card: card ? { ...card, configured: cardReady } : null,
   };
 }
 
