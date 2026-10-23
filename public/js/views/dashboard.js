@@ -14,6 +14,7 @@ const TOOLS = [
   { suffix: 'attendance', icon: '🗓️', label: 'حضور و غیاب' },
   { suffix: 'evaluations', icon: '📝', label: 'ارزشیابی دروس' },
   { suffix: 'raffle', icon: '🎲', label: 'قرعه‌کشی' },
+  { suffix: 'representative', icon: '👑', label: 'نماینده کلاس' },
   { suffix: 'live', icon: '📺', label: 'تابلوی زنده' },
   { suffix: 'timer', icon: '⏱️', label: 'تایمر و ابزار' },
   { suffix: 'wheel', icon: '🎡', label: 'گردونه شانس' },

@@ -34,7 +34,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 
 ## Highlights
 
-**Teacher area** – dashboard «میزکار معلم» with 12 tools included in every plan:
+**Teacher area** – dashboard «میزکار معلم» with the classroom tools included in every plan:
 
 | Tool | What it does |
 | --- | --- |
@@ -42,6 +42,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | لیگ تیمی | Teams, standings, manual adjustments, "no team" assignment panel, optional member-average scoring |
 | حضور و غیاب | Daily present/absent/late sheet, "mark all present", Persian date picker, per-student ratios, history |
 | قرعه‌کشی | Cryptographic random picker with "exclude previous", animated draw and history |
+| نماینده کلاس | Fair representative picker: every student gets exactly one turn per cycle, with progress, remaining count, full status, cycle history, undo-last and reset |
 | تابلوی زنده | Full-screen polling leaderboard for a projector |
 | تایمر و ابزار | Countdown / stopwatch with a WebAudio alert |
 | گردونه شانس | Canvas lucky wheel with teacher-editable segments |
@@ -326,6 +327,8 @@ Created and upgraded by versioned migrations on boot (`src/migrations/`).
 | `schedule` | Weekly grid slots (day, period, subject, note) |
 | `files` | Upload metadata; bytes live in `DATA_DIR/uploads` under random names |
 | `raffle_history` | Who was picked, when, and the reason |
+| `representative_cycles` | «نماینده کلاس» rounds per league: start/completion timestamps and the next cycle number |
+| `representative_history` | One row per student per representative cycle; the student name is kept so deleting a student does not erase history |
 | `likes` | Per-day student-to-student likes (quota enforced) |
 | `league_settings` | `individualAffectsTeam`, late/absent penalties, `grade` (نام پایه نمایش‌داده‌شده روی کارنامه) and the evaluation scoring keys (`evalPointsEnabled` + four point values) |
 | `evaluations` | Course evaluations: subject, exam title, `level` (مقطع), `grade` (پایه), `kind` (`numeric`/`descriptive`), scale, `held_on`, optional link to a score column that receives the mapped points |
@@ -516,13 +519,21 @@ average of the members' individual totals.
 | POST | `/leagues/:id/tools/raffle` | `{ excludePrevious?, reason? }` | `{ winner: { studentId, name }, poolSize, remaining, cycled, history }` |
 | GET | `/leagues/:id/tools/raffle/history` | — | `{ items, total }` |
 | DELETE | `/leagues/:id/tools/raffle/history` | — | `{ ok, items }` |
+| GET | `/leagues/:id/tools/representative` | — | `{ cycle, completed, totalStudents, selectedCount, remainingCount, percent, lastSelected, students, history, cycles }` |
+| POST | `/leagues/:id/tools/representative/draw` | — | `{ winner: { historyId, studentId, name }, cycle, remaining, completed, state }` |
+| POST | `/leagues/:id/tools/representative/cycle` | `{ force? }` | `{ cycle, state }` |
+| DELETE | `/leagues/:id/tools/representative/last` | — | `{ removed, state }` |
+| DELETE | `/leagues/:id/tools/representative/history` | — | `{ state }` |
 | GET | `/leagues/:id/tools/wheel` | — | `{ segments, source }` |
 | PUT | `/leagues/:id/tools/wheel` | `{ segments: [{ label }] }` | `{ segments, source }` |
 | POST | `/leagues/:id/tools/shuffle` | — | `{ order: [{ studentId, name }] }` |
 | GET | `/leagues/:id/tools/timer` | — | `{ timer }` |
 
 Raffle winners are drawn with `crypto.randomInt`, and "exclude previous" cycles the
-pool only after everyone has been picked.
+pool only after everyone has been picked. «نماینده کلاس» uses a stricter cycle:
+each student can be picked once, a draw is refused with `CYCLE_COMPLETE` after
+everyone has had a turn, and `force: true` is required to skip the rest of a cycle.
+`last` undoes only the most recent pick, while `history` resets everything.
 
 ### Homework, Q&A, schedule, files (teacher)
 
@@ -830,6 +841,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `jalali.test.js` | 16 | Gregorian↔Jalali round-trips, leap years (1399/1403 vs 1400), month lengths, reference dates |
 | `uploads.test.js` | 11 | Allowed/blocked extensions, MIME and size checks, filename sanitization, authorization on download |
 | `raffle.test.js` | 11 | Randomness, exclude-previous, pool cycling, history, reset |
+| `representative.test.js` | 8 | Fair one-pick-per-student cycles, progress, cycle completion/refusal, forced cycle advance, undo-last, full reset, empty league, teacher isolation |
 | `tools.test.js` | 19 | Wheel segments, shuffle, timer, live board, homework, multiple-choice + legacy text Q&A, presentation quiz, schedule, league lifecycle |
 | `student.test.js` | 20 | Dashboard series/medals, report card totals + session lines with derived quality and subject/date filters, grade setting, own attendance/history, likes quota, self-like rejection, settings |
 | `evaluations.test.js` | 23 | Evaluation CRUD + column reference, numeric/descriptive marks, scale and label validation, clearing a mark, subject/date filters, no transfer into league points, foreign-teacher and student isolation, own-marks student payload |
@@ -844,7 +856,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `smsSettings.test.js` | 6 | Per-teacher encrypted sms.ir key/line, write-only API, teacher isolation, teacher credential precedence, incomplete-settings fallback block, validation and sample message |
 | `ai.test.js` | 9 | Per-teacher encrypted Groq key and server fallback, write-only settings, mocked Groq call/shape, invalid or failed responses, foreign-league isolation, preview-only generation, reviewed bulk save |
 | `aiAssistantFrontend.test.js` | 3 | AI modal key save/clear, disabled generation without a key, preview selection, bulk-save hand-off and reload, topic validation |
-| `frontend.test.js` | 59 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (12 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, MCQ option editor, student MCQ/text answering, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, modal focus/footer lifecycle |
+| `frontend.test.js` | 60 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (17 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, MCQ option editor, student MCQ/text answering, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, modal focus/footer lifecycle |
 | `frontendPlatform.test.js` | 8 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, shared inbox thread/composer, admin settings label |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 2 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not) |
@@ -852,6 +864,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `adminBackup.test.js` | 3 | Admin-only backup status, unconfigured deployment, manual GitHub push, snapshot listing, staged restore/cancel, private local SQLite download |
 | `secrets.test.js` | 3 | Stable `SECRETS_KEY` across session rotation, legacy session-secret fallback, tamper rejection |
 | `frontendBackup.test.js` | 2 | Backup page renders missing-env guidance, disables manual backup, lists remote snapshots and the local download link |
+| `frontendRepresentative.test.js` | 3 | Representative hero/progress/status/history render, animated draw updates the winner, and name search filters only the status list |
 | `bootstrap.test.js` | 7 | First teacher account: creation, password verification, skip when accounts exist, `--force` reset, refusal of short/demo-default passwords, production-vs-development default |
 | `hardening.test.js` | 12 | Anonymous requests create no session row, logout clears the configured cookie, login performs a bcrypt comparison for unknown users, `/healthz` integrity scan is cached, expired sessions are swept, `TRUST_PROXY` fails closed |
 
@@ -870,9 +883,9 @@ Executed against a live server (`NODE_ENV=development`, fresh `DATA_DIR`, seeded
 | `GET /healthz` | ✅ `200 {"status":"ok",...,"database":{"ok":true,"integrity":"ok"}}` |
 | No external network requests | ✅ every request same-origin to `127.0.0.1` (`/js/**`, `chart.umd.js`, `vazirmatn.css`, fonts) — no CDN, no Google Fonts |
 | Browser console | ✅ zero errors/warnings during the whole walk-through |
-| Teacher login → dashboard | ✅ 12 tool tiles, stat cards, league switcher |
+| Teacher login → dashboard | ✅ 17 tool tiles, stat cards, league switcher |
 | Individual league table | ✅ 22 students, 8 default columns (step 25), staged `+25` preview, row commit → server-confirmed total |
-| Teams / attendance / raffle / wheel / live board / timer / homework / Q&A / schedule / files / evaluations | ✅ all 11 tool routes render, no console errors |
+| Teams / attendance / raffle / representative / wheel / live board / timer / homework / Q&A / schedule / files / evaluations | ✅ all tool routes render, no console errors |
 | Teacher multiple-choice question | ✅ added/removed options, picked the correct one, saved `۲۵` points; the list shows the choices and marks the correct option |
 | Presentation mode (MCQ) | ✅ started «حالت پخش», the student's screen showed the three choices with no correct-answer marker |
 | Student Q&A | ✅ new «سوال و پاسخ» tab; answered the MCQ (own answer `مشهد`, no `correctIndex` in the API), and submitted a legacy text answer |
@@ -882,6 +895,7 @@ Executed against a live server (`NODE_ENV=development`, fresh `DATA_DIR`, seeded
 | Q&A AI assistant | ⏳ key save/clear, preview selection and bulk-save hand-off are covered by automated tests; a live Groq call waits for `GROQ_API_KEY` |
 | Attendance bulk "همه حاضر" | ✅ `۰ ثبت‌نشده` → `۲۲ حاضر` |
 | Raffle draw | ✅ winner shown, "21 remaining", pool exclusion works |
+| Class representative | ✅ progress 0→100%, every student once, undo-last, new cycle keeps history |
 | Logout → login as another user | ✅ (this flow exposed a stale-CSRF bug that is now fixed and tested) |
 | Student login + dashboard | ✅ greeting `👋 سلام علی!`, points/rank/championship cards, Chart.js line chart with 16 points and Jalali labels |
 | Course evaluation (numeric) | ✅ form auto-filled مقطع `ابتدایی` / پایه `ششم` from the league setting, saved `ریاضی — آزمون فصل ۲`, linked to the `ریاضی` column as a reference only, mark sheet rendered 22 students, «نمرهٔ کامل» filled all 22 in one click, list row `میانگین ۱۹.۹۱ · ثبت‌شده ۲۲/۲۲`, band chips `🌟 عالی / 👍 خوب / 🙂 قابل قبول` by mark |

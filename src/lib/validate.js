@@ -405,6 +405,11 @@ export const schemas = {
     reason: z.string().trim().max(120).optional(),
   }),
 
+  /** «نماینده کلاس»: leaving a cycle early must be explicit. */
+  representativeCycle: z.object({
+    force: z.boolean().default(false),
+  }),
+
   wheelSave: z.object({
     segments: z.array(z.object({
       label: z.string().trim().min(1).max(40),

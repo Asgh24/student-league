@@ -10,6 +10,7 @@ import * as mcqQuestions from './009_mcq_questions.js';
 import * as teacherSmsSettings from './010_teacher_sms_settings.js';
 import * as teacherGroqSettings from './011_teacher_groq_settings.js';
 import * as cardToCardPayments from './012_card_to_card_payments.js';
+import * as classRepresentative from './013_class_representative.js';
 
 /** Ordered list of migrations applied automatically on boot. */
 export const migrations = [
@@ -25,4 +26,5 @@ export const migrations = [
   teacherSmsSettings,
   teacherGroqSettings,
   cardToCardPayments,
+  classRepresentative,
 ];

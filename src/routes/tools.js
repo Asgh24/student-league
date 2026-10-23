@@ -4,6 +4,13 @@ import { isoNow } from '../lib/http.js';
 import { pickOne, shuffle } from '../lib/random.js';
 import { schemas, validate } from '../lib/validate.js';
 import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import {
+  drawRepresentative,
+  representativeState,
+  resetRepresentativeHistory,
+  startRepresentativeCycle,
+  undoLastRepresentative,
+} from '../services/representative.js';
 
 const DEFAULT_SEGMENTS = ['جایزه ویژه', 'جایزه دوم', 'جایزه سوم', 'شانس دوباره', 'امتیاز اضافه', 'جایزه کوچک'];
 
@@ -58,6 +65,34 @@ export function createToolsRouter({ db }) {
   router.delete('/raffle/history', (req, res) => {
     db.prepare('DELETE FROM raffle_history WHERE league_id = ?').run(req.league.id);
     res.json({ ok: true, items: [] });
+  });
+
+  /** «نماینده کلاس»: current fair-draw state, progress and full history. */
+  router.get('/representative', (req, res) => {
+    res.json(representativeState(db, req.league.id));
+  });
+
+  /** Picks a student that has not been representative in the current cycle. */
+  router.post('/representative/draw', (req, res) => {
+    res.json(drawRepresentative(db, { leagueId: req.league.id, actorId: req.user.id }));
+  });
+
+  /** Starts the next cycle; `force` allows leaving the current one unfinished. */
+  router.post('/representative/cycle', validate({ body: schemas.representativeCycle }), (req, res) => {
+    res.json(startRepresentativeCycle(db, {
+      leagueId: req.league.id,
+      force: req.body.force,
+    }));
+  });
+
+  /** Reverts the most recent pick so a mistaken click can be corrected. */
+  router.delete('/representative/last', (req, res) => {
+    res.json(undoLastRepresentative(db, { leagueId: req.league.id }));
+  });
+
+  /** Clears every cycle and starts over from cycle 1. */
+  router.delete('/representative/history', (req, res) => {
+    res.json(resetRepresentativeHistory(db, { leagueId: req.league.id }));
   });
 
   /** Lucky wheel segments; falls back to the student names when never customised. */

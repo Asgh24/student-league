@@ -287,7 +287,7 @@ describe('student progress chart', () => {
 });
 
 describe('teacher dashboard', () => {
-  it('renders the league selector and the sixteen tool tiles', async () => {
+  it('renders the league selector and the seventeen tool tiles', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/leagues') {
         return Promise.resolve({
@@ -306,7 +306,7 @@ describe('teacher dashboard', () => {
     await renderTeacherDashboard();
 
     const tiles = document.querySelectorAll('#view .tile');
-    expect(tiles).toHaveLength(16);
+    expect(tiles).toHaveLength(17);
     expect(document.querySelector('#view').textContent).toContain('کلاس ششم الف');
     expect(document.querySelector('#view').textContent).toContain('لیگ انفرادی');
     expect(document.querySelector('#view').textContent).toContain('ارزشیابی دروس');
@@ -351,7 +351,7 @@ describe('teacher dashboard', () => {
 
     // no manual refresh and no second call to renderTeacherDashboard
     await vi.waitFor(() => expect(document.querySelector('#view').textContent).toContain('لیگ تازه'));
-    expect(document.querySelectorAll('#view .tile')).toHaveLength(16);
+    expect(document.querySelectorAll('#view .tile')).toHaveLength(17);
     expect(api.get).toHaveBeenCalledWith('/leagues/7');
   });
 });
