@@ -32,6 +32,7 @@ import { renderStudentMessages, renderTeacherMessages } from './views/messages.j
 import { renderQa } from './views/qa.js';
 import { renderRaffle } from './views/raffle.js';
 import { renderRepresentative } from './views/representative.js';
+import { renderRepresentativeBoard } from './views/representativeBoard.js';
 import { renderReports } from './views/reports.js';
 import { renderSchedule } from './views/schedule.js';
 import { renderSeating } from './views/seating.js';
@@ -208,6 +209,7 @@ const routes = [
   { path: 'teacher/league/:id/evaluations', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderEvaluations(ctx) },
   { path: 'teacher/league/:id/raffle', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderRaffle(ctx) },
   { path: 'teacher/league/:id/representative', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderRepresentative(ctx) },
+  { path: 'teacher/league/:id/representative/board', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderRepresentativeBoard(ctx) },
   { path: 'teacher/league/:id/wheel', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderWheel(ctx) },
   { path: 'teacher/league/:id/live', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderLiveBoard(ctx) },
   { path: 'teacher/league/:id/timer', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderTimerTools(ctx) },

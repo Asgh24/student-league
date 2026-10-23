@@ -15,6 +15,23 @@ import { createSessionStore, sessionMiddleware } from './middleware/session.js';
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = path.join(rootDir, 'public');
 
+const LONG_CACHE = 'public, max-age=2592000';
+const REVALIDATE_CACHE = 'no-cache';
+
+/**
+ * App code (JS/CSS) must revalidate on every load. Without a build step there
+ * are no content-hashed filenames, so a long `max-age` keeps serving an old
+ * frontend after a deployment and hides new features from the browser.
+ * Vendor bundles, fonts and images are untouched by app deploys and can stay
+ * cached for a long time.
+ */
+export function staticCacheControl(filePath, isProd = config.isProd) {
+  const normalized = String(filePath).replaceAll('\\', '/');
+  if (normalized.endsWith('.html')) return 'no-store';
+  if (/\/public\/(?:js|css)\/.*\.(?:m?js|css)$/i.test(normalized)) return REVALIDATE_CACHE;
+  return isProd ? LONG_CACHE : REVALIDATE_CACHE;
+}
+
 /**
  * Builds the Express application. The same process serves the JSON API and the
  * static single page frontend, so it can run on any plain Node.js host.
@@ -61,8 +78,7 @@ export function createApp({ db, version = '1.0.0', sessionStore = createSessionS
       etag: true,
       lastModified: true,
       setHeaders(res, filePath) {
-        if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-store');
-        else res.setHeader('Cache-Control', config.isProd ? 'public, max-age=2592000' : 'no-cache');
+        res.setHeader('Cache-Control', staticCacheControl(filePath));
       },
     }),
   );

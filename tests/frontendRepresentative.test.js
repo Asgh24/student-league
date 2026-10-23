@@ -29,6 +29,7 @@ vi.mock('../public/js/api.js', () => {
 
 const { api } = await import('../public/js/api.js');
 const { renderRepresentative } = await import('../public/js/views/representative.js');
+const { renderRepresentativeBoard } = await import('../public/js/views/representativeBoard.js');
 const { setMeta, setPersianDigits, setUser } = await import('../public/js/store.js');
 
 function installShellSkeleton() {
@@ -182,5 +183,37 @@ describe('class representative page', () => {
     expect(visible).toHaveLength(1);
     expect(visible[0].textContent).toContain('بهار بنفش');
     expect(document.body.textContent).toContain('نمایش ۱ از ۳ دانش‌آموز');
+  });
+
+  it('copies a ready-to-share announcement for the current winner', async () => {
+    mockLoad();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+    await renderRepresentative({ params: { id: 7 } });
+    [...document.querySelectorAll('button')]
+      .find((node) => node.textContent.includes('کپی متن اعلام'))
+      .click();
+
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const text = writeText.mock.calls[0][0];
+    expect(text).toContain('نمایندهٔ کلاس کلاس ششم الف');
+    expect(text).toContain('آرش آزمون');
+    expect(text).toContain('دور ۱');
+  });
+
+  it('renders the projector board with the current winner and cycle picks', async () => {
+    mockLoad();
+
+    await renderRepresentativeBoard({ params: { id: 7 } });
+
+    const stage = document.querySelector('.rep-stage');
+    expect(stage).not.toBeNull();
+    expect(stage.textContent).toContain('نمایندهٔ کلاس');
+    expect(stage.textContent).toContain('کلاس ششم الف');
+    expect(stage.textContent).toContain('آرش آزمون');
+    expect(stage.textContent).toContain('۳۳٪');
+    expect(stage.querySelectorAll('.rep-stage__pick')).toHaveLength(1);
+    expect(stage.querySelector('a[href="#/teacher/league/7/representative"]')).not.toBeNull();
   });
 });

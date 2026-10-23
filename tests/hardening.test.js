@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { databaseStatus } from '../src/db.js';
+import { staticCacheControl } from '../src/app.js';
 import { config } from '../src/config.js';
 import { createSessionStore, startSessionSweep } from '../src/middleware/session.js';
 import { BCRYPT_ROUNDS, dummyPasswordHash, verifyPassword } from '../src/repositories/users.js';
@@ -144,6 +145,25 @@ describe('session store maintenance', () => {
       .run('expired-sid', Date.now() - 60_000, '{"cookie":{}}');
     expect(store.sweep()).toBe(1);
     expect(store.sweep()).toBe(0);
+  });
+});
+
+describe('static asset caching', () => {
+  it('revalidates application code so a deployment cannot hide new features', () => {
+    expect(staticCacheControl('F:\\app\\public\\index.html', true)).toBe('no-store');
+    expect(staticCacheControl('/srv/app/public/js/main.js', true)).toBe('no-cache');
+    expect(staticCacheControl('/srv/app/public/js/views/representative.js', true)).toBe('no-cache');
+    expect(staticCacheControl('/srv/app/public/css/components.css', true)).toBe('no-cache');
+  });
+
+  it('keeps long-lived caching for vendor bundles, fonts and images in production', () => {
+    expect(staticCacheControl('/srv/app/public/vendor/chart.umd.js', true)).toBe('public, max-age=2592000');
+    expect(staticCacheControl('/srv/app/public/css/fonts/vazirmatn.woff2', true)).toBe('public, max-age=2592000');
+    expect(staticCacheControl('/srv/app/public/img/logo.png', true)).toBe('public, max-age=2592000');
+  });
+
+  it('disables long-lived caching outside production', () => {
+    expect(staticCacheControl('/srv/app/public/vendor/chart.umd.js', false)).toBe('no-cache');
   });
 });
 

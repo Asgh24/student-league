@@ -42,7 +42,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | لیگ تیمی | Teams, standings, manual adjustments, "no team" assignment panel, optional member-average scoring |
 | حضور و غیاب | Daily present/absent/late sheet, "mark all present", Persian date picker, per-student ratios, history |
 | قرعه‌کشی | Cryptographic random picker with "exclude previous", animated draw and history |
-| نماینده کلاس | Fair representative picker: every student gets exactly one turn per cycle, with progress, remaining count, full status, cycle history, undo-last and reset |
+| نماینده کلاس | Fair representative picker: every student gets exactly one turn per cycle, with progress, remaining count, full status, cycle history, undo-last and reset. Includes a copy-ready class announcement and a projector board (`#/teacher/league/:id/representative/board`) that refreshes automatically |
 | تابلوی زنده | Full-screen polling leaderboard for a projector |
 | تایمر و ابزار | Countdown / stopwatch with a WebAudio alert |
 | گردونه شانس | Canvas lucky wheel with teacher-editable segments |
@@ -533,7 +533,9 @@ Raffle winners are drawn with `crypto.randomInt`, and "exclude previous" cycles 
 pool only after everyone has been picked. «نماینده کلاس» uses a stricter cycle:
 each student can be picked once, a draw is refused with `CYCLE_COMPLETE` after
 everyone has had a turn, and `force: true` is required to skip the rest of a cycle.
-`last` undoes only the most recent pick, while `history` resets everything.
+`last` undoes only the most recent pick, while `history` resets everything. The
+teacher-only projector view at `#/teacher/league/:id/representative/board` polls
+this endpoint and shows the current winner, cycle progress and this cycle's picks.
 
 ### Homework, Q&A, schedule, files (teacher)
 
@@ -824,8 +826,8 @@ npm run lint    # eslint .
 Latest run on this machine (Windows, Node 26.3.0):
 
 ```
- Test Files  35 passed (35)
-      Tests  387 passed (387)
+ Test Files  38 passed (38)
+      Tests  407 passed (407)
 ```
 
 | Suite | Tests | Covers |
@@ -864,9 +866,9 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `adminBackup.test.js` | 3 | Admin-only backup status, unconfigured deployment, manual GitHub push, snapshot listing, staged restore/cancel, private local SQLite download |
 | `secrets.test.js` | 3 | Stable `SECRETS_KEY` across session rotation, legacy session-secret fallback, tamper rejection |
 | `frontendBackup.test.js` | 2 | Backup page renders missing-env guidance, disables manual backup, lists remote snapshots and the local download link |
-| `frontendRepresentative.test.js` | 3 | Representative hero/progress/status/history render, animated draw updates the winner, and name search filters only the status list |
+| `frontendRepresentative.test.js` | 5 | Representative hero/progress/status/history render, animated draw updates the winner, name search filters only the status list, copy-ready announcement, and projector board render |
 | `bootstrap.test.js` | 7 | First teacher account: creation, password verification, skip when accounts exist, `--force` reset, refusal of short/demo-default passwords, production-vs-development default |
-| `hardening.test.js` | 12 | Anonymous requests create no session row, logout clears the configured cookie, login performs a bcrypt comparison for unknown users, `/healthz` integrity scan is cached, expired sessions are swept, `TRUST_PROXY` fails closed |
+| `hardening.test.js` | 15 | Anonymous requests create no session row, logout clears the configured cookie, login performs a bcrypt comparison for unknown users, `/healthz` integrity scan is cached, expired sessions are swept, app JS/CSS revalidate after deployment, `TRUST_PROXY` fails closed |
 
 Backend suites use throwaway SQLite databases (`tests/helpers.js`), so `npm test`
 never touches your real `DATA_DIR`.
@@ -895,7 +897,7 @@ Executed against a live server (`NODE_ENV=development`, fresh `DATA_DIR`, seeded
 | Q&A AI assistant | ⏳ key save/clear, preview selection and bulk-save hand-off are covered by automated tests; a live Groq call waits for `GROQ_API_KEY` |
 | Attendance bulk "همه حاضر" | ✅ `۰ ثبت‌نشده` → `۲۲ حاضر` |
 | Raffle draw | ✅ winner shown, "21 remaining", pool exclusion works |
-| Class representative | ✅ progress 0→100%, every student once, undo-last, new cycle keeps history |
+| Class representative | ✅ progress 0→100%, every student once, undo-last, new cycle keeps history, copy-ready announcement, projector board refreshes automatically |
 | Logout → login as another user | ✅ (this flow exposed a stale-CSRF bug that is now fixed and tested) |
 | Student login + dashboard | ✅ greeting `👋 سلام علی!`, points/rank/championship cards, Chart.js line chart with 16 points and Jalali labels |
 | Course evaluation (numeric) | ✅ form auto-filled مقطع `ابتدایی` / پایه `ششم` from the league setting, saved `ریاضی — آزمون فصل ۲`, linked to the `ریاضی` column as a reference only, mark sheet rendered 22 students, «نمرهٔ کامل» filled all 22 in one click, list row `میانگین ۱۹.۹۱ · ثبت‌شده ۲۲/۲۲`, band chips `🌟 عالی / 👍 خوب / 🙂 قابل قبول` by mark |

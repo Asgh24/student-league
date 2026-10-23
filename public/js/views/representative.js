@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { matches } from '../normalize.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
-import { confirmDialog, emptyState, notify } from '../ui.js';
+import { confirmDialog, emptyState, notify, openModal } from '../ui.js';
 import { backToWorkbench, button, card, fa, faDateTime, grid, loadingNode, pageHead, statCard } from './common.js';
 
 const BASE = (leagueId) => `/leagues/${leagueId}/tools/representative`;
@@ -141,6 +141,50 @@ export async function renderRepresentative({ params }) {
     }
   }
 
+  async function copyAnnouncement() {
+    if (!state?.lastSelected) return;
+    const text = [
+      `👑 نمایندهٔ کلاس ${leagueName}`,
+      `🎉 ${state.lastSelected.studentName}`,
+      `🗓️ دور ${fa(state.cycle)} · ${faDateTime(state.lastSelected.createdAt)}`,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      notify.ok('متن اعلام نماینده کپی شد');
+      return;
+    } catch {
+      /* Clipboard API needs a secure context; fall through to the legacy path. */
+    }
+    const area = el('textarea', {
+      value: text,
+      readonly: 'true',
+      'aria-hidden': 'true',
+      style: { position: 'fixed', top: '-1000px', opacity: '0' },
+    });
+    document.body.appendChild(area);
+    let copied = false;
+    try {
+      area.select();
+      copied = typeof document.execCommand === 'function' && document.execCommand('copy');
+    } finally {
+      area.remove();
+    }
+    if (copied) {
+      notify.ok('متن اعلام نماینده کپی شد');
+      return;
+    }
+    const field = el('textarea', { rows: 4, readonly: 'true', value: text });
+    openModal({
+      title: 'متن اعلام نماینده',
+      body: el('div', {}, [
+        el('p.small.muted', { text: 'مرورگر اجازهٔ کپی خودکار نداد؛ متن زیر را انتخاب و کپی کنید.' }),
+        field,
+      ]),
+    });
+    field.focus();
+    field.select();
+  }
+
   function winnerBlock() {
     if (!state.lastSelected) {
       return el('div.rep-winner.rep-winner--empty', {}, [
@@ -215,6 +259,14 @@ export async function renderRepresentative({ params }) {
           disabled: busy || state.selectedCount === 0,
           onClick: () => void undoLast(),
         }),
+        state.lastSelected
+          ? button('کپی متن اعلام', {
+            kind: 'ghost',
+            icon: '📋',
+            disabled: busy,
+            onClick: () => void copyAnnouncement(),
+          })
+          : null,
         !complete && state.selectedCount > 0
           ? button('شروع دور بعد', {
             kind: 'ghost',
@@ -345,7 +397,8 @@ export async function renderRepresentative({ params }) {
         title: 'نماینده کلاس',
         subtitle: `${leagueName} · انتخاب منصفانه و بدون تکرار`,
         actions: [
-          el('a.btn.btn--soft', { href: `#/teacher/league/${leagueId}/raffle`, text: '🎲 قرعه‌کشی' }),
+          el('a.btn.btn--soft', { href: `#/teacher/league/${leagueId}/representative/board`, text: '📽️ نمایش برای کلاس' }),
+          el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}/raffle`, text: '🎲 قرعه‌کشی' }),
           el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' }),
           backToWorkbench(),
         ],
