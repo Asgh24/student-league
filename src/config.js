@@ -169,6 +169,8 @@ export const config = {
       apiPerWindow: int(process.env.API_RATE_LIMIT, 1200),
       windowMs: int(process.env.RATE_WINDOW_MS, 15 * 60 * 1000),
       maxUploadBytes: int(process.env.MAX_UPLOAD_BYTES, 10 * 1024 * 1024),
+      // Every teacher shares one 70 MB storage pool across all of their leagues.
+      teacherStorageBytes: Math.max(1, int(process.env.TEACHER_STORAGE_MB, 70)) * 1024 * 1024,
       // Receipts are shown inline in the admin panel, so keep them small enough
       // for a phone screenshot even when the generic upload limit is larger.
       maxReceiptBytes: Math.min(

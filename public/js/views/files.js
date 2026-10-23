@@ -48,6 +48,11 @@ export async function renderFiles({ params }) {
     setLeaguePill({ name: league.league.name });
     const items = payload.items ?? [];
     const limits = payload.limits ?? {};
+    const storage = payload.storage ?? {};
+    const usedBytes = Number(storage.usedBytes) || 0;
+    const limitBytes = Number(storage.limitBytes) || 70 * 1024 * 1024;
+    const remainingBytes = Math.max(0, Number(storage.remainingBytes ?? (limitBytes - usedBytes)) || 0);
+    const percentUsed = limitBytes > 0 ? Math.min(100, Math.round((usedBytes / limitBytes) * 100)) : 0;
 
     const fileInput = el('input', { id: 'file-input', type: 'file', hidden: 'true' });
     const chosen = el('p.small.muted', { text: 'فایلی انتخاب نشده است.' });
@@ -84,8 +89,11 @@ export async function renderFiles({ params }) {
 
     function pick() {
       const file = fileInput.files?.[0];
-      chosen.textContent = file ? `${file.name} — ${bytes(file.size)}` : 'فایلی انتخاب نشده است.';
-      submit.disabled = !file;
+      const tooLargeForQuota = Boolean(file) && file.size > remainingBytes;
+      chosen.textContent = file
+        ? `${file.name} — ${bytes(file.size)}${tooLargeForQuota ? ' · فضای باقی‌مانده کافی نیست' : ''}`
+        : 'فایلی انتخاب نشده است.';
+      submit.disabled = !file || tooLargeForQuota;
     }
 
     async function upload() {
@@ -102,7 +110,7 @@ export async function renderFiles({ params }) {
       } catch (error) {
         notify.error(errorMessage(error));
       } finally {
-        submit.disabled = false;
+        if (submit.isConnected) pick();
       }
     }
 
@@ -136,13 +144,33 @@ export async function renderFiles({ params }) {
           backToWorkbench(),
         ],
       }),
+      card({ title: 'فضای ذخیره‌سازی', icon: '💾' }, [
+        el('div.meter', { role: 'progressbar', 'aria-label': 'میزان استفاده از فضای ذخیره‌سازی', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(percentUsed) }, [
+          el('span', {
+            style: {
+              width: `${percentUsed}%`,
+              background: percentUsed >= 100 ? 'var(--bad)' : percentUsed >= 80 ? 'var(--warn)' : undefined,
+            },
+          }),
+        ]),
+        el('p.small.muted', {
+          style: { marginTop: '8px' },
+          text: `${bytes(usedBytes)} از ${bytes(limitBytes)} استفاده شده · ${bytes(remainingBytes)} باقی‌مانده`,
+        }),
+        remainingBytes === 0
+          ? el('div.demo-banner.demo-banner--warn', { role: 'status' }, [
+            el('strong', { text: 'فضای ذخیره‌سازی شما پر شده است' }),
+            el('p.small', { text: 'برای ارسال فایل جدید، ابتدا یکی از فایل‌های قبلی را حذف کنید تا فضا آزاد شود.' }),
+          ])
+          : null,
+      ]),
       card({ title: 'ارسال فایل جدید', icon: '⬆️' }, [
         fileInput,
         dropZone,
         el('div.field', { style: { marginTop: '10px' } }, [el('label', { for: 'file-description', text: 'توضیح' }), description]),
         el('div.row', {}, [submit]),
         el('p.small.muted', {
-          text: `حداکثر حجم: ${bytes(limits.maxBytes ?? 0)} · پسوندهای مجاز: ${allowed || '—'}`,
+          text: `حداکثر حجم هر فایل: ${bytes(limits.maxBytes ?? 0)} · پسوندهای مجاز: ${allowed || '—'}`,
         }),
       ]),
       card({ title: `فایل‌های کلاس (${fa(items.length)})`, icon: '📁' }, [list]),

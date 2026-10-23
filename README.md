@@ -50,7 +50,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | تکالیف | Homework with due dates and per-student done/not-done |
 | ارزشیابی دروس | Course evaluations: مقطع + پایه, exam title, numeric marks (۰–۲۰) or descriptive levels, per-student mark sheet with quick-fill, and an optional «تنظیمات امتیازدهی» mapping that turns marks into league points |
 | برنامه هفتگی | Saturday→Friday weekly schedule grid |
-| ارسال فایل | Uploaded files shared with the class, downloaded safely |
+| ارسال فایل | Uploaded files shared with the class, downloaded safely. Every teacher has one **70 MB** pool across all leagues; a new upload is rejected with a clear Persian message when it would exceed the pool, and deleting old files frees the space immediately |
 
 **Platform area** – multi-teacher SaaS features built into the same process:
 
@@ -58,7 +58,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | --- | --- |
 | ثبت‌نام معلم | Self-service signup on the login screen; every new teacher starts a configurable **14-day trial** with all tools unlocked |
 | اشتراک من | Trial/subscription banner, remaining days, admin-editable plans, Zarinpal checkout and payment history; an expired teacher is redirected here instead of seeing a broken dashboard |
-| پنل مدیر | Separate site-owner login: teacher search/filter, manual subscription grants, plan CRUD, revenue and payment ledger, inbox/SMS health, and a backup/restore console |
+| پنل مدیر | Separate site-owner login: teacher search/filter, manual subscription grants, plan CRUD, revenue and payment ledger, inbox/SMS health, and a backup/restore console. The «حذف منقضی‌ها» tab lists teachers whose trial and paid subscription have both ended and lets the owner permanently delete an account after typing its username; leagues, students, linked student logins, scores, uploads and payment history are removed with it |
 | بکاپ و بازیابی | Owner-only manual GitHub backup, consistent local DB download, remote snapshot list, staged restore with checksum verification and cancel; auto-restores an empty/schema-only DB on boot |
 | پیام‌ها | Ticket-like teacher↔student inbox with threads, unread counters, read receipts and polling; both sides can reply from the same shared view |
 | پنل پیامک | Per-teacher sms.ir API key + line number in the teacher's own panel (encrypted, write-only), a built-in «راهنمایی راه‌اندازی سامانه پیامکی» guide with annotated screenshots, credit/lines, test and bulk sends, league-report outbox and admin campaign retry; without credentials everything stays queued instead of being lost |
@@ -191,7 +191,8 @@ are safer because the file has to be uploaded separately; on a VPS you can keep
 | `LOGIN_RATE_LIMIT` | `10` | Failed-login attempts per window per IP |
 | `API_RATE_LIMIT` | `1200` | API requests per window per IP |
 | `RATE_WINDOW_MS` | `900000` | Rate-limit window (15 minutes) |
-| `MAX_UPLOAD_BYTES` | `10485760` | Upload size limit (10 MB) |
+| `MAX_UPLOAD_BYTES` | `10485760` | Upload size limit per file (10 MB) |
+| `TEACHER_STORAGE_MB` | `70` | Total file storage shared by each teacher across all leagues |
 | `MAX_RECEIPT_BYTES` | `5242880` | Card-receipt image limit (5 MB, capped by `MAX_UPLOAD_BYTES`) |
 | `LIKES_PER_DAY` | `10` | Likes a student may give per day |
 | `BODY_LIMIT` | `512kb` | JSON body limit |
@@ -557,10 +558,10 @@ this endpoint and shows the current winner, cycle progress and this cycle's pick
 | POST | `/answers/:id/award` | `{ points }` | `{ answer: { id, awarded, delta } }` |
 | GET | `/leagues/:id/schedule` | — | `{ slots }` |
 | PUT | `/leagues/:id/schedule` | `{ slots: [{ dayIndex, period, subject, note }] }` | `{ slots }` |
-| GET | `/leagues/:id/files` | — | `{ items, total, limits }` |
-| POST | `/leagues/:id/files` | `multipart/form-data` (`file`, `description?`) | `201 { file }` |
+| GET | `/leagues/:id/files` | — | `{ items, total, limits, storage }` — `storage` is the teacher-wide usage (`usedBytes`, `limitBytes`, `remainingBytes`) |
+| POST | `/leagues/:id/files` | `multipart/form-data` (`file`, `description?`) | `201 { file, storage }`; over the shared quota returns `413 STORAGE_QUOTA_EXCEEDED` |
 | GET | `/files/:id/download` | — | file bytes (`Content-Disposition: attachment`) |
-| DELETE | `/files/:id` | — | `{ ok: true }` |
+| DELETE | `/files/:id` | — | `{ ok: true, storage }` — frees quota space immediately |
 
 Questions created before the multiple-choice migration have `options: []` and
 `type: "text"`; they stay readable and answerable with a free-text `body`.
@@ -703,6 +704,8 @@ student session.
 | GET | `/admin/teachers/:id` | — | `{ teacher }` |
 | POST | `/admin/teachers` | `{ displayName, username, password, trialDays }` | `201 { teacher }` (`trialDays: 0` creates without a trial) |
 | POST | `/admin/teachers/:id/subscription` | `{ days, note? }` | `{ subscription, payment, teacher }` — manual paid grant, appended to the ledger |
+| GET | `/admin/expired-users` | `?search=&page=&limit=` | `{ items, total, page, limit, pages }` — only teachers with `access.status === "expired"` |
+| DELETE | `/admin/teachers/:id` | `{ confirmUsername? }` | `{ ok, deleted }` — permanent cascade; rejects active/trial/unlimited accounts, and a supplied username must match |
 | GET | `/admin/plans` | — | `{ items }` (including inactive plans) |
 | POST | `/admin/plans` | `{ name, days, price, description?, active?, sortOrder? }` | `201 { item }` |
 | PATCH | `/admin/plans/:id` | any plan field | `{ item }` |
@@ -826,8 +829,8 @@ npm run lint    # eslint .
 Latest run on this machine (Windows, Node 26.3.0):
 
 ```
- Test Files  38 passed (38)
-      Tests  407 passed (407)
+ Test Files  39 passed (39)
+      Tests  413 passed (413)
 ```
 
 | Suite | Tests | Covers |
@@ -841,7 +844,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `attendance.test.js` | 8 | Daily set, bulk "all present", counters, history, summary ratios |
 | `ranking.test.js` | 5 | Competition ranking with ties, title thresholds |
 | `jalali.test.js` | 16 | Gregorian↔Jalali round-trips, leap years (1399/1403 vs 1400), month lengths, reference dates |
-| `uploads.test.js` | 11 | Allowed/blocked extensions, MIME and size checks, filename sanitization, authorization on download |
+| `uploads.test.js` | 12 | Allowed/blocked extensions, MIME and size checks, filename sanitization, authorization on download, shared per-teacher quota across leagues and space freed by deletion |
 | `raffle.test.js` | 11 | Randomness, exclude-previous, pool cycling, history, reset |
 | `representative.test.js` | 8 | Fair one-pick-per-student cycles, progress, cycle completion/refusal, forced cycle advance, undo-last, full reset, empty league, teacher isolation |
 | `tools.test.js` | 19 | Wheel segments, shuffle, timer, live board, homework, multiple-choice + legacy text Q&A, presentation quiz, schedule, league lifecycle |
@@ -859,10 +862,11 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `ai.test.js` | 9 | Per-teacher encrypted Groq key and server fallback, write-only settings, mocked Groq call/shape, invalid or failed responses, foreign-league isolation, preview-only generation, reviewed bulk save |
 | `aiAssistantFrontend.test.js` | 3 | AI modal key save/clear, disabled generation without a key, preview selection, bulk-save hand-off and reload, topic validation |
 | `frontend.test.js` | 60 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (17 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, MCQ option editor, student MCQ/text answering, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, modal focus/footer lifecycle |
-| `frontendPlatform.test.js` | 8 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, shared inbox thread/composer, admin settings label |
+| `frontendPlatform.test.js` | 10 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, expired-user deletion section, teacher file storage card, shared inbox thread/composer, admin settings label |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 2 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not) |
 | `githubBackup.test.js` | 26 | Off-site backups against an in-memory GitHub Contents/Blob API: upload + manifest checksum, Blob download above 1 MB, full push→restore round trip, retention/pruning, public-repo refusal, size limit, missing repo and 404 handling, checksum-mismatch safety, schema-only/empty detection, staged restore + cancel, scheduler due-time/retry/state handling |
+| `adminExpiredUsers.test.js` | 3 | Expired-only user listing, typed-confirmation hard delete with cascaded leagues/students/files, linked student-login cleanup, uploaded-blob cleanup, session invalidation, and refusal of active accounts or non-admin callers |
 | `adminBackup.test.js` | 3 | Admin-only backup status, unconfigured deployment, manual GitHub push, snapshot listing, staged restore/cancel, private local SQLite download |
 | `secrets.test.js` | 3 | Stable `SECRETS_KEY` across session rotation, legacy session-secret fallback, tamper rejection |
 | `frontendBackup.test.js` | 2 | Backup page renders missing-env guidance, disables manual backup, lists remote snapshots and the local download link |

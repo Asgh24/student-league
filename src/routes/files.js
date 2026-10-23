@@ -8,6 +8,11 @@ import { badRequest, forbidden, notFound, payloadTooLarge } from '../lib/errors.
 import { isoNow } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
 import { requireAuth, requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import {
+  assertTeacherStorageAvailable,
+  removeUploadedFile,
+  teacherStorageUsage,
+} from '../services/storage.js';
 
 const BLOCKED_EXTENSIONS = new Set(['.exe', '.dll', '.bat', '.cmd', '.com', '.scr', '.js', '.mjs', '.cjs', '.php', '.sh', '.ps1', '.jar', '.msi', '.vbs', '.hta']);
 
@@ -94,6 +99,7 @@ export function createLeagueFilesRouter({ db }) {
       items,
       total: items.length,
       limits: { maxBytes: config.limits.maxUploadBytes, extensions: ALLOWED_UPLOAD_EXTENSIONS },
+      storage: teacherStorageUsage(db, req.user.id),
     });
   });
 
@@ -105,26 +111,35 @@ export function createLeagueFilesRouter({ db }) {
       if (!req.file) throw badRequest('NO_FILE', 'فایلی انتخاب نشده است');
       const originalName = sanitizeFilename(decodeUploadFilename(req.file.originalname));
       const extension = validateUpload(originalName, req.file.mimetype, req.file.size);
+      // Check the teacher-wide quota before writing anything to disk. The check
+      // covers every league, not just the one currently open.
+      assertTeacherStorageAvailable(db, req.user.id, req.file.size);
+
       const storedName = `${crypto.randomUUID()}${extension}`;
       const target = path.join(config.uploadsDir, storedName);
       fs.mkdirSync(config.uploadsDir, { recursive: true });
-      fs.writeFileSync(target, req.file.buffer);
-
-      const info = db.prepare(`
-        INSERT INTO files (league_id, teacher_id, original_name, stored_name, mime, size, description, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        req.league.id,
-        req.user.id,
-        originalName,
-        storedName,
-        req.file.mimetype || 'application/octet-stream',
-        req.file.size,
-        req.body.description ?? '',
-        isoNow(),
-      );
-      const created = leagueFiles(db, req.league.id).find((row) => row.id === Number(info.lastInsertRowid));
-      res.status(201).json({ file: created });
+      try {
+        fs.writeFileSync(target, req.file.buffer);
+        const info = db.prepare(`
+          INSERT INTO files (league_id, teacher_id, original_name, stored_name, mime, size, description, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          req.league.id,
+          req.user.id,
+          originalName,
+          storedName,
+          req.file.mimetype || 'application/octet-stream',
+          req.file.size,
+          req.body.description ?? '',
+          isoNow(),
+        );
+        const created = leagueFiles(db, req.league.id).find((row) => row.id === Number(info.lastInsertRowid));
+        res.status(201).json({ file: created, storage: teacherStorageUsage(db, req.user.id) });
+      } catch (error) {
+        // Do not leave a blob behind when the database insert fails.
+        removeUploadedFile(storedName);
+        throw error;
+      }
     },
   );
 
@@ -170,12 +185,8 @@ export function createFilesRouter({ db }) {
     const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(file.league_id);
     if (league?.teacher_id !== req.user.id) throw forbidden('این فایل به لیگ شما تعلق ندارد');
     db.prepare('DELETE FROM files WHERE id = ?').run(file.id);
-    try {
-      fs.rmSync(path.resolve(config.uploadsDir, file.stored_name), { force: true });
-    } catch {
-      /* the row is gone; an orphaned blob is harmless */
-    }
-    res.json({ ok: true });
+    removeUploadedFile(file.stored_name);
+    res.json({ ok: true, storage: teacherStorageUsage(db, req.user.id) });
   });
 
   return router;

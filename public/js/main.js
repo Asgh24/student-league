@@ -54,6 +54,7 @@ import { renderStudentTeam } from './views/student/team.js';
 
 import { renderAdminDashboard } from './views/admin/dashboard.js';
 import { renderAdminBackup } from './views/admin/backup.js';
+import { renderAdminExpiredUsers } from './views/admin/expiredUsers.js';
 import { renderAdminPaymentSettings } from './views/admin/paymentSettings.js';
 import { renderAdminPayments } from './views/admin/payments.js';
 import { renderAdminPlans } from './views/admin/plans.js';
@@ -111,6 +112,7 @@ function adminNav() {
   const tabs = [
     ['admin', '📊', 'داشبورد'],
     ['admin/teachers', '👩‍🏫', 'معلمان'],
+    ['admin/expired-users', '🗑️', 'حذف منقضی‌ها'],
     ['admin/plans', '🛍️', 'طرح‌های اشتراک'],
     ['admin/payments', '🧾', 'پرداخت‌ها'],
     ['admin/payment-settings', '💳', 'کارت و پرداخت'],
@@ -222,6 +224,7 @@ const routes = [
   { path: 'teacher/league/:id/reports', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderReports(ctx) },
   { path: 'admin', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminDashboard(ctx) },
   { path: 'admin/teachers', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminTeachers(ctx) },
+  { path: 'admin/expired-users', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminExpiredUsers(ctx) },
   { path: 'admin/plans', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminPlans(ctx) },
   { path: 'admin/payments', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminPayments(ctx) },
   { path: 'admin/payment-settings', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminPaymentSettings(ctx) },

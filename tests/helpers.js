@@ -58,7 +58,10 @@ export function createClient(db) {
     post: (url, body = {}) => agent.post(url).set('x-csrf-token', token).send(body),
     patch: (url, body = {}) => agent.patch(url).set('x-csrf-token', token).send(body),
     put: (url, body = {}) => agent.put(url).set('x-csrf-token', token).send(body),
-    del: (url) => agent.delete(url).set('x-csrf-token', token),
+    del: (url, body) => {
+      const req = agent.delete(url).set('x-csrf-token', token);
+      return body === undefined ? req : req.send(body);
+    },
     postRaw: (url, body, headers = {}) => agent.post(url).set(headers).send(body),
     upload(url, { filename, buffer, contentType = 'application/octet-stream', fields = {}, fieldName = 'file' }) {
       const req = agent.post(url).set('x-csrf-token', token);

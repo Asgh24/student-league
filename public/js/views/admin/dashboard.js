@@ -36,6 +36,9 @@ function revenueCard(data) {
       button('مدیریت پرداخت‌ها', { kind: 'soft', icon: '🧾', onClick: () => { window.location.hash = '#/admin/payments'; } }),
       button('کارت و پرداخت', { kind: 'soft', icon: '💳', onClick: () => { window.location.hash = '#/admin/payment-settings'; } }),
       button('مدیریت معلمان', { kind: 'soft', icon: '👩‍🏫', onClick: () => { window.location.hash = '#/admin/teachers'; } }),
+      data.teachers.expired > 0
+        ? button('حذف معلمان منقضی', { kind: 'danger', icon: '🗑️', onClick: () => { window.location.hash = '#/admin/expired-users'; } })
+        : null,
     ]),
   ]);
 }

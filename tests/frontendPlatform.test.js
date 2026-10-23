@@ -38,7 +38,9 @@ const { api, login, register } = await import('../public/js/api.js');
 const { renderLogin } = await import('../public/js/views/login.js');
 const { renderSubscription } = await import('../public/js/views/subscription.js');
 const { renderAdminDashboard } = await import('../public/js/views/admin/dashboard.js');
+const { renderAdminExpiredUsers } = await import('../public/js/views/admin/expiredUsers.js');
 const { renderAdminTeachers } = await import('../public/js/views/admin/teachers.js');
+const { renderFiles } = await import('../public/js/views/files.js');
 const { renderTeacherMessages } = await import('../public/js/views/messages.js');
 const { renderSettings } = await import('../public/js/views/settings.js');
 const { setMeta, setPersianDigits, setUser } = await import('../public/js/store.js');
@@ -232,6 +234,65 @@ describe('admin panel', () => {
     expect(text).toContain('دورهٔ آزمایشی');
     expect(text).toContain('تمدید دستی');
     expect(text).toContain('۲۲ دانش‌آموز');
+  });
+
+  it('renders expired users with storage usage and a guarded delete action', async () => {
+    api.get.mockResolvedValueOnce({
+      items: [{
+        id: 7,
+        username: 'expired-a',
+        displayName: 'معلم منقضی',
+        role: 'teacher',
+        trialEndsAt: daysFromNow(-4),
+        subscriptionEndsAt: null,
+        subscription: { status: 'expired', daysLeft: 0, active: false, endsAt: daysFromNow(-4) },
+        leagueCount: 2,
+        studentCount: 31,
+        fileCount: 3,
+        storage: { usedBytes: 5 * 1024 * 1024, limitBytes: 70 * 1024 * 1024, remainingBytes: 65 * 1024 * 1024 },
+        lastPaidAt: null,
+        createdAt: daysFromNow(-40),
+      }],
+      total: 1,
+    });
+
+    await renderAdminExpiredUsers();
+
+    const text = document.body.textContent;
+    expect(text).toContain('حذف کاربران منقضی');
+    expect(text).toContain('معلم منقضی');
+    expect(text).toContain('اشتراک منقضی');
+    expect(text).toContain('۳ فایل');
+    expect(text).toContain('حذف حساب');
+    expect(text).toContain('حذف حساب دائمی است');
+  });
+});
+
+describe('teacher file storage', () => {
+  it('shows total usage, remaining space and the per-file limit', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url.endsWith('/files')) {
+        return {
+          items: [],
+          limits: { maxBytes: 10 * 1024 * 1024, extensions: ['.pdf'] },
+          storage: {
+            usedBytes: 60 * 1024 * 1024,
+            limitBytes: 70 * 1024 * 1024,
+            remainingBytes: 10 * 1024 * 1024,
+          },
+        };
+      }
+      return { league: { name: 'لیگ الف' } };
+    });
+
+    await renderFiles({ params: { id: '1' } });
+
+    const text = document.body.textContent;
+    expect(text).toContain('فضای ذخیره‌سازی');
+    expect(text).toContain('۶۰ مگابایت از ۷۰ مگابایت استفاده شده');
+    expect(text).toContain('۱۰ مگابایت باقی‌مانده');
+    expect(text).toContain('حداکثر حجم هر فایل');
+    expect(text).toContain('پسوندهای مجاز: .pdf');
   });
 });
 

@@ -135,6 +135,12 @@ export const schemas = {
     note: z.string().trim().max(200).default(''),
   }),
 
+  adminTeacherDelete: z.object({
+    // Optional on the API so an authenticated owner can delete from any client;
+    // when supplied, it must match the account username exactly.
+    confirmUsername: z.string().trim().max(64).optional().default(''),
+  }),
+
   planCreate: z.object({
     name: z.string().trim().min(2, 'نام طرح الزامی است').max(80),
     days: z.coerce.number().int().min(1).max(3650),

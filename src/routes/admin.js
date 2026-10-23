@@ -21,6 +21,8 @@ import {
 } from '../services/paymentSettings.js';
 import { paymentProviderInfo } from '../services/payments.js';
 import { resolveReceiptPath } from '../services/receipts.js';
+import { storageUsageFromBytes } from '../services/storage.js';
+import { deleteExpiredTeacher } from '../services/teacherDeletion.js';
 import {
   ensureTrialEnd,
   extendTeacherSubscription,
@@ -40,6 +42,8 @@ function teacherJson(row) {
     subscription: teacherAccess(row),
     leagueCount: row.league_count ?? 0,
     studentCount: row.student_count ?? 0,
+    fileCount: row.file_count ?? 0,
+    storage: storageUsageFromBytes(row.file_bytes ?? 0, { fileCount: row.file_count ?? 0 }),
     lastPaidAt: row.last_paid_at ?? null,
     createdAt: row.created_at,
   };
@@ -51,6 +55,8 @@ function teacherRows(db, search = '') {
     SELECT u.*,
       (SELECT COUNT(*) FROM leagues l WHERE l.teacher_id = u.id) AS league_count,
       (SELECT COUNT(*) FROM students s JOIN leagues l ON l.id = s.league_id WHERE l.teacher_id = u.id) AS student_count,
+      (SELECT COUNT(*) FROM files f JOIN leagues l ON l.id = f.league_id WHERE l.teacher_id = u.id) AS file_count,
+      (SELECT COALESCE(SUM(f.size), 0) FROM files f JOIN leagues l ON l.id = f.league_id WHERE l.teacher_id = u.id) AS file_bytes,
       (SELECT MAX(p.paid_at) FROM payments p WHERE p.teacher_id = u.id AND p.status = 'paid') AS last_paid_at
     FROM users u
     WHERE u.role = 'teacher'
@@ -176,6 +182,42 @@ export function createAdminRouter({ db }) {
     const row = teacherRows(db).find((teacher) => teacher.id === id);
     if (!row) throw notFound('معلم یافت نشد');
     res.json({ teacher: teacherJson(row) });
+  });
+
+  /**
+   * Teachers whose trial and paid subscription have both ended. Only these
+   * accounts are offered for permanent deletion; active/trial/unlimited users
+   * never appear here and are rejected by the delete endpoint too.
+   */
+  router.get('/expired-users', (req, res) => {
+    const { page, limit, offset } = paginate(req.query, { defaultLimit: 50, maxLimit: 200 });
+    const rows = teacherRows(db, req.query.search ?? '')
+      .filter((row) => teacherAccess(row).status === 'expired');
+    res.json({
+      items: rows.slice(offset, offset + limit).map(teacherJson),
+      total: rows.length,
+      page,
+      limit,
+      pages: Math.max(1, Math.ceil(rows.length / limit)),
+    });
+  });
+
+  /** Permanently deletes one expired teacher after a typed confirmation. */
+  router.delete('/teachers/:id', validate({ body: schemas.adminTeacherDelete }), (req, res) => {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) throw notFound('معلم یافت نشد');
+    const result = deleteExpiredTeacher(db, {
+      teacherId: id,
+      confirmUsername: req.body.confirmUsername,
+    });
+    if (!result.ok) {
+      if (result.reason === 'not-found') throw notFound('معلم یافت نشد');
+      if (result.reason === 'confirmation-mismatch') {
+        throw badRequest('CONFIRMATION_MISMATCH', 'برای حذف حساب، نام کاربری معلم را دقیقاً وارد کنید');
+      }
+      throw conflict('TEACHER_NOT_EXPIRED', 'این حساب هنوز دورهٔ آزمایشی یا اشتراک فعال دارد و قابل حذف نیست');
+    }
+    res.json(result);
   });
 
   router.post(

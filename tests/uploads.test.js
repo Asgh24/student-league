@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createLeague } from '../src/repositories/leagues.js';
 import { buildFixture } from './fixtures.js';
 import { createClient, createTestDatabase } from './helpers.js';
 import { sanitizeFilename, validateUpload } from '../src/routes/files.js';
@@ -19,6 +20,7 @@ beforeEach(async () => {
 afterEach(() => {
   ctx.cleanup();
   delete process.env.MAX_UPLOAD_BYTES;
+  delete process.env.TEACHER_STORAGE_MB;
 });
 
 describe('file sharing', () => {
@@ -130,7 +132,49 @@ describe('file sharing', () => {
     });
     const res = await client.del(`/api/v1/files/${upload.body.file.id}`);
     expect(res.status).toBe(200);
+    expect(res.body.storage.usedBytes).toBe(0);
     expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM files').get().n).toBe(0);
+  });
+
+  it('shares one quota across all leagues and frees space after a delete', async () => {
+    process.env.TEACHER_STORAGE_MB = '1';
+    const secondLeague = createLeague(ctx.db, fixture.teacherA.id, 'لیگ دوم');
+    const first = Buffer.alloc(700 * 1024, 0x41);
+    const second = Buffer.alloc(400 * 1024, 0x42);
+
+    const uploaded = await client.upload(`/api/v1/leagues/${fixture.leagueA.id}/files`, {
+      filename: 'first.pdf',
+      buffer: first,
+      contentType: 'application/pdf',
+    });
+    expect(uploaded.status).toBe(201);
+    expect(uploaded.body.storage.usedBytes).toBe(first.length);
+    expect(uploaded.body.storage.limitBytes).toBe(1024 * 1024);
+
+    const blocked = await client.upload(`/api/v1/leagues/${secondLeague.id}/files`, {
+      filename: 'second.pdf',
+      buffer: second,
+      contentType: 'application/pdf',
+    });
+    expect(blocked.status).toBe(413);
+    expect(blocked.body.error.code).toBe('STORAGE_QUOTA_EXCEEDED');
+    expect(blocked.body.error.message).toContain('حذف کنید');
+
+    const list = await client.get(`/api/v1/leagues/${secondLeague.id}/files`);
+    expect(list.body.storage.usedBytes).toBe(first.length);
+    expect(list.body.storage.remainingBytes).toBe(1024 * 1024 - first.length);
+
+    const removed = await client.del(`/api/v1/files/${uploaded.body.file.id}`);
+    expect(removed.status).toBe(200);
+    expect(removed.body.storage.usedBytes).toBe(0);
+
+    const retried = await client.upload(`/api/v1/leagues/${secondLeague.id}/files`, {
+      filename: 'second.pdf',
+      buffer: second,
+      contentType: 'application/pdf',
+    });
+    expect(retried.status).toBe(201);
+    expect(retried.body.storage.usedBytes).toBe(second.length);
   });
 });
 

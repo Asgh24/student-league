@@ -7,6 +7,7 @@ import { chip, fa } from '../common.js';
 const TABS = [
   ['admin', '📊', 'داشبورد'],
   ['admin/teachers', '👩‍🏫', 'معلمان'],
+  ['admin/expired-users', '🗑️', 'حذف منقضی‌ها'],
   ['admin/plans', '🛍️', 'طرح‌ها'],
   ['admin/payments', '🧾', 'پرداخت‌ها'],
   ['admin/payment-settings', '💳', 'کارت و پرداخت'],
