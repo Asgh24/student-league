@@ -210,3 +210,79 @@ describe('sending the daily report', () => {
     expect(stored.error).toContain('کلید API نامعتبر');
   });
 });
+
+describe('custom parent message', () => {
+  it('queues the exact teacher text and skips students without a parent number', async () => {
+    const [first, second] = fixture.studentsA;
+    await setParentPhone(first.id, '09123456789');
+    const text = 'سلام، احتراماً به اطلاع می‌رسانم آرش امروز در کلاس بی‌نظمی کرد. لطفاً در خانه پیگیری کنید.';
+
+    const res = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/reports/custom/send`, {
+      studentIds: [first.id, second.id],
+      message: text,
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.counts).toEqual({ sent: 0, queued: 1, failed: 0, skipped: 1 });
+    expect(res.body.results.find((item) => item.studentId === second.id))
+      .toMatchObject({ status: 'skipped', reason: 'NO_PARENT_PHONE' });
+
+    const stored = ctx.db.prepare('SELECT mobile, body, kind, status, report_date FROM sms_messages').all();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      mobile: '09123456789',
+      body: text,
+      kind: 'custom',
+      status: 'queued',
+      report_date: todayIso(),
+    });
+  });
+
+  it('sends the custom text through the configured provider', async () => {
+    const first = fixture.studentsA[0];
+    await setParentPhone(first.id, '09123456789');
+
+    process.env.SMSIR_API_KEY = 'test-api-key';
+    process.env.SMSIR_LINE_NUMBER = '30001234';
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ status: 1, message: 'موفق', data: { packId: 6, messageIds: [123], cost: 1200 } }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const text = 'تذکر انضباطی: لطفاً فردا برای هماهنگی به مدرسه مراجعه کنید.';
+    const res = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/reports/custom/send`, {
+      studentIds: [first.id],
+      message: text,
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.counts.sent).toBe(1);
+    expect(res.body.smsConfigured).toBe(true);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://api.sms.ir/v1/send/bulk');
+    expect(init.headers['X-API-KEY']).toBe('test-api-key');
+    expect(JSON.parse(init.body).messageText).toBe(text);
+  });
+
+  it('rejects an empty message and protects the league from other teachers', async () => {
+    const first = fixture.studentsA[0];
+    await setParentPhone(first.id, '09123456789');
+
+    const empty = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/reports/custom/send`, {
+      studentIds: [first.id],
+      message: '   ',
+    });
+    expect(empty.status).toBe(400);
+    expect(empty.body.error.code).toBe('VALIDATION_ERROR');
+
+    const other = createClient(ctx.db);
+    await other.login('teacher-b', 'password-b1');
+    const foreign = await other.post(`/api/v1/leagues/${fixture.leagueA.id}/reports/custom/send`, {
+      studentIds: [first.id],
+      message: 'پیام غیرمجاز',
+    });
+    expect(foreign.status).toBe(403);
+  });
+});

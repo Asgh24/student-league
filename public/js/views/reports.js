@@ -91,6 +91,15 @@ export async function renderReports({ params }) {
     selectionInfo.className = chosen.length ? 'small' : 'small muted';
     sendButton.disabled = sending || withPhone === 0;
     sendButton.title = withPhone === 0 ? 'برای ارسال، حداقل یک دانش‌آموز با شماره والد انتخاب کنید' : 'ارسال پیامک گزارش';
+    if (customSendButton) {
+      const hasText = customMessage.value.trim().length > 0;
+      customSendButton.disabled = sending || withPhone === 0 || !hasText;
+      customSendButton.title = withPhone === 0
+        ? 'برای ارسال، حداقل یک دانش‌آموز با شماره والد انتخاب کنید'
+        : hasText
+          ? 'ارسال پیام دلخواه به والدین'
+          : 'متن پیام را وارد کنید';
+    }
     previewHost.replaceChildren(...(chosen.length
       ? chosen.map((item) => el('div.report-message', {}, [
         el('div.report-message__head', {}, [
@@ -114,7 +123,17 @@ export async function renderReports({ params }) {
   const selectionInfo = el('p.small.muted');
   const previewHost = el('div.report-previews');
   const rowsByStudent = new Map();
+  const customMessage = el('textarea', {
+    id: 'custom-sms-message',
+    rows: '4',
+    maxlength: '1000',
+    dir: 'rtl',
+    placeholder: 'مثلاً: سلام، احتراماً به اطلاع می‌رسانم آرش امروز در کلاس ... لطفاً در خانه پیگیری کنید.',
+    'aria-label': 'متن پیام دلخواه برای والدین',
+  });
+  customMessage.addEventListener('input', refreshSelectionUi);
   let sendButton = null;
+  let customSendButton = null;
 
   function toggle(studentId, value) {
     if (value) selected.add(studentId);
@@ -253,6 +272,51 @@ export async function renderReports({ params }) {
     return card({ title: 'ارسال‌های اخیر این روز', icon: '🕘' }, [list]);
   }
 
+  async function sendCustomMessage() {
+    const chosen = selectedItems();
+    const withPhone = chosen.filter((item) => item.hasParentPhone);
+    const text = customMessage.value.trim();
+    if (sending) return;
+    if (!text) {
+      notify.error('متن پیام را وارد کنید');
+      customMessage.focus();
+      return;
+    }
+    if (withPhone.length === 0) {
+      notify.error('برای ارسال، حداقل یک دانش‌آموز با شماره والد انتخاب کنید');
+      return;
+    }
+
+    const agreed = await confirmDialog({
+      title: 'ارسال پیام دلخواه',
+      message: `این پیام برای والدین ${fa(withPhone.length)} دانش‌آموز انتخاب‌شده ارسال شود؟`,
+      confirmLabel: 'ارسال پیام',
+    });
+    if (!agreed) return;
+
+    sending = true;
+    if (customSendButton) customSendButton.disabled = true;
+    try {
+      const result = await api.post(`/leagues/${leagueId}/reports/custom/send`, {
+        studentIds: chosen.map((item) => item.studentId),
+        message: text,
+      });
+      lastResult = result;
+      customMessage.value = '';
+      const counts = result.counts ?? {};
+      if (counts.sent) notify.ok(`${fa(counts.sent)} پیام ارسال شد`);
+      if (counts.queued) notify.info(`${fa(counts.queued)} پیام در صف ذخیره شد (کلید و خط sms.ir را در تنظیمات پیامک کامل کنید)`);
+      if (counts.failed) notify.error(`${fa(counts.failed)} پیام ناموفق بود`);
+      if (counts.skipped) notify.warn(`${fa(counts.skipped)} دانش‌آموز شماره والد ندارد`);
+      await load();
+    } catch (error) {
+      notify.error(errorMessage(error));
+    } finally {
+      sending = false;
+      refreshSelectionUi();
+    }
+  }
+
   async function sendSelected() {
     const chosen = selectedItems();
     const withPhone = chosen.filter((item) => item.hasParentPhone);
@@ -285,6 +349,21 @@ export async function renderReports({ params }) {
       sending = false;
       if (sendButton) sendButton.disabled = false;
     }
+  }
+
+  function customMessageCard() {
+    customSendButton = button('ارسال پیام به والدین', { icon: '✍️', onClick: () => { void sendCustomMessage(); } });
+    return card({ title: 'پیام دلخواه به والدین', icon: '✍️' }, [
+      el('p.small.muted', {
+        text: 'متن دلخواه خود را بنویسید؛ برای والدین دانش‌آموزان انتخاب‌شده ارسال می‌شود. برای یک دانش‌آموز، فقط همان را انتخاب کنید.',
+      }),
+      customMessage,
+      el('div.row', { style: { marginTop: '8px', flexWrap: 'wrap' } }, [
+        el('span.small.muted', { text: 'حداکثر ۱۰۰۰ نویسه · ارسال از همان حساب پیامک صفحهٔ بالا' }),
+        el('span.spacer'),
+        customSendButton,
+      ]),
+    ]);
   }
 
   function paint() {
@@ -323,6 +402,7 @@ export async function renderReports({ params }) {
         selectionInfo,
         reportTable(),
       ]),
+      customMessageCard(),
       card({ title: 'پیش‌نمایش پیامک', icon: '👁️' }, [previewHost]),
       ...cards,
     );

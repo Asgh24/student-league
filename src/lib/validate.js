@@ -492,6 +492,12 @@ export const schemas = {
     studentIds: z.array(z.coerce.number().int().positive()).min(1, 'حداقل یک دانش‌آموز انتخاب کنید').max(200),
   }),
 
+  /** A teacher-written SMS for the parents of selected students. */
+  customReportSend: z.object({
+    studentIds: z.array(z.coerce.number().int().positive()).min(1, 'حداقل یک دانش‌آموز انتخاب کنید').max(200),
+    message: z.string().trim().min(1, 'متن پیام را وارد کنید').max(1000, 'متن پیام حداکثر ۱۰۰۰ نویسه است'),
+  }),
+
   scheduleSave: z.object({
     slots: z.array(z.object({
       dayIndex: z.coerce.number().int().min(0).max(6),

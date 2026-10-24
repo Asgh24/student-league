@@ -6,8 +6,10 @@
 
 import { config } from '../config.js';
 import { badRequest } from '../lib/errors.js';
+import { todayIso } from '../lib/http.js';
 import { formatJalaliDate } from '../lib/jalali.js';
 import { toPersianDigits } from '../lib/normalize.js';
+import { normalizeMobile } from '../lib/phone.js';
 import { getLeague } from '../repositories/leagues.js';
 import { contactsList } from './contacts.js';
 import {
@@ -168,6 +170,61 @@ export async function sendDailyReports(db, { leagueId, date, studentIds, fetchIm
 
   const fresh = dailyReport(db, leagueId, date);
   return { ...fresh, results, counts, smsConfigured: fresh.sms.configured };
+}
+
+/**
+ * Sends one teacher-written message to the parents of the selected students.
+ *
+ * The exact text is used for every recipient, so a teacher can write a notice
+ * about a specific incident or a general reminder. Messages are stored in the
+ * same outbox as daily reports with `kind = 'custom'`; missing parent numbers
+ * are reported as skipped instead of silently dropping the student.
+ */
+export async function sendCustomParentMessages(db, { leagueId, studentIds, message, fetchImpl }) {
+  const league = getLeague(db, leagueId);
+  if (!league) throw badRequest('LEAGUE_NOT_FOUND', 'لیگ یافت نشد');
+
+  const text = String(message ?? '').trim();
+  if (!text) throw badRequest('EMPTY_MESSAGE', 'متن پیام را وارد کنید');
+
+  const selected = new Set(studentIds);
+  const chosen = contactsList(db, leagueId).filter((contact) => selected.has(contact.id));
+  if (chosen.length === 0) throw badRequest('NO_STUDENTS', 'هیچ دانش‌آموزی برای ارسال انتخاب نشده است');
+
+  const credentials = resolveSmsProvider(db, { teacherId: league.teacher_id });
+  const reportDate = todayIso();
+  const results = [];
+
+  for (const item of chosen) {
+    const mobile = normalizeMobile(item.parentPhone);
+    if (!mobile) {
+      results.push({ studentId: item.id, name: item.name, status: 'skipped', reason: 'NO_PARENT_PHONE' });
+      continue;
+    }
+
+    const messageId = queueMessage(db, {
+      leagueId,
+      studentId: item.id,
+      mobile,
+      body: text,
+      kind: 'custom',
+      reportDate,
+    });
+    const outcome = await deliverSms({ mobile, text, fetchImpl, credentials });
+    if (outcome.ok) {
+      markMessage(db, messageId, { status: 'sent', providerMessageId: outcome.providerMessageId });
+      results.push({ studentId: item.id, name: item.name, status: 'sent', messageId });
+    } else if (outcome.queued) {
+      results.push({ studentId: item.id, name: item.name, status: 'queued', messageId });
+    } else {
+      markMessage(db, messageId, { status: 'failed', error: outcome.error });
+      results.push({ studentId: item.id, name: item.name, status: 'failed', messageId, error: outcome.error });
+    }
+  }
+
+  const counts = { sent: 0, queued: 0, failed: 0, skipped: 0 };
+  for (const result of results) counts[result.status] += 1;
+  return { results, counts, smsConfigured: credentials.enabled, message: text };
 }
 
 export { localDayWindow };

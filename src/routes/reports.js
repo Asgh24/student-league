@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { asyncHandler, todayIso } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
 import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
-import { dailyReport, sendDailyReports } from '../services/dailyReports.js';
+import { dailyReport, sendCustomParentMessages, sendDailyReports } from '../services/dailyReports.js';
 
 /** «گزارش روزانه»: condensed change report sent to parents over sms.ir. */
 export function createLeagueReportsRouter({ db }) {
@@ -22,6 +22,20 @@ export function createLeagueReportsRouter({ db }) {
         leagueId: req.league.id,
         date: req.body.date,
         studentIds: req.body.studentIds,
+      });
+      res.json(payload);
+    }),
+  );
+
+  /** Free-text message written by the teacher for the selected parents. */
+  router.post(
+    '/custom/send',
+    validate({ body: schemas.customReportSend }),
+    asyncHandler(async (req, res) => {
+      const payload = await sendCustomParentMessages(db, {
+        leagueId: req.league.id,
+        studentIds: req.body.studentIds,
+        message: req.body.message,
       });
       res.json(payload);
     }),

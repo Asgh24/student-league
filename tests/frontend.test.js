@@ -1466,6 +1466,44 @@ describe('daily parent report', () => {
     expect(document.querySelector('#view').textContent).toContain('در صف');
     expect(document.querySelector('#view').textContent).toContain('ارسال‌شده ۰');
   });
+
+  it('sends a teacher-written custom message to the selected parents', async () => {
+    api.get.mockResolvedValue(reportPayload());
+    api.post.mockResolvedValue({
+      results: [{ studentId: 11, name: 'آرش آزمون', status: 'sent', messageId: 7 }],
+      counts: { sent: 1, queued: 0, failed: 0, skipped: 0 },
+      smsConfigured: true,
+      message: 'تذکر انضباطی',
+    });
+
+    await renderReports({ params: { id: '1' } });
+    const view = document.querySelector('#view');
+    const textarea = view.querySelector('#custom-sms-message');
+    expect(textarea).not.toBeNull();
+    expect(textarea.getAttribute('maxlength')).toBe('1000');
+
+    const customSend = [...view.querySelectorAll('button')]
+      .find((node) => node.textContent.trim() === '✍️ارسال پیام به والدین');
+    expect(customSend).not.toBeUndefined();
+    expect(customSend.disabled).toBe(true);
+
+    const text = 'سلام، احتراماً آرش امروز در کلاس بی‌نظمی کرد. لطفاً در خانه پیگیری کنید.';
+    textarea.value = text;
+    textarea.dispatchEvent(new window.Event('input', { bubbles: true }));
+    expect(customSend.disabled).toBe(false);
+    customSend.click();
+
+    await vi.waitFor(() => expect(document.querySelector('#modal-root .modal')).not.toBeNull());
+    [...document.querySelectorAll('#modal-root button')]
+      .find((node) => node.textContent.trim() === 'ارسال پیام').click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/leagues/1/reports/custom/send', {
+      studentIds: [11],
+      message: text,
+    }));
+    await vi.waitFor(() => expect(document.getElementById('toasts').textContent).toContain('۱ پیام ارسال شد'));
+    expect(document.querySelector('#view').querySelector('#custom-sms-message').value).toBe('');
+  });
 });
 
 describe('fun tab', () => {

@@ -61,7 +61,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | پنل مدیر | Separate site-owner login: teacher search/filter, manual subscription grants, plan CRUD, revenue and payment ledger, inbox/SMS health, and a backup/restore console. The «حذف منقضی‌ها» tab lists teachers whose trial and paid subscription have both ended and lets the owner permanently delete an account after typing its username; leagues, students, linked student logins, scores, uploads and payment history are removed with it |
 | بکاپ و بازیابی | Owner-only manual GitHub backup, consistent local DB download, remote snapshot list, staged restore with checksum verification and cancel; auto-restores an empty/schema-only DB on boot |
 | پیام‌ها | Ticket-like teacher↔student inbox with threads, unread counters, read receipts and polling; both sides can reply from the same shared view |
-| پنل پیامک | Per-teacher sms.ir API key + line number in the teacher's own panel (encrypted, write-only), a built-in «راهنمایی راه‌اندازی سامانه پیامکی» guide with annotated screenshots, credit/lines, test and bulk sends, league-report outbox and admin campaign retry; without credentials everything stays queued instead of being lost |
+| پنل پیامک | Per-teacher sms.ir API key + line number in the teacher's own panel (encrypted, write-only), a built-in «راهنمایی راه‌اندازی سامانه پیامکی» guide with annotated screenshots, credit/lines, test and bulk sends, the daily parent report, a free-text «پیام دلخواه به والدین» box for notices such as a student's misbehavior, league-report outbox and admin campaign retry; without credentials everything stays queued instead of being lost |
 | دستیار هوش مصنوعی | In the Q&A page, drafts multiple-choice quizzes/questionnaires through Groq (`openai/gpt-oss-20b`), shows a reviewable preview and bulk-saves only the selected questions; supports a server-wide default key plus an encrypted, write-only personal teacher key |
 | پرداخت‌ها | Zarinpal v4 request/verify (Rial conversion, sandbox support) and a local `mock` gateway for development before a merchant ID exists |
 
@@ -760,6 +760,19 @@ formatter used for real sends:
 جمع تغییرات: +۲
 ```
 
+The same page also carries a **«پیام دلخواه به والدین»** box. The teacher writes
+any text (up to 1000 characters) — for example a note about a student's
+misbehavior — picks the students in the table, reviews the confirmation dialog and
+sends. The exact text is stored in `sms_messages` with `kind = 'custom'` and goes
+through the same provider/queue path as daily reports. Students without a parent
+number are returned as `skipped` rather than being silently dropped.
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| GET | `/leagues/:id/reports/daily` | `?date=YYYY-MM-DD` | the day's per-student changes, generated messages, SMS config, recent sends |
+| POST | `/leagues/:id/reports/daily/send` | `{ date, studentIds[] }` | `{ results, counts{ sent, queued, failed, skipped }, smsConfigured }` |
+| POST | `/leagues/:id/reports/custom/send` | `{ studentIds[], message }` | `{ results, counts{ sent, queued, failed, skipped }, smsConfigured, message }` — a blank message is rejected with `VALIDATION_ERROR` |
+
 ### SMS console (site owner)
 
 | Method | Path | Body / query | Response |
@@ -830,7 +843,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 
 ```
  Test Files  39 passed (39)
-      Tests  413 passed (413)
+      Tests  417 passed (417)
 ```
 
 | Suite | Tests | Covers |
@@ -850,7 +863,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `tools.test.js` | 19 | Wheel segments, shuffle, timer, live board, homework, multiple-choice + legacy text Q&A, presentation quiz, schedule, league lifecycle |
 | `student.test.js` | 20 | Dashboard series/medals, report card totals + session lines with derived quality and subject/date filters, grade setting, own attendance/history, likes quota, self-like rejection, settings |
 | `evaluations.test.js` | 23 | Evaluation CRUD + column reference, numeric/descriptive marks, scale and label validation, clearing a mark, subject/date filters, no transfer into league points, foreign-teacher and student isolation, own-marks student payload |
-| `reports.test.js` | 7 | Daily parent report grouping, message trimming, authorization and SMS queue/delivery paths |
+| `reports.test.js` | 10 | Daily parent report grouping, message trimming, authorization and SMS queue/delivery paths; free-text custom messages store the exact teacher text as `kind = 'custom'`, skip students without a parent number, and reject blank messages |
 | `contacts.test.js` | 5 | Parent/student phone normalization, validation, clearing and teacher isolation |
 | `seating.test.js` | 6 | Seating plan persistence, random reshuffle, clearing, teacher-only access |
 | `platform.test.js` | 10 | Teacher signup + 14-day trial, expired access + admin grant, admin/teacher/student separation, teacher create/search/filter, plan CRUD, mock checkout and renewal, Zarinpal request/verify (Rial, codes 100/101) |
@@ -861,7 +874,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `smsSettings.test.js` | 6 | Per-teacher encrypted sms.ir key/line, write-only API, teacher isolation, teacher credential precedence, incomplete-settings fallback block, validation and sample message |
 | `ai.test.js` | 9 | Per-teacher encrypted Groq key and server fallback, write-only settings, mocked Groq call/shape, invalid or failed responses, foreign-league isolation, preview-only generation, reviewed bulk save |
 | `aiAssistantFrontend.test.js` | 3 | AI modal key save/clear, disabled generation without a key, preview selection, bulk-save hand-off and reload, topic validation |
-| `frontend.test.js` | 60 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (17 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, MCQ option editor, student MCQ/text answering, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, modal focus/footer lifecycle |
+| `frontend.test.js` | 61 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (17 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, MCQ option editor, student MCQ/text answering, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, custom parent-message box with confirmation and send, modal focus/footer lifecycle |
 | `frontendPlatform.test.js` | 10 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, expired-user deletion section, teacher file storage card, shared inbox thread/composer, admin settings label |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 2 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not) |
