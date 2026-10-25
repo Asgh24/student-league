@@ -29,31 +29,14 @@ export async function askCustomDelta(column) {
 }
 
 /**
- * One-field quick add used by the inline «نام دانش‌آموز جدید…» row above the
- * scores table. Resolves to `true` when the student was created.
+ * Adds a student. Giving the student a login is optional: when both the
+ * username and password are filled in, a student account is created as well.
  */
-export async function quickAddStudent(leagueId, name, reload) {
-  const trimmed = String(name ?? '').trim();
-  if (!trimmed) {
-    notify.error('نام دانش‌آموز را وارد کنید');
-    return false;
-  }
-  try {
-    await api.post(`/leagues/${leagueId}/students`, { name: trimmed });
-    notify.ok(`«${trimmed}» افزوده شد`);
-    reload();
-    return true;
-  } catch (error) {
-    notify.error(errorMessage(error));
-    return false;
-  }
-}
-
 export async function addStudent(leagueId, reload) {
   const values = await formDialog({
-    title: 'افزودن دانش‌آموز',
-    description: 'می‌توانید برای دانش‌آموز حساب کاربری بسازید تا کارنامه خود را ببیند.',
-    submitLabel: 'افزودن',
+    title: 'افزودن دانش‌آموز جدید',
+    description: 'نام دانش‌آموز الزامی است. ساخت حساب کاربری اختیاری است؛ اگر نام کاربری و گذرواژه را وارد کنید، دانش‌آموز می‌تواند وارد شود و کارنامه‌اش را ببیند.',
+    submitLabel: 'افزودن دانش‌آموز',
     fields: [
       { name: 'name', label: 'نام و نام خانوادگی', type: 'text', required: true },
       { name: 'username', label: 'نام کاربری (اختیاری)', type: 'text', placeholder: 'مثلاً ali.rezaei' },
@@ -194,24 +177,45 @@ export async function recordWithReason(row, columns, leagueId, reload) {
   }
 }
 
-async function changeStudentPassword(row) {
+/**
+ * Creates or updates the student's login. Both fields are optional: when the
+ * student already has a login, a blank field is left unchanged; when there is
+ * no login yet, both are required by the API to create one.
+ */
+export async function manageStudentCredentials(row, reload = () => {}) {
   const values = await formDialog({
-    title: `تغییر گذرواژه — ${row.name}`,
-    description: 'گذرواژهٔ جدید را معلم تعیین می‌کند. گذرواژهٔ فارسی (مثلاً «رمزمن») هم پذیرفته می‌شود.',
-    submitLabel: 'ذخیره گذرواژه',
+    title: `حساب کاربری — ${row.name}`,
+    description: row.hasLogin
+      ? 'نام کاربری و گذرواژه را می‌توانید عوض کنید. هر فیلد را خالی بگذارید، همان مقدار قبلی می‌ماند.'
+      : 'این دانش‌آموز هنوز حساب کاربری ندارد. برای ساختن حساب، نام کاربری و گذرواژه را وارد کنید؛ این کار اختیاری است.',
+    submitLabel: row.hasLogin ? 'ذخیره تغییرات' : 'ساخت حساب کاربری',
     fields: [
-      { name: 'password', label: 'گذرواژه جدید', type: 'text', required: true, placeholder: 'حداقل ۶ نویسه' },
+      { name: 'username', label: 'نام کاربری', type: 'text', value: row.username ?? '', placeholder: 'مثلاً ali.rezaei' },
+      { name: 'password', label: 'گذرواژه', type: 'text', placeholder: row.hasLogin ? 'برای تغییر، گذرواژهٔ جدید' : 'حداقل ۶ نویسه' },
     ],
   });
   if (!values) return;
+  const username = values.username.trim();
   const password = values.password.trim();
-  if (password.length < 6) {
+  if (!username && !password) {
+    notify.error('نام کاربری یا گذرواژه را وارد کنید');
+    return;
+  }
+  if (username && username.length < 3) {
+    notify.error('نام کاربری باید حداقل ۳ نویسه باشد');
+    return;
+  }
+  if (password && password.length < 6) {
     notify.error('گذرواژه باید حداقل ۶ نویسه باشد');
     return;
   }
+  const body = {};
+  if (username) body.username = username;
+  if (password) body.password = password;
   try {
-    await api.post(`/students/${row.id}/password`, { password });
-    notify.ok('گذرواژه دانش‌آموز تغییر کرد');
+    await api.put(`/students/${row.id}/credentials`, body);
+    notify.ok(row.hasLogin ? 'نام کاربری/گذرواژه دانش‌آموز به‌روز شد' : 'حساب کاربری دانش‌آموز ساخته شد');
+    reload();
   } catch (error) {
     notify.error(errorMessage(error));
   }
@@ -271,9 +275,11 @@ export async function showProfile(row, { columns = [], leagueId = null, reload =
         button('افزودن قهرمانی', { kind: 'ghost', icon: '🏆', onClick: () => { modal.close(); addChampionship(row, reload); } }),
         button('حذف آخرین قهرمانی', { kind: 'ghost', icon: '🎗️', onClick: () => { modal.close(); removeChampionship(row, reload); } }),
         button('ثبت امتیاز با دلیل', { kind: 'ghost', icon: '📝', onClick: () => { modal.close(); recordWithReason(row, columns, leagueId, reload); } }),
-        student.hasLogin
-          ? button('تغییر گذرواژه', { kind: 'ghost', icon: '🔑', onClick: () => { modal.close(); changeStudentPassword(row); } })
-          : null,
+        button(student.hasLogin ? 'نام کاربری و گذرواژه' : 'ساخت حساب کاربری', {
+          kind: 'ghost',
+          icon: '🔑',
+          onClick: () => { modal.close(); manageStudentCredentials({ ...row, ...student }, reload); },
+        }),
         button('حذف دانش‌آموز', { kind: 'danger', icon: '✕', onClick: () => { modal.close(); deleteStudent(row, reload); } }),
       ]),
     ]);

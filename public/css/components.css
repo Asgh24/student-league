@@ -211,26 +211,18 @@ textarea:focus {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 0.8fr);
   gap: 6px;
   direction: rtl;
+  /* On desktop the three native selects need enough room for the year/month
+     labels plus their arrow; without this they collapse to a few pixels. */
+  min-width: 185px;
 }
 .jalali-date select {
   min-width: 0;
   padding: 8px 6px;
-  font-size: 0.86rem;
+  font-size: 0.9rem;
   text-align: center;
   text-align-last: center;
 }
 
-/* Inline “add student” row above the scores table */
-.quick-add {
-  display: flex;
-  flex: 1 1 240px;
-  gap: 8px;
-  align-items: center;
-}
-.quick-add input {
-  flex: 1 1 140px;
-  min-width: 0;
-}
 .checkbox {
   display: inline-flex;
   align-items: center;

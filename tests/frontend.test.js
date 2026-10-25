@@ -50,6 +50,7 @@ const { createScoresTable } = await import('../public/js/views/scoresTable.js');
 const { renderTeams } = await import('../public/js/views/teams.js');
 const { renderStudentDashboard } = await import('../public/js/views/student/dashboard.js');
 const { renderReportCard } = await import('../public/js/views/student/reportcard.js');
+const { renderStudentSchedule } = await import('../public/js/views/student/schedule.js');
 const { renderEvaluations } = await import('../public/js/views/evaluations.js');
 const { renderQa } = await import('../public/js/views/qa.js');
 const { renderSeating } = await import('../public/js/views/seating.js');
@@ -442,34 +443,112 @@ describe('inline add student', () => {
     return host;
   };
 
-  it('shows the add row even when the league has no students yet', () => {
+  function submitDialog() {
+    [...document.querySelectorAll('#modal-root button')]
+      .find((node) => node.textContent.trim() === 'افزودن دانش‌آموز')
+      .click();
+  }
+
+  it('offers one account-aware add button instead of the old inline row', () => {
     const host = emptyTable(vi.fn());
-    expect(host.querySelector('[aria-label="نام دانش‌آموز جدید"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="نام دانش‌آموز جدید"]')).toBeNull();
+    expect(host.textContent).toContain('افزودن دانش‌آموز جدید');
+    expect(host.textContent).not.toContain('افزودن با حساب کاربری');
     expect(host.textContent).toContain('هنوز دانش‌آموزی اضافه نشده');
   });
 
-  it('adds a student by name and clears the field', async () => {
+  it('adds a student with an optional login from the merged dialog', async () => {
     api.post.mockResolvedValue({ student: { id: 9, name: 'سارا تازه' } });
     const reload = vi.fn();
     const host = emptyTable(reload);
 
-    const input = host.querySelector('[aria-label="نام دانش‌آموز جدید"]');
-    input.value = '  سارا تازه  ';
-    input.nextElementSibling.click(); // the inline «افزودن» button
+    [...host.querySelectorAll('button')].find((node) => node.textContent.includes('افزودن دانش‌آموز جدید')).click();
+    await vi.waitFor(() => expect(document.querySelector('#modal-root #f-name')).not.toBeNull());
 
-    await vi.waitFor(() => expect(input.value).toBe(''));
-    expect(api.post).toHaveBeenCalledWith('/leagues/3/students', { name: 'سارا تازه' });
+    document.querySelector('#modal-root #f-name').value = '  سارا تازه  ';
+    document.querySelector('#modal-root #f-username').value = 'sara.taze';
+    document.querySelector('#modal-root #f-password').value = 'sara1234';
+    submitDialog();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/leagues/3/students', {
+      name: 'سارا تازه',
+      username: 'sara.taze',
+      password: 'sara1234',
+    }));
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  it('ignores an empty name', () => {
+  it('creates a student without a login when the credentials stay empty', async () => {
+    api.post.mockResolvedValue({ student: { id: 9, name: 'سارا تازه' } });
     const reload = vi.fn();
     const host = emptyTable(reload);
-    const input = host.querySelector('[aria-label="نام دانش‌آموز جدید"]');
-    input.value = '   ';
-    input.nextElementSibling.click();
-    expect(api.post).not.toHaveBeenCalled();
-    expect(reload).not.toHaveBeenCalled();
+
+    [...host.querySelectorAll('button')].find((node) => node.textContent.includes('افزودن دانش‌آموز جدید')).click();
+    await vi.waitFor(() => expect(document.querySelector('#modal-root #f-name')).not.toBeNull());
+
+    document.querySelector('#modal-root #f-name').value = 'سارا تازه';
+    submitDialog();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/leagues/3/students', { name: 'سارا تازه' }));
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('student credentials in the profile drawer', () => {
+  const profile = {
+    student: {
+      id: 5,
+      name: 'زهرا محمدی',
+      leagueId: 3,
+      hasLogin: true,
+      username: 'zahra',
+      total: 35,
+      rank: 2,
+      totalStudents: 20,
+      attended: 0,
+      recorded: 0,
+      title: { title: 'جنگجو', icon: '🛡️' },
+      team: null,
+      reportCard: [],
+      championships: [],
+      history: [],
+      attendance: [],
+    },
+  };
+
+  it('lets the teacher change both username and password from the profile', async () => {
+    api.get.mockResolvedValue(profile);
+    api.put.mockResolvedValue({ ok: true, student: { id: 5, hasLogin: true, username: 'zahra.new' } });
+    const reload = vi.fn();
+    const node = createScoresTable({
+      leagueId: 3,
+      columns: [],
+      students: [{ id: 5, name: 'زهرا محمدی', rank: 2, total: 35, scores: {}, attended: 0, recorded: 0, championships: 0, title: { title: 'جنگجو' } }],
+      reload,
+    });
+    const host = el('div');
+    mount(host, [node]);
+
+    host.querySelector('[aria-label="پرونده دانش‌آموز"]').click();
+    await vi.waitFor(() => expect(document.querySelector('#modal-root').textContent).toContain('پرونده زهرا محمدی'));
+
+    [...document.querySelectorAll('#modal-root button')]
+      .find((button) => button.textContent.includes('نام کاربری و گذرواژه'))
+      .click();
+    await vi.waitFor(() => expect(document.querySelector('#modal-root #f-username')).not.toBeNull());
+
+    expect(document.querySelector('#modal-root #f-username').value).toBe('zahra');
+    document.querySelector('#modal-root #f-username').value = 'zahra.new';
+    document.querySelector('#modal-root #f-password').value = 'new-password-1';
+    [...document.querySelectorAll('#modal-root button')]
+      .find((button) => button.textContent.trim() === 'ذخیره تغییرات')
+      .click();
+
+    await vi.waitFor(() => expect(api.put).toHaveBeenCalledWith('/students/5/credentials', {
+      username: 'zahra.new',
+      password: 'new-password-1',
+    }));
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -645,6 +724,49 @@ describe('student report card', () => {
       expect(api.get).toHaveBeenCalledWith('/student/report-card?columnId=2&from=2026-02-01&to=2026-02-28');
     });
   });
+
+  it('shows the monthly report button with a "coming soon" placeholder only', async () => {
+    api.get.mockResolvedValue(payload);
+    await renderReportCard();
+
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('کارنامه ماهانه');
+    const trigger = [...view.querySelectorAll('button')].find((node) => node.textContent.includes('مشاهده کارنامه ماهانه'));
+    expect(trigger).not.toBeUndefined();
+    trigger.click();
+
+    await vi.waitFor(() => expect(document.querySelector('#modal-root').textContent).toContain('به‌زودی فعال می‌شود'));
+    // Deliberately no monthly data request yet: the basis is still undecided.
+    expect(api.get).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('student weekly schedule', () => {
+  it('renders one row per weekday and one column per period', async () => {
+    api.get.mockResolvedValue({
+      days: serverJalali.JALALI_WEEKDAYS.map((label, index) => ({ index, label })),
+      periods: 2,
+      slots: [
+        { dayIndex: 0, period: 0, subject: 'ریاضی', note: 'کلاس ۱۰۱' },
+        { dayIndex: 1, period: 1, subject: 'فارسی', note: '' },
+      ],
+    });
+
+    await renderStudentSchedule();
+
+    const view = document.querySelector('#view');
+    const headers = [...view.querySelectorAll('table.grid-table thead th')].map((node) => node.textContent);
+    expect(headers).toEqual(['روز', 'زنگ ۱', 'زنگ ۲']);
+
+    const rows = [...view.querySelectorAll('table.grid-table tbody tr')];
+    expect(rows).toHaveLength(7);
+    expect(rows[0].querySelector('td').textContent).toBe('شنبه');
+    expect(rows[0].textContent).toContain('ریاضی');
+    expect(rows[0].textContent).toContain('کلاس ۱۰۱');
+    expect(rows[1].textContent).toContain('فارسی');
+    expect(view.textContent).toContain('برنامه هفتگی');
+    expect(view.querySelector('.tab.is-active').textContent).toContain('برنامه هفتگی');
+  });
 });
 
 describe('evaluation vocabulary parity between client and server', () => {
@@ -785,6 +907,32 @@ describe('course evaluations (teacher view)', () => {
       good: 40,
       fair: -25,
       needsWork: -50,
+    }));
+  });
+
+  it('hides the numeric maximum for a descriptive evaluation', async () => {
+    api.get.mockResolvedValue(listPayload);
+    api.post.mockResolvedValue({ evaluation: { ...evaluation, id: 10, kind: 'descriptive' } });
+    await renderEvaluations({ params: { id: '3' } });
+
+    const view = document.querySelector('#view');
+    const kind = view.querySelector('#ev-kind');
+    kind.value = 'descriptive';
+    kind.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    const maxField = view.querySelector('#ev-max').closest('.field');
+    expect(maxField.style.display).toBe('none');
+    expect(view.textContent).toContain('حداکثر نمره لازم نیست');
+
+    view.querySelector('#ev-subject').value = 'هدیه';
+    view.querySelector('#ev-title').value = 'ارزشیابی توصیفی';
+    view.querySelector('#ev-date').value = '2026-10-20';
+    [...view.querySelectorAll('button')].find((node) => node.textContent.includes('ثبت ارزشیابی')).click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalled());
+    expect(api.post).toHaveBeenCalledWith('/leagues/3/evaluations', expect.objectContaining({
+      kind: 'descriptive',
+      scaleMax: 20,
     }));
   });
 

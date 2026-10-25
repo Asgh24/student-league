@@ -41,15 +41,17 @@ export async function renderSchedule({ params }) {
     const table = el('table.grid-table');
     table.appendChild(el('thead', {}, [
       el('tr', {}, [
-        el('th', { text: 'زنگ' }),
-        ...days.map((day) => el('th', { text: day.label })),
+        el('th', { text: 'روز' }),
+        ...Array.from({ length: periods }, (_, period) => el('th', { text: `زنگ ${fa(period + 1)}` })),
       ]),
     ]));
 
+    // One row per weekday and one column per period: the whole week stays
+    // readable without a long horizontal scan across seven day columns.
     const tbody = el('tbody');
-    for (let period = 0; period < periods; period += 1) {
-      const row = el('tr', {}, [el('td', { text: fa(period + 1) })]);
-      for (const day of days) {
+    for (const day of days) {
+      const row = el('tr', {}, [el('td', { text: day.label, style: { fontWeight: '700', whiteSpace: 'nowrap' } })]);
+      for (let period = 0; period < periods; period += 1) {
         const current = slotMap.get(`${day.index}:${period}`) ?? { subject: '', note: '' };
         const subject = el('input', {
           type: 'text',
@@ -102,7 +104,7 @@ export async function renderSchedule({ params }) {
         ],
       }),
       card({ title: 'جدول هفتگی', icon: '📅' }, [
-        el('p.small.muted', { text: 'خانه‌های خالی ذخیره نمی‌شوند. برای حذف یک درس، متن آن را پاک کنید.' }),
+        el('p.small.muted', { text: 'هر ردیف یک روز هفته است و هر ستون یک زنگ. خانه‌های خالی ذخیره نمی‌شوند؛ برای حذف یک درس، متن آن را پاک کنید.' }),
         el('div.table-wrap', {}, [table]),
       ]),
     );

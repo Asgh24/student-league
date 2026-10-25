@@ -44,6 +44,10 @@ function formCard({ leagueId, payload, onCreated }) {
   });
   const kindInput = el('select', { id: 'ev-kind' }, (options.kinds ?? EVALUATION_KINDS).map((kind) => el('option', { value: kind.key, text: kind.label })));
   const maxInput = el('input', { id: 'ev-max', type: 'number', min: 1, max: 100, value: 20, 'aria-label': 'حداکثر نمره' });
+  const maxField = el('div.field', {}, [el('label', { for: 'ev-max', text: 'حداکثر نمره' }), maxInput]);
+  const kindHint = el('p.small.muted', {
+    text: 'در ارزشیابی توصیفی، به‌جای نمره، سطح (خیلی خوب، خوب، قابل قبول، نیاز به تلاش) ثبت می‌شود؛ حداکثر نمره لازم نیست.',
+  });
   const noteInput = el('textarea', { id: 'ev-note', placeholder: 'توضیح اختیاری برای دانش‌آموزان' });
   const linkHint = el('span.muted.small');
 
@@ -74,12 +78,22 @@ function formCard({ leagueId, payload, onCreated }) {
       : `🔗 نمره‌ها طبق «تنظیمات امتیازدهی» به ستون «${column.name}» لیگ اضافه می‌شوند.`;
   }
 
+  /** A descriptive evaluation uses levels, so the numeric maximum is irrelevant. */
+  function syncKind() {
+    const descriptive = kindInput.value === 'descriptive';
+    maxField.style.display = descriptive ? 'none' : '';
+    kindHint.style.display = descriptive ? '' : 'none';
+  }
+
   levelInput.addEventListener('change', syncGrades);
   subjectInput.addEventListener('input', syncHint);
+  kindInput.addEventListener('change', syncKind);
   syncGrades();
   syncHint();
+  syncKind();
 
   async function submit() {
+    const descriptive = kindInput.value === 'descriptive';
     const payloadBody = {
       subject: subjectInput.value.trim(),
       title: titleInput.value.trim(),
@@ -87,7 +101,7 @@ function formCard({ leagueId, payload, onCreated }) {
       grade: gradeInput.value,
       kind: kindInput.value,
       scaleMin: 0,
-      scaleMax: Number(maxInput.value) || 20,
+      scaleMax: descriptive ? 20 : (Number(maxInput.value) || 20),
       heldOn: dateInput.value,
       note: noteInput.value.trim(),
     };
@@ -106,15 +120,16 @@ function formCard({ leagueId, payload, onCreated }) {
 
   return card({ title: 'ثبت ارزشیابی جدید', icon: '➕' }, [
     dataLists,
-    el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' } }, [
+    el('div.grid', { style: { gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' } }, [
       el('div.field', {}, [el('label', { for: 'ev-level', text: 'مقطع' }), levelInput]),
       el('div.field', {}, [el('label', { for: 'ev-grade', text: 'پایه' }), gradeInput]),
       el('div.field', {}, [el('label', { for: 'ev-subject', text: 'نام درس' }), subjectInput]),
       el('div.field', {}, [el('label', { for: 'ev-title', text: 'عنوان امتحان / ارزشیابی' }), titleInput]),
       el('div.field', {}, [el('label', { for: 'ev-date', text: 'تاریخ (شمسی)' }), dateInput]),
       el('div.field', {}, [el('label', { for: 'ev-kind', text: 'نوع' }), kindInput]),
-      el('div.field', {}, [el('label', { for: 'ev-max', text: 'حداکثر نمره' }), maxInput]),
+      maxField,
     ]),
+    kindHint,
     el('div.field', {}, [el('label', { for: 'ev-note', text: 'توضیح (اختیاری)' }), noteInput]),
     el('p', {}, [linkHint]),
     el('div.row', {}, [button('ثبت ارزشیابی', { kind: 'soft', icon: '💾', onClick: submit })]),
@@ -248,30 +263,39 @@ function listRows(payload, onGrade, reload) {
 }
 
 async function editEvaluation(item, reload) {
+  const descriptive = item.kind === 'descriptive';
+  const fields = [
+    { name: 'subject', label: 'نام درس', type: 'text', value: item.subject, required: true },
+    { name: 'title', label: 'عنوان', type: 'text', value: item.title, required: true },
+    { name: 'level', label: 'مقطع', type: 'select', value: item.level, options: [{ value: '', label: 'انتخاب کنید' }, ...SCHOOL_LEVELS.map((level) => ({ value: level, label: level }))] },
+    { name: 'grade', label: 'پایه', type: 'select', value: item.grade, options: [{ value: '', label: 'انتخاب کنید' }, ...GRADES.map((grade) => ({ value: grade, label: grade }))] },
+    { name: 'heldOn', label: 'تاریخ (شمسی)', type: 'jalali-date', value: item.heldOn, required: true, persianDigits: state.persianDigits },
+  ];
+  // A descriptive evaluation has no numeric scale, so showing a maximum would
+  // be misleading. The kind itself is not editable here.
+  if (!descriptive) {
+    fields.push({ name: 'scaleMax', label: 'حداکثر نمره', type: 'number', value: item.scaleMax, min: 1, max: 100 });
+  }
+  fields.push({ name: 'note', label: 'توضیح', type: 'textarea', value: item.note ?? '' });
+
   const values = await formDialog({
     title: 'ویرایش ارزشیابی',
+    description: descriptive ? 'این ارزشیابی توصیفی است و با سطح (خیلی خوب، خوب، …) ثبت می‌شود.' : '',
     submitLabel: 'ذخیره',
-    fields: [
-      { name: 'subject', label: 'نام درس', type: 'text', value: item.subject, required: true },
-      { name: 'title', label: 'عنوان', type: 'text', value: item.title, required: true },
-      { name: 'level', label: 'مقطع', type: 'select', value: item.level, options: [{ value: '', label: 'انتخاب کنید' }, ...SCHOOL_LEVELS.map((level) => ({ value: level, label: level }))] },
-      { name: 'grade', label: 'پایه', type: 'select', value: item.grade, options: [{ value: '', label: 'انتخاب کنید' }, ...GRADES.map((grade) => ({ value: grade, label: grade }))] },
-      { name: 'heldOn', label: 'تاریخ (شمسی)', type: 'jalali-date', value: item.heldOn, required: true, persianDigits: state.persianDigits },
-      { name: 'scaleMax', label: 'حداکثر نمره', type: 'number', value: item.scaleMax, min: 1, max: 100 },
-      { name: 'note', label: 'توضیح', type: 'textarea', value: item.note ?? '' },
-    ],
+    fields,
   });
   if (!values) return;
   try {
-    await api.patch(`/leagues/${item.leagueId}/evaluations/${item.id}`, {
+    const body = {
       subject: values.subject.trim(),
       title: values.title.trim(),
       level: values.level,
       grade: values.grade,
       heldOn: values.heldOn,
-      scaleMax: Number(values.scaleMax) || item.scaleMax,
       note: values.note.trim(),
-    });
+    };
+    if (!descriptive) body.scaleMax = Number(values.scaleMax) || item.scaleMax;
+    await api.patch(`/leagues/${item.leagueId}/evaluations/${item.id}`, body);
     notify.ok('ارزشیابی ذخیره شد');
     reload();
   } catch (error) {

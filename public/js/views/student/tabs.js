@@ -7,6 +7,7 @@ export const STUDENT_TABS = [
   ['student/report-card', '📄', 'کارنامه'],
   ['student/evaluations', '📝', 'ارزشیابی'],
   ['student/attendance', '🗓️', 'حضور و غیاب'],
+  ['student/schedule', '📅', 'برنامه هفتگی'],
   ['student/team', '🛡️', 'تیم من'],
   ['student/history', '📜', 'تاریخچه'],
   ['student/ranking', '🏅', 'رده‌بندی'],

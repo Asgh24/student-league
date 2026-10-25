@@ -38,7 +38,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 
 | Tool | What it does |
 | --- | --- |
-| لیگ انفرادی | Students, dynamic score columns, staged per-row editing, totals, ranks, championship medals, per-change history. The table pins the rank/name (right) and total/commit (left) columns so the score grid can be filled without hunting for the ✓ button; the remaining per-student actions live in the profile dialog |
+| لیگ انفرادی | Students, dynamic score columns, staged per-row editing, totals, ranks, championship medals, per-change history. One «افزودن دانش‌آموز جدید» dialog creates a student and optionally their login (username/password). The table pins the rank/name (right) and total/commit (left) columns so the score grid can be filled without hunting for the ✓ button; the remaining per-student actions, including changing a student's username or password, live in the profile dialog |
 | لیگ تیمی | Teams, standings, manual adjustments, "no team" assignment panel, optional member-average scoring |
 | حضور و غیاب | Daily present/absent/late sheet, "mark all present", Persian date picker, per-student ratios, history |
 | قرعه‌کشی | Cryptographic random picker with "exclude previous", animated draw and history |
@@ -49,7 +49,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | سوال و پاسخ | Teacher multiple-choice questions (2–10 options + correct answer), legacy text questions, student answers and manual point awards |
 | تکالیف | Homework with due dates and per-student done/not-done |
 | ارزشیابی دروس | Course evaluations: مقطع + پایه, exam title, numeric marks (۰–۲۰) or descriptive levels, per-student mark sheet with quick-fill, and an optional «تنظیمات امتیازدهی» mapping that turns marks into league points |
-| برنامه هفتگی | Saturday→Friday weekly schedule grid |
+| برنامه هفتگی | Saturday→Friday weekly schedule with one row per day and one column per period; readable by the owning teacher (editable) and every student of the class (read-only) |
 | ارسال فایل | Uploaded files shared with the class, downloaded safely. Every teacher has one **70 MB** pool across all leagues; a new upload is rejected with a clear Persian message when it would exceed the pool, and deleting old files frees the space immediately |
 
 **Platform area** – multi-teacher SaaS features built into the same process:
@@ -65,10 +65,13 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | دستیار هوش مصنوعی | In the Q&A page, drafts multiple-choice quizzes/questionnaires through Groq (`openai/gpt-oss-20b`), shows a reviewable preview and bulk-saves only the selected questions; supports a server-wide default key plus an encrypted, write-only personal teacher key |
 | پرداخت‌ها | Zarinpal v4 request/verify (Rial conversion, sandbox support) and a local `mock` gateway for development before a merchant ID exists |
 
-**Student area** – tabs: میزکار, کارنامه, ارزشیابی, حضور و غیاب, تیم من, تاریخچه, رده‌بندی, لایک, سوال و پاسخ, پیام‌ها, تنظیمات.
+**Student area** – tabs: میزکار, کارنامه, ارزشیابی, حضور و غیاب, برنامه هفتگی, تیم من, تاریخچه, رده‌بندی, لایک, سوال و پاسخ, پیام‌ها, تنظیمات.
 The کارنامه tab carries a profile band, subject + date-range filters, one line per
 recorded score session (subject, teacher topic, date, points, derived quality) and
-the per-subject totals table + chart.
+the per-subject totals table + chart. It also shows the «کارنامه ماهانه» button; the
+monthly report itself is intentionally a placeholder until its basis is decided.
+The برنامه هفتگی tab renders the class schedule read-only with one row per weekday
+and one column per period, so it stays readable on a phone.
 The dashboard greets the student, shows points / rank / championships, and draws a
 points-over-time Chart.js line chart built from the append-only score history using
 Jalali date labels.
@@ -459,10 +462,11 @@ Pagination: list endpoints accept `?page=1&limit=50` and answer
 | --- | --- | --- | --- |
 | GET | `/leagues/:id/students` | `?search=` | `{ items, total }` |
 | POST | `/leagues/:id/students` | `{ name, username?, password? }` | `201 { student }` |
-| GET | `/students/:id` | — | `{ student{ ..., reportCard, championships, history, attendance } }` |
+| GET | `/students/:id` | — | `{ student{ ..., hasLogin, username, reportCard, championships, history, attendance } }` |
 | PATCH | `/students/:id` | `{ name }` | `{ ok, student }` |
 | DELETE | `/students/:id` | — | `{ ok: true }` |
-| POST | `/students/:id/password` | `{ password }` | `{ ok: true }` |
+| PUT | `/students/:id/credentials` | `{ username?, password? }` — both required when the student has no login yet | `{ ok, student{ id, hasLogin, username } }` (`201` when the login is created) |
+| POST | `/students/:id/password` | `{ password }` | `{ ok: true }` — kept for compatibility; the credentials endpoint also changes the username |
 | POST | `/students/:id/championships` | `{ title, rank }` | `201 { championship, championships }` |
 | DELETE | `/students/:id/championships` | — (removes the most recent one) | `{ removed, championships }` |
 | GET | `/students/:id/ranking` | — | `{ items, total }` |
@@ -624,7 +628,7 @@ mapping described above (and only when it is enabled).
 | GET | `/student/evaluations` | — | `{ items[{ id, subject, title, level, grade, kind, scaleMin, scaleMax, heldOn, note, score, label, average, topScore, rank, gradedCount, studentCount, band{ key, label, icon } }], stats{ count, graded, average, bestSubject, subjects[{ subject, average, count }] } }` — only the caller's own marks plus class aggregates (no other student is ever identified) |
 | GET | `/student/questions` | — | `{ items (with the caller's answers) }` — `options[]` is present, `correctIndex` is **never** sent to students |
 | POST | `/student/questions/:id/answers` | `{ optionIndex }` for multiple-choice, `{ body }` for legacy text | `201 { ok: true }` |
-| GET | `/student/schedule` | — | `{ slots, days[{ index, label }] }` |
+| GET | `/student/schedule` | — | `{ slots, periods, days[{ index, label }] }` |
 | GET | `/student/files` | — | `{ items }` |
 | PATCH | `/student/settings` | `{ persianDigits }` | `{ ok, persianDigits }` |
 | GET | `/student/timeline` | `?page=&limit=` | `{ items, total, series, page, limit }` |
@@ -843,7 +847,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 
 ```
  Test Files  39 passed (39)
-      Tests  417 passed (417)
+      Tests  427 passed (427)
 ```
 
 | Suite | Tests | Covers |
@@ -861,7 +865,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `raffle.test.js` | 11 | Randomness, exclude-previous, pool cycling, history, reset |
 | `representative.test.js` | 8 | Fair one-pick-per-student cycles, progress, cycle completion/refusal, forced cycle advance, undo-last, full reset, empty league, teacher isolation |
 | `tools.test.js` | 19 | Wheel segments, shuffle, timer, live board, homework, multiple-choice + legacy text Q&A, presentation quiz, schedule, league lifecycle |
-| `student.test.js` | 20 | Dashboard series/medals, report card totals + session lines with derived quality and subject/date filters, grade setting, own attendance/history, likes quota, self-like rejection, settings |
+| `student.test.js` | 26 | Dashboard series/medals, report card totals + session lines with derived quality and subject/date filters, grade setting, own attendance/history, likes quota, self-like rejection, settings, teacher-managed username/password (update, optional first-time login, username conflicts, isolation) |
 | `evaluations.test.js` | 23 | Evaluation CRUD + column reference, numeric/descriptive marks, scale and label validation, clearing a mark, subject/date filters, no transfer into league points, foreign-teacher and student isolation, own-marks student payload |
 | `reports.test.js` | 10 | Daily parent report grouping, message trimming, authorization and SMS queue/delivery paths; free-text custom messages store the exact teacher text as `kind = 'custom'`, skip students without a parent number, and reject blank messages |
 | `contacts.test.js` | 5 | Parent/student phone normalization, validation, clearing and teacher isolation |
@@ -873,8 +877,8 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `smsAdmin.test.js` | 4 | Admin SMS config, queued test messages without credentials, normalized bulk send, credit, invalid numbers and outbox retry |
 | `smsSettings.test.js` | 6 | Per-teacher encrypted sms.ir key/line, write-only API, teacher isolation, teacher credential precedence, incomplete-settings fallback block, validation and sample message |
 | `ai.test.js` | 9 | Per-teacher encrypted Groq key and server fallback, write-only settings, mocked Groq call/shape, invalid or failed responses, foreign-league isolation, preview-only generation, reviewed bulk save |
-| `aiAssistantFrontend.test.js` | 3 | AI modal key save/clear, disabled generation without a key, preview selection, bulk-save hand-off and reload, topic validation |
-| `frontend.test.js` | 61 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (17 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill, student evaluation cards, MCQ option editor, student MCQ/text answering, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, custom parent-message box with confirmation and send, modal focus/footer lifecycle |
+| `aiAssistantFrontend.test.js` | 4 | AI modal key save/clear, disabled generation without a key, preview selection, bulk-save hand-off and reload, topic validation |
+| `frontend.test.js` | 65 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (17 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters + monthly placeholder button, weekly schedule rows/columns, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill and descriptive max hiding, student evaluation cards, MCQ option editor, student MCQ/text answering, merged add-student dialog, student credential dialog, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, custom parent-message box with confirmation and send, modal focus/footer lifecycle |
 | `frontendPlatform.test.js` | 10 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, expired-user deletion section, teacher file storage card, shared inbox thread/composer, admin settings label |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 2 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not) |
@@ -1170,8 +1174,9 @@ The admin account lives in a separate table and opens `#/admin`; set
 
 Only the first demo student gets a login (the seeded class has 22 students; the
 other 21 exist as roster entries without credentials). Teachers create logins for
-the rest from **لیگ انفرادی → add student** and can reset a password from a
-student's row at any time.
+the rest from **لیگ انفرادی → افزودن دانش‌آموز جدید** (credentials are optional at
+creation) and can change either the username or the password later from the
+student's profile dialog.
 
 In **production** the demo seed never runs. An empty production database gets its
 first account from `BOOTSTRAP_TEACHER_USER` / `BOOTSTRAP_TEACHER_PASS` on boot (see
@@ -1183,8 +1188,9 @@ npm run bootstrap -- --force      # reset that account's password (forgotten log
 ```
 
 > **Change these before using the app with a real class.** Sign in as the teacher,
-> open **تنظیمات** (Settings) and change the password; student passwords can be
-> reset from a student's row in the individual league table. In production the
+> open **تنظیمات** (Settings) and change the password; student usernames and
+> passwords can be changed from a student's profile in the individual league table.
+> In production the
 > demo seed never runs automatically (`SEED_ENABLED=false` is the safest setting),
 > and `BOOTSTRAP_TEACHER_PASS` (or `SEED_TEACHER_USER` / `SEED_TEACHER_PASS` for a
 > trial) is how the first account is created.
@@ -1217,7 +1223,7 @@ npm run bootstrap -- --force      # reset that account's password (forgotten log
   backup repository over time; Git also keeps every uploaded version in history, so prune
   with `BACKUP_GITHUB_KEEP` rather than expecting space to be freed. Keep `SECRETS_KEY`
   unchanged or restored provider keys cannot be decrypted.
-* **No email.** Password recovery is manual (teacher resets student passwords).
+* **No email.** Password recovery is manual (teacher changes student usernames and passwords).
 * **AI generation needs a Groq key.** The Q&A assistant works only after
   `GROQ_API_KEY` or a teacher's personal key is saved. It is non-streaming,
   limited to 1–10 questions per request, and validates the model's JSON before

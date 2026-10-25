@@ -16,7 +16,6 @@ import {
   askCustomDelta,
   deleteColumn,
   editColumn,
-  quickAddStudent,
   showProfile,
 } from './scoresActions.js';
 
@@ -199,31 +198,9 @@ export function createScoresTable({ leagueId, columns, students, reload }) {
   ]));
   table.appendChild(tbody);
 
-  const newStudentInput = el('input', {
-    type: 'text',
-    placeholder: 'نام دانش‌آموز جدید…',
-    'aria-label': 'نام دانش‌آموز جدید',
-    autocomplete: 'off',
-  });
-
-  async function submitNewStudent() {
-    const added = await quickAddStudent(leagueId, newStudentInput.value, reload);
-    if (added) newStudentInput.value = '';
-  }
-
-  newStudentInput.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-    void submitNewStudent();
-  });
-
   const toolbar = el('div.row', { style: { marginBottom: '10px' } }, [
     el('div', { style: { flex: '1 1 200px' } }, [searchInput]),
-    el('div.quick-add', {}, [
-      newStudentInput,
-      button('افزودن', { kind: 'soft', icon: '➕', onClick: () => void submitNewStudent() }),
-    ]),
-    button('افزودن با حساب کاربری', { kind: 'ghost', icon: '👤', onClick: () => addStudent(leagueId, reload) }),
+    button('افزودن دانش‌آموز جدید', { kind: 'soft', icon: '➕', onClick: () => addStudent(leagueId, reload) }),
     button('افزودن ستون', { kind: 'soft', icon: '📋', onClick: () => addColumn(leagueId, reload) }),
   ]);
 

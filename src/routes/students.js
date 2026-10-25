@@ -3,7 +3,7 @@ import { conflict } from '../lib/errors.js';
 import { asyncHandler, isoNow } from '../lib/http.js';
 import { matchesFa } from '../lib/normalize.js';
 import { schemas, validate } from '../lib/validate.js';
-import { createUser, findByUsername, updatePassword } from '../repositories/users.js';
+import { createUser, findByUsername, findById, updatePassword, updateUsername } from '../repositories/users.js';
 import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
 import { ownedStudent } from '../middleware/ownership.js';
 import {
@@ -73,6 +73,7 @@ export function createStudentsRouter({ db }) {
     const ratios = attendanceRatios(db, league.id).get(student.id) ?? { attended: 0, recorded: 0 };
     const team = studentTeam(db, league.id, student.id);
     const attendance = studentAttendance(db, student.id, { limit: 14, offset: 0 });
+    const account = student.user_id ? findById(db, student.user_id) : null;
 
     res.json({
       student: {
@@ -80,6 +81,7 @@ export function createStudentsRouter({ db }) {
         name: student.name,
         leagueId: league.id,
         hasLogin: student.user_id !== null,
+        username: account?.username ?? '',
         total,
         rank,
         totalStudents,
@@ -116,6 +118,44 @@ export function createStudentsRouter({ db }) {
     if (!req.student.user_id) throw conflict('NO_LOGIN', 'برای این دانش‌آموز حساب کاربری ساخته نشده است');
     updatePassword(db, req.student.user_id, req.body.password);
     res.json({ ok: true });
+  });
+
+  /**
+   * Updates the student's login, or creates it when the student has none yet.
+   * A field left out keeps its current value; creating a login needs both.
+   */
+  router.put('/:id/credentials', ...owned, validate({ body: schemas.studentCredentials }), (req, res) => {
+    const { username, password } = req.body;
+    const account = req.student.user_id ? findById(db, req.student.user_id) : null;
+
+    if (!account) {
+      if (!username || !password) {
+        throw conflict('LOGIN_FIELDS_REQUIRED', 'برای ساخت حساب کاربری، نام کاربری و گذرواژه هر دو لازم است');
+      }
+      if (findByUsername(db, username)) throw conflict('USERNAME_TAKEN', 'این نام کاربری قبلاً استفاده شده است');
+      const create = db.transaction(() => {
+        const user = createUser(db, { username, password, role: 'student', displayName: req.student.name });
+        db.prepare('UPDATE students SET user_id = ? WHERE id = ?').run(user.id, req.student.id);
+        return user;
+      });
+      const user = create();
+      res.status(201).json({ ok: true, student: { id: req.student.id, hasLogin: true, username: user.username } });
+      return;
+    }
+
+    if (username && username.toLocaleLowerCase() !== account.username.toLocaleLowerCase()) {
+      const taken = findByUsername(db, username);
+      if (taken && taken.id !== account.id) throw conflict('USERNAME_TAKEN', 'این نام کاربری قبلاً استفاده شده است');
+    }
+    const run = db.transaction(() => {
+      if (username && username !== account.username) updateUsername(db, account.id, username);
+      if (password) updatePassword(db, account.id, password);
+    });
+    run();
+    res.json({
+      ok: true,
+      student: { id: req.student.id, hasLogin: true, username: username || account.username },
+    });
   });
 
   router.post('/:id/championships', ...owned, validate({ body: schemas.championshipCreate }), (req, res) => {

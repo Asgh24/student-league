@@ -10,8 +10,8 @@ import { errorMessage } from '../../format.js';
 import { renderBars } from '../../charts.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../../shell.js';
 import { state } from '../../store.js';
-import { emptyState } from '../../ui.js';
-import { card, fa, faDate, grid, loadingNode, pageHead, statCard } from '../common.js';
+import { emptyState, openModal } from '../../ui.js';
+import { button, card, fa, faDate, grid, loadingNode, pageHead, statCard } from '../common.js';
 import { reportFilters, sessionCard } from './reportSessions.js';
 import { studentTabs } from './tabs.js';
 
@@ -144,6 +144,20 @@ export async function renderReportCard() {
         hasItems
           ? el('div.chart-box', {}, [canvas])
           : emptyState({ icon: '📊', title: 'داده‌ای برای نمودار نیست' }),
+      ]),
+      card({ title: 'کارنامه ماهانه', icon: '📆' }, [
+        el('p.small.muted', { text: 'گزارش ماهانهٔ امتیازها و ارزشیابی‌ها در حال آماده‌سازی است.' }),
+        button('مشاهده کارنامه ماهانه', {
+          kind: 'soft',
+          icon: '📆',
+          onClick: () => openModal({
+            title: 'کارنامه ماهانه',
+            body: el('div', {}, [
+              el('p', { text: 'این بخش به‌زودی فعال می‌شود.' }),
+              el('p.small.muted', { text: 'پس از مشخص شدن مبنای گزارش، کارنامهٔ ماهانه در همین صفحه نمایش داده می‌شود.' }),
+            ]),
+          }),
+        }),
       ]),
     );
 

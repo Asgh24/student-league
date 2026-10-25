@@ -50,6 +50,7 @@ import { renderStudentLikes } from './views/student/likes.js';
 import { renderStudentQuestions } from './views/student/questions.js';
 import { renderStudentRanking } from './views/student/ranking.js';
 import { renderReportCard } from './views/student/reportcard.js';
+import { renderStudentSchedule } from './views/student/schedule.js';
 import { renderStudentTeam } from './views/student/team.js';
 
 import { renderAdminDashboard } from './views/admin/dashboard.js';
@@ -139,6 +140,7 @@ function studentNav() {
     ['student/report-card', '📄', 'کارنامه'],
     ['student/evaluations', '📝', 'ارزشیابی'],
     ['student/attendance', '🗓️', 'حضور و غیاب'],
+    ['student/schedule', '📅', 'برنامه هفتگی'],
     ['student/team', '🛡️', 'تیم من'],
     ['student/history', '📜', 'تاریخچه'],
     ['student/ranking', '🏅', 'رده‌بندی'],
@@ -236,6 +238,7 @@ const routes = [
   { path: 'student/report-card', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderReportCard(ctx) },
   { path: 'student/evaluations', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentEvaluations(ctx) },
   { path: 'student/attendance', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentAttendance(ctx) },
+  { path: 'student/schedule', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentSchedule(ctx) },
   { path: 'student/team', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentTeam(ctx) },
   { path: 'student/history', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentHistory(ctx) },
   { path: 'student/ranking', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentRanking(ctx) },

@@ -329,6 +329,12 @@ export const schemas = {
     password: z.string().min(6, 'گذرواژه حداقل ۶ نویسه').max(200),
   }),
 
+  /** Update (or first-time create) of a student login; both parts optional. */
+  studentCredentials: z.object({
+    username: z.preprocess(blankToUndefined, z.string().trim().min(3, 'نام کاربری حداقل ۳ نویسه').max(64).optional()),
+    password: z.preprocess(blankToUndefined, z.string().min(6, 'گذرواژه حداقل ۶ نویسه').max(200).optional()),
+  }).refine((value) => value.username || value.password, { message: 'نام کاربری یا گذرواژه را وارد کنید' }),
+
   columnCreate: z.object({
     name: z.string().trim().min(1, 'نام ستون الزامی است').max(40),
     step: z.coerce.number().int().min(1).max(1000).default(25),

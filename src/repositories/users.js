@@ -110,6 +110,10 @@ export function updatePassword(db, userId, newPassword) {
   db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(newPassword), userId);
 }
 
+export function updateUsername(db, userId, username) {
+  db.prepare('UPDATE users SET username = ? WHERE id = ?').run(String(username).trim(), userId);
+}
+
 export function setPersianDigits(db, userId, enabled) {
   db.prepare('UPDATE users SET persian_digits = ? WHERE id = ?').run(enabled ? 1 : 0, userId);
 }

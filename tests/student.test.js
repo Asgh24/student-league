@@ -292,3 +292,71 @@ describe('student portal', () => {
     expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM championships').get().n).toBe(0);
   });
 });
+
+describe('teacher-managed student credentials', () => {
+  it('exposes the username in the student profile', async () => {
+    const res = await teacher.get(`/api/v1/students/${fixture.studentsA[0].id}`);
+    expect(res.status).toBe(200);
+    expect(res.body.student.hasLogin).toBe(true);
+    expect(res.body.student.username).toBe('student-a');
+  });
+
+  it('updates both the username and the password', async () => {
+    const id = fixture.studentsA[0].id;
+    const res = await teacher.put(`/api/v1/students/${id}/credentials`, {
+      username: 'arash.new',
+      password: 'new-password-1',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.student).toMatchObject({ id, hasLogin: true, username: 'arash.new' });
+
+    expect((await createClient(ctx.db).login('student-a', 'student-a1')).status).toBe(401);
+    const fresh = createClient(ctx.db);
+    expect((await fresh.login('arash.new', 'new-password-1')).status).toBe(200);
+  });
+
+  it('keeps the current password when only the username changes', async () => {
+    const id = fixture.studentsA[0].id;
+    const res = await teacher.put(`/api/v1/students/${id}/credentials`, { username: 'arash.renamed' });
+    expect(res.status).toBe(200);
+
+    expect((await createClient(ctx.db).login('student-a', 'student-a1')).status).toBe(401);
+    expect((await createClient(ctx.db).login('arash.renamed', 'student-a1')).status).toBe(200);
+  });
+
+  it('creates a login for a student who has none', async () => {
+    const id = fixture.studentsA[1].id;
+    const missing = await teacher.put(`/api/v1/students/${id}/credentials`, { username: 'bahar.new' });
+    expect(missing.status).toBe(409);
+    expect(missing.body.error.code).toBe('LOGIN_FIELDS_REQUIRED');
+
+    const created = await teacher.put(`/api/v1/students/${id}/credentials`, {
+      username: 'bahar.new',
+      password: 'bahar-pass-1',
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.student).toMatchObject({ hasLogin: true, username: 'bahar.new' });
+
+    const fresh = createClient(ctx.db);
+    expect((await fresh.login('bahar.new', 'bahar-pass-1')).status).toBe(200);
+  });
+
+  it('rejects a username that belongs to another account and an empty payload', async () => {
+    const id = fixture.studentsA[0].id;
+    const taken = await teacher.put(`/api/v1/students/${id}/credentials`, { username: 'student-b' });
+    expect(taken.status).toBe(409);
+    expect(taken.body.error.code).toBe('USERNAME_TAKEN');
+
+    const empty = await teacher.put(`/api/v1/students/${id}/credentials`, {});
+    expect(empty.status).toBe(400);
+  });
+
+  it('does not allow another teacher to change the credentials', async () => {
+    const other = createClient(ctx.db);
+    await other.login('teacher-b', 'password-b1');
+    const res = await other.put(`/api/v1/students/${fixture.studentsA[0].id}/credentials`, {
+      password: 'stolen-password',
+    });
+    expect(res.status).toBe(403);
+  });
+});
