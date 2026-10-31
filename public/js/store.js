@@ -53,6 +53,15 @@ export function setUser(user) {
   if (user?.role !== 'admin') state.adminPendingPayments = 0;
   state.persianDigits = user ? user.persianDigits !== false : true;
   if (user?.role !== 'teacher' && user?.role !== 'student') state.leagueId = null;
+  // An assistant only ever sees the one league assigned by the owner.
+  if (user?.assistant?.leagueId) {
+    state.leagueId = Number(user.assistant.leagueId);
+    try {
+      localStorage.setItem(STORAGE_KEY, String(state.leagueId));
+    } catch {
+      /* storage may be unavailable in private mode */
+    }
+  }
   emit();
 }
 
@@ -85,6 +94,19 @@ export function storedLeagueId() {
 
 export function isTeacher() {
   return state.user?.role === 'teacher';
+}
+
+/** A student-facing assistant account with a scoped teacher-like panel. */
+export function isAssistant() {
+  return Boolean(state.user?.assistant);
+}
+
+/** Section permission check; the owner teacher always has every section. */
+export function can(permission) {
+  if (!state.user) return true;
+  if (!isTeacher()) return false;
+  if (!isAssistant()) return true;
+  return Array.isArray(state.user.assistant.permissions) && state.user.assistant.permissions.includes(permission);
 }
 
 export function isStudent() {

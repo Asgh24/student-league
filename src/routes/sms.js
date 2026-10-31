@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { schemas, validate } from '../lib/validate.js';
-import { requireTeacher } from '../middleware/auth.js';
+import { requireTeacher, requireOwnerTeacher } from '../middleware/auth.js';
 import { saveTeacherSmsSettings, smsConfigFor } from '../services/sms.js';
 
 /**
@@ -9,7 +9,7 @@ import { saveTeacherSmsSettings, smsConfigFor } from '../services/sms.js';
  */
 export function createSmsSettingsRouter({ db }) {
   const router = Router();
-  router.use(requireTeacher);
+  router.use(requireTeacher, requireOwnerTeacher);
 
   router.get('/settings', (req, res) => {
     res.json({ config: smsConfigFor(db, { teacherId: req.user.id }) });

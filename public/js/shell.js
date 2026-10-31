@@ -56,7 +56,13 @@ export function setUserPill() {
     pill.hidden = true;
     return;
   }
-  const role = state.user.role === 'admin' ? 'مدیر' : state.user.role === 'teacher' ? 'معلم' : 'دانش‌آموز';
+  const role = state.user.role === 'admin'
+    ? 'مدیر'
+    : state.user.assistant
+      ? 'همیار معلم'
+      : state.user.role === 'teacher'
+        ? 'معلم'
+        : 'دانش‌آموز';
   pill.hidden = false;
   pill.textContent = `${state.user.displayName} · ${role}`;
 }

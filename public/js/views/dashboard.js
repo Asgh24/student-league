@@ -4,28 +4,28 @@ import { api } from '../api.js';
 import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
-import { setLeagueId, state } from '../store.js';
+import { can, isAssistant, setLeagueId, state } from '../store.js';
 import { confirmDialog, emptyState, formDialog, notify, openModal } from '../ui.js';
 import { button, card, fa, faDate, grid, loadingNode, pageHead, statCard, tile } from './common.js';
 
 const TOOLS = [
-  { suffix: '', icon: '🏆', label: 'لیگ انفرادی' },
-  { suffix: 'teams', icon: '🛡️', label: 'لیگ تیمی' },
-  { suffix: 'attendance', icon: '🗓️', label: 'حضور و غیاب' },
-  { suffix: 'evaluations', icon: '📝', label: 'ارزشیابی دروس' },
-  { suffix: 'raffle', icon: '🎲', label: 'قرعه‌کشی' },
-  { suffix: 'representative', icon: '👑', label: 'نماینده کلاس' },
-  { suffix: 'live', icon: '📺', label: 'تابلوی زنده' },
-  { suffix: 'timer', icon: '⏱️', label: 'تایمر و ابزار' },
-  { suffix: 'wheel', icon: '🎡', label: 'گردونه شانس' },
-  { suffix: 'qa', icon: '❓', label: 'سوال و پاسخ' },
-  { suffix: 'homework', icon: '📚', label: 'تکالیف' },
-  { suffix: 'schedule', icon: '🗂️', label: 'برنامه هفتگی' },
-  { suffix: 'files', icon: '📎', label: 'ارسال فایل' },
-  { suffix: 'seating', icon: '🪑', label: 'جای‌گیری' },
-  { suffix: 'contacts', icon: '📱', label: 'شماره‌ها' },
-  { suffix: 'reports', icon: '📨', label: 'گزارش روزانه' },
-  { href: 'fun', icon: '🎮', label: 'سرگرمی' },
+  { suffix: '', icon: '🏆', label: 'لیگ انفرادی', perm: 'scores' },
+  { suffix: 'teams', icon: '🛡️', label: 'لیگ تیمی', perm: 'teams' },
+  { suffix: 'attendance', icon: '🗓️', label: 'حضور و غیاب', perm: 'attendance' },
+  { suffix: 'evaluations', icon: '📝', label: 'ارزشیابی دروس', perm: 'evaluations' },
+  { suffix: 'raffle', icon: '🎲', label: 'قرعه‌کشی', perm: 'raffle' },
+  { suffix: 'representative', icon: '👑', label: 'نماینده کلاس', perm: 'representative' },
+  { suffix: 'live', icon: '📺', label: 'تابلوی زنده', perm: 'live' },
+  { suffix: 'timer', icon: '⏱️', label: 'تایمر و ابزار', perm: 'timer' },
+  { suffix: 'wheel', icon: '🎡', label: 'گردونه شانس', perm: 'wheel' },
+  { suffix: 'qa', icon: '❓', label: 'سوال و پاسخ', perm: 'qa' },
+  { suffix: 'homework', icon: '📚', label: 'تکالیف', perm: 'homework' },
+  { suffix: 'schedule', icon: '🗂️', label: 'برنامه هفتگی', perm: 'schedule' },
+  { suffix: 'files', icon: '📎', label: 'ارسال فایل', perm: 'files' },
+  { suffix: 'seating', icon: '🪑', label: 'جای‌گیری', perm: 'seating' },
+  { suffix: 'contacts', icon: '📱', label: 'شماره‌ها', perm: 'contacts' },
+  { suffix: 'reports', icon: '📨', label: 'گزارش روزانه', perm: 'reports' },
+  { href: 'fun', icon: '🎮', label: 'سرگرمی', perm: '' },
 ];
 
 async function createLeague() {
@@ -164,13 +164,14 @@ function statsGrid(summary) {
 }
 
 export async function renderTeacherDashboard() {
-  setTopbarTitle('میزکار معلم');
+  const assistant = isAssistant();
+  setTopbarTitle(assistant ? 'میزکار همیار' : 'میزکار معلم');
   const body = el('div');
   const head = pageHead({
     icon: '🏫',
-    title: 'میزکار معلم',
-    subtitle: 'لیگ، امتیاز، تیم، حضور و ابزارهای کلاس',
-    actions: [button('ساخت لیگ جدید', { icon: '➕', onClick: createLeague })],
+    title: assistant ? 'میزکار همیار' : 'میزکار معلم',
+    subtitle: assistant ? 'بخش‌هایی که معلم برای شما فعال کرده است' : 'لیگ، امتیاز، تیم، حضور و ابزارهای کلاس',
+    actions: assistant ? [] : [button('ساخت لیگ جدید', { icon: '➕', onClick: createLeague })],
   });
   renderView([head, body]);
   body.appendChild(loadingNode());
@@ -192,13 +193,15 @@ export async function renderTeacherDashboard() {
   if (leagues.length === 0) {
     setLeaguePill(null);
     body.textContent = '';
-    body.appendChild(card({ title: 'شروع کار', icon: '🚀' }, [
+    body.appendChild(card({ title: assistant ? 'لیگ در دسترس نیست' : 'شروع کار', icon: '🚀' }, [
       emptyState({
         icon: '🏁',
-        title: 'هنوز لیگی نساخته‌اید',
-        hint: 'با ساخت نخستین لیگ، ستون‌های امتیاز پیش‌فرض و ابزارهای کلاس فعال می‌شوند.',
+        title: assistant ? 'لیگی برای این حساب همیار ثبت نشده است' : 'هنوز لیگی نساخته‌اید',
+        hint: assistant
+          ? 'از معلم اصلی بخواهید دسترسی لیگ را برای شما تنظیم کند.'
+          : 'با ساخت نخستین لیگ، ستون‌های امتیاز پیش‌فرض و ابزارهای کلاس فعال می‌شوند.',
       }),
-      el('div.row', { style: { justifyContent: 'center' } }, [button('ساخت اولین لیگ', { icon: '➕', onClick: createLeague })]),
+      assistant ? null : el('div.row', { style: { justifyContent: 'center' } }, [button('ساخت اولین لیگ', { icon: '➕', onClick: createLeague })]),
     ]));
     return undefined;
   }
@@ -225,18 +228,34 @@ export async function renderTeacherDashboard() {
   }
 
   const base = `teacher/league/${active.id}`;
-  const tiles = TOOLS.map((tool) => tile({
-    icon: tool.icon,
-    label: tool.label,
-    href: tool.href ?? (tool.suffix ? `${base}/${tool.suffix}` : base),
-  }));
+  const tiles = TOOLS
+    .filter((tool) => !tool.perm || can(tool.perm))
+    .map((tool) => tile({
+      icon: tool.icon,
+      label: tool.label,
+      href: tool.href ?? (tool.suffix ? `${base}/${tool.suffix}` : base),
+    }));
+
+  const intro = assistant
+    ? card({ title: 'دسترسی همیار', icon: '🤝' }, [
+      el('p', {}, [
+        el('strong', { text: state.user?.ownerDisplayName || 'معلم اصلی' }),
+        el('span.small.muted', { text: ' · دسترسی شما را مدیریت می‌کند' }),
+      ]),
+      el('p.small.muted', { text: 'فقط بخش‌هایی که در فهرست زیر می‌بینید برای شما فعال شده‌اند.' }),
+    ])
+    : leagueSwitcher(leagues, active.id);
+
+  const management = assistant ? null : managementCard({ ...active, ...detail.league });
 
   body.textContent = '';
   body.appendChild(el('div.grid', { style: { gap: '14px' } }, [
-    leagueSwitcher(leagues, active.id),
-    managementCard({ ...active, ...detail.league }),
+    intro,
+    management,
     card({ title: 'خلاصه وضعیت', icon: '📈' }, [statsGrid(detail.summary)]),
-    card({ title: 'ابزارهای کلاس', icon: '🧰' }, [grid('grid--tiles', tiles)]),
+    card({ title: assistant ? 'ابزارهای فعال شما' : 'ابزارهای کلاس', icon: '🧰' }, [
+      tiles.length ? grid('grid--tiles', tiles) : emptyState({ icon: '🔒', title: 'هنوز بخشی برای شما فعال نشده است', hint: 'از معلم اصلی بخواهید دسترسی لازم را بدهد.' }),
+    ]),
   ]));
   return undefined;
 }

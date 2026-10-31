@@ -521,4 +521,29 @@ export const schemas = {
     toStudentId: z.coerce.number().int().positive(),
     achievement: z.string().trim().max(120).default(''),
   }),
+
+  /** «همیار سایت دانش‌آموزی»: separate login scoped to one league. */
+  assistantCreate: z.object({
+    leagueId: z.coerce.number().int().positive(),
+    studentId: z.preprocess(blankToUndefined, z.coerce.number().int().positive().optional()),
+    displayName: z.string().trim().max(80).optional().default(''),
+    username: z.string().trim().min(3, 'نام کاربری حداقل ۳ نویسه').max(32)
+      .regex(/^[A-Za-z0-9_.\-\u0600-\u06FF]+$/, 'نام کاربری فقط می‌تواند شامل حروف، عدد، نقطه، خط تیره و زیرخط باشد'),
+    password: z.string().min(8, 'گذرواژه حداقل ۸ نویسه').max(200),
+    permissions: z.array(z.string().trim().max(32)).max(40).optional().default([]),
+  }),
+
+  assistantUpdate: z.object({
+    displayName: z.string().trim().max(80).optional(),
+    permissions: z.array(z.string().trim().max(32)).max(40).optional(),
+    active: z.boolean().optional(),
+  }).refine((value) => Object.keys(value).length > 0, { message: 'هیچ تغییری ارسال نشده است' }),
+
+  assistantPassword: z.object({
+    password: z.string().min(8, 'گذرواژه حداقل ۸ نویسه').max(200),
+  }),
+
+  assistantListQuery: z.object({
+    leagueId: z.preprocess(blankToUndefined, z.coerce.number().int().positive().optional()),
+  }),
 };

@@ -231,11 +231,13 @@ textarea:focus {
   font-weight: 600;
   cursor: pointer;
 }
-.checkbox input {
-  width: 20px;
-  height: 20px;
-  accent-color: var(--brand);
-}
+.assistant-list { display: flex; flex-direction: column; gap: 10px; }
+.assistant-row { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm, 10px); background: var(--surface); flex-wrap: wrap; }
+.assistant-row__main { flex: 1 1 260px; min-width: 0; }
+.perm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px 12px; max-height: 260px; overflow: auto; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-sm, 10px); background: var(--surface); }
+.log-list { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow: auto; }
+.log-item { padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm, 10px); background: var(--surface); }
+.log-item__head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 2px; }
 
 /* Teacher-authored multiple-choice options (question modal). */
 .option-editor {

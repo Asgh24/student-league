@@ -18,6 +18,7 @@ import {
  * messaging API. Admins are deliberately excluded.
  */
 function messagingAccess(req, res, next) {
+  if (req.user.assistant) return next(forbidden('پیام‌ها فقط برای معلم اصلی است'));
   if (req.user.role === 'teacher') return requireTeacher(req, res, next);
   if (req.user.role === 'student') return requireStudent(req, res, next);
   return next(forbidden('این بخش فقط برای معلم و دانش‌آموز است'));

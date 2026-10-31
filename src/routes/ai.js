@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { schemas, validate } from '../lib/validate.js';
-import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import { requireTeacher, loadOwnedLeague, requirePermission, requireOwnerTeacher, teacherId } from '../middleware/auth.js';
 import { aiConfigFor, generateQuestions, saveTeacherAiSettings } from '../services/groq.js';
 
 /**
@@ -9,7 +9,7 @@ import { aiConfigFor, generateQuestions, saveTeacherAiSettings } from '../servic
  */
 export function createAiSettingsRouter({ db }) {
   const router = Router();
-  router.use(requireTeacher);
+  router.use(requireTeacher, requireOwnerTeacher);
 
   router.get('/settings', (req, res) => {
     res.json({ config: aiConfigFor(db, { teacherId: req.user.id }) });
@@ -29,10 +29,10 @@ export function createAiSettingsRouter({ db }) {
  */
 export function createLeagueAiRouter({ db }) {
   const router = Router({ mergeParams: true });
-  router.use(requireTeacher, loadOwnedLeague(db));
+  router.use(requireTeacher, loadOwnedLeague(db), requirePermission('qa'));
 
   router.post('/questions', validate({ body: schemas.aiQuestions }), async (req, res) => {
-    const result = await generateQuestions(db, req.user.id, {
+    const result = await generateQuestions(db, teacherId(req), {
       ...req.body,
       leagueName: req.league.name || '',
     });

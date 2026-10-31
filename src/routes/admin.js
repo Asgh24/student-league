@@ -60,6 +60,7 @@ function teacherRows(db, search = '') {
       (SELECT MAX(p.paid_at) FROM payments p WHERE p.teacher_id = u.id AND p.status = 'paid') AS last_paid_at
     FROM users u
     WHERE u.role = 'teacher'
+      AND u.is_assistant = 0
       AND (? = '%%' OR u.username LIKE ? OR u.display_name LIKE ?)
     ORDER BY u.id DESC
   `).all(needle, needle, needle);

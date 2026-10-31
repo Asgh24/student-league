@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { notFound } from '../lib/errors.js';
 import { schemas, validate } from '../lib/validate.js';
-import { loadOwnedLeague, requireTeacher } from '../middleware/auth.js';
+import { loadOwnedLeague, requireTeacher, requirePermission, teacherId } from '../middleware/auth.js';
 import {
   createForTeacher,
   detailForTeacher,
@@ -26,7 +26,7 @@ function evaluationIdOf(req) {
  */
 export function createLeagueEvaluationsRouter({ db }) {
   const router = Router({ mergeParams: true });
-  router.use(requireTeacher, loadOwnedLeague(db));
+  router.use(requireTeacher, loadOwnedLeague(db), requirePermission('evaluations'));
 
   router.get('/', validate({ query: schemas.evaluationsQuery }), (req, res) => {
     const { subject, from, to, page, limit } = req.query;
@@ -34,7 +34,7 @@ export function createLeagueEvaluationsRouter({ db }) {
   });
 
   router.post('/', validate({ body: schemas.evaluationCreate }), (req, res) => {
-    const evaluation = createForTeacher(db, req.league.id, req.user.id, req.body);
+    const evaluation = createForTeacher(db, req.league.id, teacherId(req), req.body);
     res.status(201).json({ evaluation });
   });
 

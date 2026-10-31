@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { asyncHandler, todayIso } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
-import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import { requireTeacher, loadOwnedLeague, requirePermission, requireOwnerTeacher } from '../middleware/auth.js';
 import { dailyReport, sendCustomParentMessages, sendDailyReports } from '../services/dailyReports.js';
 
 /** «گزارش روزانه»: condensed change report sent to parents over sms.ir. */
 export function createLeagueReportsRouter({ db }) {
   const router = Router({ mergeParams: true });
-  router.use(requireTeacher, loadOwnedLeague(db));
+  router.use(requireTeacher, loadOwnedLeague(db), requirePermission('reports'));
 
   router.get('/daily', validate({ query: schemas.listQuery }), (req, res) => {
     const date = req.query.date ?? todayIso();
@@ -16,6 +16,7 @@ export function createLeagueReportsRouter({ db }) {
 
   router.post(
     '/daily/send',
+    requireOwnerTeacher,
     validate({ body: schemas.dailyReportSend }),
     asyncHandler(async (req, res) => {
       const payload = await sendDailyReports(db, {
@@ -30,6 +31,7 @@ export function createLeagueReportsRouter({ db }) {
   /** Free-text message written by the teacher for the selected parents. */
   router.post(
     '/custom/send',
+    requireOwnerTeacher,
     validate({ body: schemas.customReportSend }),
     asyncHandler(async (req, res) => {
       const payload = await sendCustomParentMessages(db, {

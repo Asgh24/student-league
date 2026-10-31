@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { schemas, validate } from '../lib/validate.js';
-import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import { requireTeacher, loadOwnedLeague, requirePermission } from '../middleware/auth.js';
 import { clearSeating, saveSeatingPlan, seatingPlan, shuffleSeating } from '../services/seating.js';
 
 /** «جای‌گیری»: the classroom seating plan of a league. */
 export function createLeagueSeatingRouter({ db }) {
   const router = Router({ mergeParams: true });
-  router.use(requireTeacher, loadOwnedLeague(db));
+  router.use(requireTeacher, loadOwnedLeague(db), requirePermission('seating'));
 
   router.get('/', (req, res) => {
     res.json(seatingPlan(db, req.league.id));

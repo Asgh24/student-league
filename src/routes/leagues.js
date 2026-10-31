@@ -13,7 +13,7 @@ import {
   requireLeague,
   writeSettings,
 } from '../repositories/leagues.js';
-import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import { requireTeacher, loadOwnedLeague, requirePermission, requireOwnerTeacher, teacherId } from '../middleware/auth.js';
 import { rankingForLeague, titleForPoints } from '../services/scoring.js';
 import { todayCounters } from '../services/attendance.js';
 import { teamStandings } from '../services/teams.js';
@@ -61,9 +61,13 @@ function summaryFor(db, league) {
 export function createLeaguesRouter({ db }) {
   const router = Router();
   const owned = [requireTeacher, loadOwnedLeague(db)];
+  const ownerOwned = [...owned, requireOwnerTeacher];
 
   router.get('/', requireTeacher, (req, res) => {
-    res.json({ items: listLeagues(db, req.user.id).map((league) => ({
+    const ownerId = teacherId(req);
+    let leagues = listLeagues(db, ownerId);
+    if (req.user.assistant) leagues = leagues.filter((league) => league.id === req.user.assistant.leagueId);
+    res.json({ items: leagues.map((league) => ({
       id: league.id,
       name: league.name,
       status: league.status,
@@ -74,7 +78,7 @@ export function createLeaguesRouter({ db }) {
     })) });
   });
 
-  router.post('/', requireTeacher, validate({ body: schemas.leagueCreate }), (req, res) => {
+  router.post('/', requireTeacher, requireOwnerTeacher, validate({ body: schemas.leagueCreate }), (req, res) => {
     const league = createLeague(db, req.user.id, req.body.name);
     res.status(201).json({ league: { id: league.id, name: league.name, status: league.status, createdAt: league.created_at }, settings: serializeSettings(readSettings(db, league.id)) });
   });
@@ -93,11 +97,11 @@ export function createLeaguesRouter({ db }) {
       settings: serializeSettings(readSettings(db, league.id)),
       timer: timerPayload(db, league.id),
       summary: summaryFor(db, league),
-      teacher: { id: req.user.id, displayName: req.user.displayName },
+      teacher: { id: teacherId(req), displayName: req.user.ownerDisplayName ?? req.user.displayName },
     });
   });
 
-  router.patch('/:id', ...owned, validate({ body: schemas.leagueUpdate }), (req, res) => {
+  router.patch('/:id', ...ownerOwned, validate({ body: schemas.leagueUpdate }), (req, res) => {
     let league = requireLeague(db, req.league.id);
     if (req.body.name !== undefined) league = renameLeague(db, league.id, req.body.name);
     if (req.body.status === 'completed') league = completeLeague(db, league.id, rankingForLeague(db, league.id));
@@ -105,12 +109,12 @@ export function createLeaguesRouter({ db }) {
     res.json({ league: { id: league.id, name: league.name, status: league.status, completedAt: league.completed_at } });
   });
 
-  router.delete('/:id', ...owned, (req, res) => {
+  router.delete('/:id', ...ownerOwned, (req, res) => {
     deleteLeague(db, req.league.id);
     res.json({ ok: true });
   });
 
-  router.post('/:id/complete', ...owned, (req, res) => {
+  router.post('/:id/complete', ...ownerOwned, (req, res) => {
     const ranking = rankingForLeague(db, req.league.id);
     const league = completeLeague(db, req.league.id, ranking);
     res.json({
@@ -119,7 +123,7 @@ export function createLeaguesRouter({ db }) {
     });
   });
 
-  router.post('/:id/reactivate', ...owned, (req, res) => {
+  router.post('/:id/reactivate', ...ownerOwned, (req, res) => {
     const league = reactivateLeague(db, req.league.id);
     res.json({ league: { id: league.id, status: league.status } });
   });
@@ -128,7 +132,7 @@ export function createLeaguesRouter({ db }) {
     res.json({ settings: serializeSettings(readSettings(db, req.league.id)) });
   });
 
-  router.put('/:id/settings', ...owned, validate({ body: schemas.leagueSettings }), (req, res) => {
+  router.put('/:id/settings', ...ownerOwned, validate({ body: schemas.leagueSettings }), (req, res) => {
     const patch = {
       individualAffectsTeam: req.body.individualAffectsTeam,
       latePenalty: req.body.latePenalty,
@@ -147,11 +151,11 @@ export function createLeaguesRouter({ db }) {
     res.json({ items, total: items.length });
   });
 
-  router.get('/:id/timer', ...owned, (req, res) => {
+  router.get('/:id/timer', ...owned, requirePermission('timer'), (req, res) => {
     res.json({ timer: timerPayload(db, req.league.id) });
   });
 
-  router.put('/:id/timer', ...owned, validate({ body: schemas.timerSet }), (req, res) => {
+  router.put('/:id/timer', ...owned, requirePermission('timer'), validate({ body: schemas.timerSet }), (req, res) => {
     const { days, hours, minutes, seconds } = req.body;
     const durationSeconds = days * 86400 + hours * 3600 + minutes * 60 + seconds;
     if (durationSeconds <= 0) throw badRequest('TIMER_ZERO', 'مدت زمان باید بیشتر از صفر باشد');
@@ -164,7 +168,7 @@ export function createLeaguesRouter({ db }) {
     res.json({ timer: timerPayload(db, req.league.id) });
   });
 
-  router.post('/:id/timer/adjust', ...owned, (req, res) => {
+  router.post('/:id/timer/adjust', ...owned, requirePermission('timer'), (req, res) => {
     const days = Number.parseInt(req.body?.days ?? 0, 10);
     if (!Number.isFinite(days) || days === 0) throw badRequest('INVALID_DAYS', 'تعداد روز نامعتبر است');
     const current = db.prepare('SELECT ends_at AS endsAt FROM timers WHERE league_id = ?').get(req.league.id);
@@ -174,12 +178,12 @@ export function createLeaguesRouter({ db }) {
     res.json({ timer: timerPayload(db, req.league.id) });
   });
 
-  router.delete('/:id/timer', ...owned, (req, res) => {
+  router.delete('/:id/timer', ...owned, requirePermission('timer'), (req, res) => {
     db.prepare('DELETE FROM timers WHERE league_id = ?').run(req.league.id);
     res.json({ timer: timerPayload(db, req.league.id) });
   });
 
-  router.get('/:id/live', ...owned, (req, res) => {
+  router.get('/:id/live', ...owned, requirePermission('live'), (req, res) => {
     const league = requireLeague(db, req.league.id);
     const standings = teamStandings(db, league.id);
     const rows = rankingForLeague(db, league.id).map((row) => ({
@@ -191,7 +195,7 @@ export function createLeaguesRouter({ db }) {
     }));
     res.json({
       league: { id: league.id, name: league.name, status: league.status },
-      teacher: { id: req.user.id, displayName: req.user.displayName },
+      teacher: { id: teacherId(req), displayName: req.user.ownerDisplayName ?? req.user.displayName },
       timer: timerPayload(db, league.id),
       students: rows,
       teams: standings.teams.map((team) => ({ rank: team.rank, name: team.name, label: team.label, points: team.finalPoints, members: team.memberCount })),

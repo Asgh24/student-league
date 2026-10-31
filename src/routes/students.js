@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { conflict } from '../lib/errors.js';
+import { conflict, forbidden } from '../lib/errors.js';
 import { asyncHandler, isoNow } from '../lib/http.js';
 import { matchesFa } from '../lib/normalize.js';
 import { schemas, validate } from '../lib/validate.js';
 import { createUser, findByUsername, findById, updatePassword, updateUsername } from '../repositories/users.js';
-import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import { requireTeacher, loadOwnedLeague, requirePermission, requireOwnerTeacher } from '../middleware/auth.js';
 import { ownedStudent } from '../middleware/ownership.js';
 import {
   addChampionship,
@@ -31,8 +31,11 @@ export function createLeagueStudentsRouter({ db }) {
     res.json({ items: rows, total: rows.length });
   });
 
-  router.post('/', validate({ body: schemas.studentCreate }), asyncHandler(async (req, res) => {
+  router.post('/', requirePermission('scores'), validate({ body: schemas.studentCreate }), asyncHandler(async (req, res) => {
     const { name, username, password } = req.body;
+    if (req.user.assistant && (username || password)) {
+      throw forbidden('ساخت حساب کاربری دانش‌آموز فقط توسط معلم اصلی انجام می‌شود');
+    }
     if (username && !password) throw conflict('PASSWORD_REQUIRED', 'برای نام کاربری، گذرواژه هم لازم است');
     if (username && findByUsername(db, username)) throw conflict('USERNAME_TAKEN', 'این نام کاربری قبلاً استفاده شده است');
 
@@ -81,7 +84,7 @@ export function createStudentsRouter({ db }) {
         name: student.name,
         leagueId: league.id,
         hasLogin: student.user_id !== null,
-        username: account?.username ?? '',
+        username: req.user.assistant ? '' : (account?.username ?? ''),
         total,
         rank,
         totalStudents,
@@ -97,7 +100,7 @@ export function createStudentsRouter({ db }) {
     });
   });
 
-  router.patch('/:id', ...owned, validate({ body: schemas.studentUpdate }), (req, res) => {
+  router.patch('/:id', ...owned, requirePermission('scores'), validate({ body: schemas.studentUpdate }), (req, res) => {
     db.prepare('UPDATE students SET name = ? WHERE id = ?').run(req.body.name.trim(), req.student.id);
     if (req.student.user_id) {
       db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(req.body.name.trim(), req.student.user_id);
@@ -105,7 +108,7 @@ export function createStudentsRouter({ db }) {
     res.json({ ok: true, student: { id: req.student.id, name: req.body.name.trim() } });
   });
 
-  router.delete('/:id', ...owned, (req, res) => {
+  router.delete('/:id', ...owned, requirePermission('scores'), (req, res) => {
     const run = db.transaction(() => {
       db.prepare('DELETE FROM students WHERE id = ?').run(req.student.id);
       if (req.student.user_id) db.prepare('DELETE FROM users WHERE id = ? AND role = \'student\'').run(req.student.user_id);
@@ -114,7 +117,7 @@ export function createStudentsRouter({ db }) {
     res.json({ ok: true });
   });
 
-  router.post('/:id/password', ...owned, validate({ body: schemas.studentPassword }), (req, res) => {
+  router.post('/:id/password', ...owned, requireOwnerTeacher, validate({ body: schemas.studentPassword }), (req, res) => {
     if (!req.student.user_id) throw conflict('NO_LOGIN', 'برای این دانش‌آموز حساب کاربری ساخته نشده است');
     updatePassword(db, req.student.user_id, req.body.password);
     res.json({ ok: true });
@@ -124,7 +127,7 @@ export function createStudentsRouter({ db }) {
    * Updates the student's login, or creates it when the student has none yet.
    * A field left out keeps its current value; creating a login needs both.
    */
-  router.put('/:id/credentials', ...owned, validate({ body: schemas.studentCredentials }), (req, res) => {
+  router.put('/:id/credentials', ...owned, requireOwnerTeacher, validate({ body: schemas.studentCredentials }), (req, res) => {
     const { username, password } = req.body;
     const account = req.student.user_id ? findById(db, req.student.user_id) : null;
 
@@ -158,7 +161,7 @@ export function createStudentsRouter({ db }) {
     });
   });
 
-  router.post('/:id/championships', ...owned, validate({ body: schemas.championshipCreate }), (req, res) => {
+  router.post('/:id/championships', ...owned, requirePermission('scores'), validate({ body: schemas.championshipCreate }), (req, res) => {
     const created = addChampionship(db, {
       leagueId: req.student.league_id,
       studentId: req.student.id,
@@ -168,7 +171,7 @@ export function createStudentsRouter({ db }) {
     res.status(201).json({ championship: created, championships: championshipsFor(db, req.student.id) });
   });
 
-  router.delete('/:id/championships', ...owned, (req, res) => {
+  router.delete('/:id/championships', ...owned, requirePermission('scores'), (req, res) => {
     const removed = removeChampionship(db, { leagueId: req.student.league_id, studentId: req.student.id });
     res.json({ removed, championships: championshipsFor(db, req.student.id) });
   });

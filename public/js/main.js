@@ -15,10 +15,11 @@ import {
   setUserPill,
   showTopbar,
 } from './shell.js';
-import { homePath, isAdmin, isStudent, isTeacher, setLeagueId, setMeta, setUser, state, storedLeagueId, subscribe } from './store.js';
+import { homePath, can, isAdmin, isAssistant, isStudent, isTeacher, setLeagueId, setMeta, setUser, state, storedLeagueId, subscribe } from './store.js';
 import { notify } from './ui.js';
 
 import { renderAttendance } from './views/attendance.js';
+import { renderAssistants } from './views/assistants.js';
 import { renderContacts } from './views/contacts.js';
 import { renderTeacherDashboard } from './views/dashboard.js';
 import { renderEvaluations } from './views/evaluations.js';
@@ -62,47 +63,60 @@ import { renderAdminPlans } from './views/admin/plans.js';
 import { renderAdminSms } from './views/admin/sms.js';
 import { renderAdminTeachers } from './views/admin/teachers.js';
 
+const LEAGUE_NAV = [
+  ['', '🏆', 'لیگ انفرادی', 'scores'],
+  ['teams', '🛡️', 'لیگ تیمی', 'teams'],
+  ['attendance', '🗓️', 'حضور و غیاب', 'attendance'],
+  ['evaluations', '📝', 'ارزشیابی', 'evaluations'],
+  ['raffle', '🎲', 'قرعه‌کشی', 'raffle'],
+  ['representative', '👑', 'نماینده کلاس', 'representative'],
+  ['wheel', '🎡', 'گردونه شانس', 'wheel'],
+  ['live', '📺', 'تابلوی زنده', 'live'],
+  ['timer', '⏱️', 'تایمر و ابزار', 'timer'],
+  ['qa', '❓', 'سوال و پاسخ', 'qa'],
+  ['homework', '📚', 'تکالیف', 'homework'],
+  ['schedule', '🗂️', 'برنامه هفتگی', 'schedule'],
+  ['files', '📎', 'ارسال فایل', 'files'],
+  ['seating', '🪑', 'جای‌گیری', 'seating'],
+  ['contacts', '📱', 'شماره‌ها', 'contacts'],
+  ['reports', '📨', 'گزارش روزانه', 'reports'],
+];
+
 function leagueNavItems() {
   const base = `teacher/league/${state.leagueId}`;
   const active = currentPath();
-  const entries = [
-    ['', '🏆', 'لیگ انفرادی'],
-    ['teams', '🛡️', 'لیگ تیمی'],
-    ['attendance', '🗓️', 'حضور و غیاب'],
-    ['evaluations', '📝', 'ارزشیابی'],
-    ['raffle', '🎲', 'قرعه‌کشی'],
-    ['representative', '👑', 'نماینده کلاس'],
-    ['wheel', '🎡', 'گردونه شانس'],
-    ['live', '📺', 'تابلوی زنده'],
-    ['timer', '⏱️', 'تایمر و ابزار'],
-    ['qa', '❓', 'سوال و پاسخ'],
-    ['homework', '📚', 'تکالیف'],
-    ['schedule', '🗂️', 'برنامه هفتگی'],
-    ['files', '📎', 'ارسال فایل'],
-    ['seating', '🪑', 'جای‌گیری'],
-    ['contacts', '📱', 'شماره‌ها'],
-    ['reports', '📨', 'گزارش روزانه'],
-  ];
-  return entries.map(([suffix, icon, label]) => {
-    const href = suffix ? `${base}/${suffix}` : base;
-    return { label, icon, href, active: active === href };
-  });
+  return LEAGUE_NAV
+    .filter(([, , , permission]) => !isAssistant() || can(permission))
+    .map(([suffix, icon, label]) => {
+      const href = suffix ? `${base}/${suffix}` : base;
+      return { label, icon, href, active: active === href };
+    });
 }
 
 function teacherNav() {
   const active = currentPath();
-  const items = [
-    { group: 'میزکار' },
-    { label: 'میزکار معلم', icon: '🏠', href: 'teacher', active: active === 'teacher' },
-  ];
+  const items = isAssistant()
+    ? [
+      { group: 'پنل همیار' },
+      { label: 'میزکار همیار', icon: '🏠', href: 'teacher', active: active === 'teacher' },
+    ]
+    : [
+      { group: 'میزکار' },
+      { label: 'میزکار معلم', icon: '🏠', href: 'teacher', active: active === 'teacher' },
+    ];
   if (state.leagueId) {
     items.push({ group: 'لیگ فعال' });
     items.push(...leagueNavItems());
   }
-  items.push({ group: 'ارتباط و اشتراک' });
-  items.push({ label: 'پیام‌ها', icon: '💬', href: 'teacher/messages', active: active === 'teacher/messages' });
-  items.push({ label: 'اشتراک من', icon: '💳', href: 'teacher/subscription', active: active === 'teacher/subscription' });
+  if (!isAssistant()) {
+    items.push({ group: 'ارتباط و اشتراک' });
+    items.push({ label: 'پیام‌ها', icon: '💬', href: 'teacher/messages', active: active === 'teacher/messages' });
+    items.push({ label: 'اشتراک من', icon: '💳', href: 'teacher/subscription', active: active === 'teacher/subscription' });
+  }
   items.push({ group: 'حساب کاربری' });
+  if (!isAssistant()) {
+    items.push({ label: 'همیاران سایت', icon: '🤝', href: 'teacher/assistants', active: active === 'teacher/assistants' });
+  }
   items.push({ label: 'تنظیمات', icon: '⚙️', href: 'teacher/settings', active: active === 'teacher/settings' });
   items.push({ label: 'سرگرمی', icon: '🎮', href: 'fun', active: active === 'fun' });
   return items;
@@ -207,6 +221,7 @@ const routes = [
   { path: 'teacher/settings', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSettings(ctx) },
   { path: 'teacher/messages', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderTeacherMessages(ctx) },
   { path: 'teacher/subscription', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSubscription(ctx) },
+  { path: 'teacher/assistants', guard: () => (isTeacher() && !isAssistant() ? undefined : 'teacher'), view: (ctx) => renderAssistants(ctx) },
   { path: 'teacher/league/:id', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderLeague(ctx) },
   { path: 'teacher/league/:id/teams', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderTeams(ctx) },
   { path: 'teacher/league/:id/attendance', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderAttendance(ctx) },

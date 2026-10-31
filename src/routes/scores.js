@@ -2,12 +2,12 @@ import { Router } from 'express';
 import { asyncHandler } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
 import { getColumns, readSettings } from '../repositories/leagues.js';
-import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import { requireTeacher, loadOwnedLeague, requirePermission } from '../middleware/auth.js';
 import { commitScoreChanges, recordScoreChange, scoresMatrix, studentTotal } from '../services/scoring.js';
 
 export function createScoresRouter({ db }) {
   const router = Router({ mergeParams: true });
-  router.use(requireTeacher, loadOwnedLeague(db));
+  router.use(requireTeacher, loadOwnedLeague(db), requirePermission('scores'));
 
   /** The whole scores table: columns, rows, totals and rank. */
   router.get('/', (req, res) => {

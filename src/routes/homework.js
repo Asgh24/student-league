@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { isoNow } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
-import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import { requireTeacher, loadOwnedLeague, requirePermission, teacherId } from '../middleware/auth.js';
 import { ownedRow } from '../middleware/ownership.js';
 
 function homeworkWithCounts(db, leagueId) {
@@ -27,7 +27,7 @@ function statusRows(db, homeworkId) {
 
 export function createLeagueHomeworkRouter({ db }) {
   const router = Router({ mergeParams: true });
-  router.use(requireTeacher, loadOwnedLeague(db));
+  router.use(requireTeacher, loadOwnedLeague(db), requirePermission('homework'));
 
   router.get('/', (req, res) => {
     res.json({ items: homeworkWithCounts(db, req.league.id) });
@@ -35,7 +35,7 @@ export function createLeagueHomeworkRouter({ db }) {
 
   router.post('/', validate({ body: schemas.homeworkCreate }), (req, res) => {
     const info = db.prepare('INSERT INTO homework (league_id, teacher_id, title, description, due_date, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(req.league.id, req.user.id, req.body.title, req.body.description ?? '', req.body.dueDate ?? null, isoNow());
+      .run(req.league.id, teacherId(req), req.body.title, req.body.description ?? '', req.body.dueDate ?? null, isoNow());
     const row = db.prepare('SELECT id, title, description, due_date AS dueDate, created_at AS createdAt FROM homework WHERE id = ?')
       .get(info.lastInsertRowid);
     res.status(201).json({ homework: { ...row, doneCount: 0, pendingCount: db.prepare('SELECT COUNT(*) AS n FROM students WHERE league_id = ?').get(req.league.id).n } });
@@ -46,7 +46,7 @@ export function createLeagueHomeworkRouter({ db }) {
 
 export function createHomeworkRouter({ db }) {
   const router = Router();
-  const owned = [requireTeacher, ownedRow(db, 'homework', { as: 'homework' })];
+  const owned = [requireTeacher, requirePermission('homework'), ownedRow(db, 'homework', { as: 'homework' })];
 
   router.patch('/:id', ...owned, validate({ body: schemas.homeworkUpdate }), (req, res) => {
     const current = req.homework;

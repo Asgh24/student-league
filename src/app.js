@@ -7,6 +7,7 @@ import { createApiRouter } from './routes/index.js';
 import { createHealthRouter } from './routes/health.js';
 import { createPaymentRouter } from './routes/payments.js';
 import { attachUser } from './middleware/auth.js';
+import { assistantActionLog } from './middleware/assistantLog.js';
 import { csrfProtection } from './middleware/csrf.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { apiRateLimit } from './middleware/rateLimit.js';
@@ -95,7 +96,7 @@ export function createApp({ db, version = '1.0.0', sessionStore = createSessionS
   // chain means anonymous page views never write a session row.
   app.use(attachUser(db));
 
-  app.use('/api/v1', apiRateLimit(), csrfProtection, createApiRouter({ db }));
+  app.use('/api/v1', assistantActionLog(db), apiRateLimit(), csrfProtection, createApiRouter({ db }));
   app.use('/api', notFoundHandler);
 
   // Hash routing keeps the SPA on "/", this fallback only helps deep links.

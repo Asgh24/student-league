@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
-import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import { requireTeacher, loadOwnedLeague, requirePermission } from '../middleware/auth.js';
 import { ownedRow } from '../middleware/ownership.js';
 import { readSettings } from '../repositories/leagues.js';
 import {
@@ -19,7 +19,7 @@ import {
 /** League scoped team collection + the "no team" panel. */
 export function createLeagueTeamsRouter({ db }) {
   const router = Router({ mergeParams: true });
-  router.use(requireTeacher, loadOwnedLeague(db));
+  router.use(requireTeacher, loadOwnedLeague(db), requirePermission('teams'));
 
   router.get('/', (req, res) => {
     const standings = teamStandings(db, req.league.id);
@@ -51,7 +51,7 @@ export function createLeagueTeamsRouter({ db }) {
 /** Single team operations, authorized through the owning league. */
 export function createTeamsRouter({ db }) {
   const router = Router();
-  const owned = [requireTeacher, ownedRow(db, 'teams', { as: 'team' })];
+  const owned = [requireTeacher, requirePermission('teams'), ownedRow(db, 'teams', { as: 'team' })];
 
   router.patch('/:id', ...owned, validate({ body: schemas.teamUpdate }), (req, res) => {
     const team = updateTeam(db, req.team.id, req.body);

@@ -3,7 +3,7 @@ import { notFound } from '../lib/errors.js';
 import { isoNow } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
 import { readSettings } from '../repositories/leagues.js';
-import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import { requireTeacher, loadOwnedLeague, requirePermission, teacherId } from '../middleware/auth.js';
 import { ownedRow, ownedRowQuery } from '../middleware/ownership.js';
 import { findDisciplineColumn } from '../repositories/leagues.js';
 import { serializeQuestion } from '../services/questions.js';
@@ -12,7 +12,7 @@ import { createQuizSession, recentQuizSessions } from '../services/quiz.js';
 
 export function createLeagueQuestionsRouter({ db }) {
   const router = Router({ mergeParams: true });
-  router.use(requireTeacher, loadOwnedLeague(db));
+  router.use(requireTeacher, loadOwnedLeague(db), requirePermission('qa'));
 
   router.get('/', (req, res) => {
     const rows = db.prepare(`
@@ -34,7 +34,7 @@ export function createLeagueQuestionsRouter({ db }) {
     const ids = db.transaction(() => req.body.questions.map((question) => {
       const info = insert.run(
         req.league.id,
-        req.user.id,
+        teacherId(req),
         question.body,
         question.points,
         JSON.stringify(question.options.map((option) => option.trim())),
@@ -64,7 +64,7 @@ export function createLeagueQuestionsRouter({ db }) {
       VALUES (?, ?, ?, ?, 1, ?, ?, ?)
     `).run(
       req.league.id,
-      req.user.id,
+      teacherId(req),
       req.body.body,
       req.body.points,
       JSON.stringify(options),
@@ -84,7 +84,7 @@ export function createLeagueQuestionsRouter({ db }) {
 
 export function createQuestionsRouter({ db }) {
   const router = Router();
-  const ownedQuestion = [requireTeacher, ownedRow(db, 'questions', { as: 'question' })];
+  const ownedQuestion = [requireTeacher, requirePermission('qa'), ownedRow(db, 'questions', { as: 'question' })];
 
   router.delete('/:id', ...ownedQuestion, (req, res) => {
     db.prepare('DELETE FROM questions WHERE id = ?').run(req.question.id);
@@ -124,7 +124,7 @@ export function createQuestionsRouter({ db }) {
 /** «حالت پخش»: records a completed presentation run and awards its points. */
 export function createLeagueQuizRouter({ db }) {
   const router = Router({ mergeParams: true });
-  router.use(requireTeacher, loadOwnedLeague(db));
+  router.use(requireTeacher, loadOwnedLeague(db), requirePermission('qa'));
 
   router.get('/', (req, res) => {
     res.json({ items: recentQuizSessions(db, req.league.id) });
@@ -142,6 +142,7 @@ export function createAnswersRouter({ db }) {
   const router = Router();
   const owned = [
     requireTeacher,
+    requirePermission('qa'),
     ownedRowQuery(db, {
       sql: 'SELECT a.*, q.league_id AS league_id FROM answers a JOIN questions q ON q.id = a.question_id WHERE a.id = ?',
       as: 'answer',

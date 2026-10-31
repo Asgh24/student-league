@@ -3,14 +3,14 @@ import { badRequest } from '../lib/errors.js';
 import { isoNow } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
 import { getColumns, findDisciplineColumn } from '../repositories/leagues.js';
-import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import { requireTeacher, loadOwnedLeague, requirePermission } from '../middleware/auth.js';
 import { ownedRow } from '../middleware/ownership.js';
 import { applyScoreDelta } from '../services/scoring.js';
 
 /** Collections scoped to a league the teacher owns. */
 export function createLeagueColumnsRouter({ db }) {
   const router = Router({ mergeParams: true });
-  router.use(requireTeacher, loadOwnedLeague(db));
+  router.use(requireTeacher, loadOwnedLeague(db), requirePermission('scores'));
 
   router.get('/', (req, res) => {
     res.json({ items: getColumns(db, req.league.id) });
@@ -30,7 +30,7 @@ export function createLeagueColumnsRouter({ db }) {
 /** Single column operations, authorized through the owning league. */
 export function createColumnsRouter({ db }) {
   const router = Router();
-  const owned = [requireTeacher, ownedRow(db, 'columns', { as: 'column' })];
+  const owned = [requireTeacher, requirePermission('scores'), ownedRow(db, 'columns', { as: 'column' })];
 
   router.patch('/:id', ...owned, validate({ body: schemas.columnUpdate }), (req, res) => {
     const column = req.column;

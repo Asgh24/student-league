@@ -3,7 +3,7 @@ import { badRequest } from '../lib/errors.js';
 import { isoNow } from '../lib/http.js';
 import { pickOne, shuffle } from '../lib/random.js';
 import { schemas, validate } from '../lib/validate.js';
-import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import { requireTeacher, loadOwnedLeague, requirePermission, teacherId } from '../middleware/auth.js';
 import {
   drawRepresentative,
   representativeState,
@@ -26,7 +26,7 @@ export function createToolsRouter({ db }) {
   router.use(requireTeacher, loadOwnedLeague(db));
 
   /** Draws a random student, optionally excluding everyone already drawn. */
-  router.post('/raffle', validate({ body: schemas.raffleDraw }), (req, res) => {
+  router.post('/raffle', requirePermission('raffle'), validate({ body: schemas.raffleDraw }), (req, res) => {
     const leagueId = req.league.id;
     const students = db.prepare('SELECT id, name FROM students WHERE league_id = ?').all(leagueId);
     if (students.length === 0) throw badRequest('NO_STUDENTS', 'هنوز دانش‌آموزی به این لیگ اضافه نشده است');
@@ -46,7 +46,7 @@ export function createToolsRouter({ db }) {
 
     const chosen = pickOne(pool);
     db.prepare('INSERT INTO raffle_history (league_id, student_id, student_name, reason, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(leagueId, chosen.id, chosen.name, req.body.reason ?? '', req.user.id, isoNow());
+      .run(leagueId, chosen.id, chosen.name, req.body.reason ?? '', teacherId(req), isoNow());
 
     res.json({
       winner: { studentId: chosen.id, name: chosen.name },
@@ -57,28 +57,28 @@ export function createToolsRouter({ db }) {
     });
   });
 
-  router.get('/raffle/history', (req, res) => {
+  router.get('/raffle/history', requirePermission('raffle'), (req, res) => {
     const items = raffleHistory(db, req.league.id, 100);
     res.json({ items, total: items.length });
   });
 
-  router.delete('/raffle/history', (req, res) => {
+  router.delete('/raffle/history', requirePermission('raffle'), (req, res) => {
     db.prepare('DELETE FROM raffle_history WHERE league_id = ?').run(req.league.id);
     res.json({ ok: true, items: [] });
   });
 
   /** «نماینده کلاس»: current fair-draw state, progress and full history. */
-  router.get('/representative', (req, res) => {
+  router.get('/representative', requirePermission('representative'), (req, res) => {
     res.json(representativeState(db, req.league.id));
   });
 
   /** Picks a student that has not been representative in the current cycle. */
-  router.post('/representative/draw', (req, res) => {
-    res.json(drawRepresentative(db, { leagueId: req.league.id, actorId: req.user.id }));
+  router.post('/representative/draw', requirePermission('representative'), (req, res) => {
+    res.json(drawRepresentative(db, { leagueId: req.league.id, actorId: teacherId(req) }));
   });
 
   /** Starts the next cycle; `force` allows leaving the current one unfinished. */
-  router.post('/representative/cycle', validate({ body: schemas.representativeCycle }), (req, res) => {
+  router.post('/representative/cycle', requirePermission('representative'), validate({ body: schemas.representativeCycle }), (req, res) => {
     res.json(startRepresentativeCycle(db, {
       leagueId: req.league.id,
       force: req.body.force,
@@ -86,17 +86,17 @@ export function createToolsRouter({ db }) {
   });
 
   /** Reverts the most recent pick so a mistaken click can be corrected. */
-  router.delete('/representative/last', (req, res) => {
+  router.delete('/representative/last', requirePermission('representative'), (req, res) => {
     res.json(undoLastRepresentative(db, { leagueId: req.league.id }));
   });
 
   /** Clears every cycle and starts over from cycle 1. */
-  router.delete('/representative/history', (req, res) => {
+  router.delete('/representative/history', requirePermission('representative'), (req, res) => {
     res.json(resetRepresentativeHistory(db, { leagueId: req.league.id }));
   });
 
   /** Lucky wheel segments; falls back to the student names when never customised. */
-  router.get('/wheel', (req, res) => {
+  router.get('/wheel', requirePermission('wheel'), (req, res) => {
     const saved = db.prepare('SELECT id, label, position FROM wheel_segments WHERE league_id = ? ORDER BY position ASC, id ASC').all(req.league.id);
     if (saved.length >= 2) {
       return res.json({ segments: saved.map((row) => ({ id: row.id, label: row.label })), source: 'custom' });
@@ -106,7 +106,7 @@ export function createToolsRouter({ db }) {
     return res.json({ segments: labels.map((label, index) => ({ id: index + 1, label })), source: students.length >= 2 ? 'students' : 'default' });
   });
 
-  router.put('/wheel', validate({ body: schemas.wheelSave }), (req, res) => {
+  router.put('/wheel', requirePermission('wheel'), validate({ body: schemas.wheelSave }), (req, res) => {
     const run = db.transaction(() => {
       db.prepare('DELETE FROM wheel_segments WHERE league_id = ?').run(req.league.id);
       const insert = db.prepare('INSERT INTO wheel_segments (league_id, label, position) VALUES (?, ?, ?)');
@@ -118,12 +118,12 @@ export function createToolsRouter({ db }) {
   });
 
   /** Deterministic "random order" helper used by the live board spinner. */
-  router.post('/shuffle', (req, res) => {
+  router.post('/shuffle', requirePermission('live'), (req, res) => {
     const students = db.prepare('SELECT id, name FROM students WHERE league_id = ?').all(req.league.id);
     res.json({ order: shuffle(students).map((s) => ({ studentId: s.id, name: s.name })) });
   });
 
-  router.get('/timer', (req, res) => {
+  router.get('/timer', requirePermission('timer'), (req, res) => {
     const row = db.prepare('SELECT ends_at AS endsAt, duration_seconds AS durationSeconds FROM timers WHERE league_id = ?').get(req.league.id);
     if (!row) return res.json({ timer: { endsAt: null, durationSeconds: 0, remainingMs: 0, expired: false } });
     const remainingMs = new Date(row.endsAt).getTime() - Date.now();

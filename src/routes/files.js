@@ -7,7 +7,7 @@ import { ALLOWED_UPLOAD_EXTENSIONS, config } from '../config.js';
 import { badRequest, forbidden, notFound, payloadTooLarge } from '../lib/errors.js';
 import { isoNow } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
-import { requireAuth, requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import { requireAuth, requireTeacher, loadOwnedLeague, requirePermission, teacherId, canAccessLeague, hasAssistantPermission } from '../middleware/auth.js';
 import {
   assertTeacherStorageAvailable,
   removeUploadedFile,
@@ -85,7 +85,7 @@ function leagueFiles(db, leagueId) {
 
 export function createLeagueFilesRouter({ db }) {
   const router = Router({ mergeParams: true });
-  router.use(requireTeacher, loadOwnedLeague(db));
+  router.use(requireTeacher, loadOwnedLeague(db), requirePermission('files'));
 
   // Built per router so the size limit reflects the current configuration.
   const upload = multer({
@@ -99,7 +99,7 @@ export function createLeagueFilesRouter({ db }) {
       items,
       total: items.length,
       limits: { maxBytes: config.limits.maxUploadBytes, extensions: ALLOWED_UPLOAD_EXTENSIONS },
-      storage: teacherStorageUsage(db, req.user.id),
+      storage: teacherStorageUsage(db, teacherId(req)),
     });
   });
 
@@ -113,7 +113,7 @@ export function createLeagueFilesRouter({ db }) {
       const extension = validateUpload(originalName, req.file.mimetype, req.file.size);
       // Check the teacher-wide quota before writing anything to disk. The check
       // covers every league, not just the one currently open.
-      assertTeacherStorageAvailable(db, req.user.id, req.file.size);
+      assertTeacherStorageAvailable(db, teacherId(req), req.file.size);
 
       const storedName = `${crypto.randomUUID()}${extension}`;
       const target = path.join(config.uploadsDir, storedName);
@@ -125,7 +125,7 @@ export function createLeagueFilesRouter({ db }) {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           req.league.id,
-          req.user.id,
+          teacherId(req),
           originalName,
           storedName,
           req.file.mimetype || 'application/octet-stream',
@@ -134,7 +134,7 @@ export function createLeagueFilesRouter({ db }) {
           isoNow(),
         );
         const created = leagueFiles(db, req.league.id).find((row) => row.id === Number(info.lastInsertRowid));
-        res.status(201).json({ file: created, storage: teacherStorageUsage(db, req.user.id) });
+        res.status(201).json({ file: created, storage: teacherStorageUsage(db, teacherId(req)) });
       } catch (error) {
         // Do not leave a blob behind when the database insert fails.
         removeUploadedFile(storedName);
@@ -158,7 +158,7 @@ export function createFilesRouter({ db }) {
     const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(file.league_id);
     let allowed = false;
     if (req.user.role === 'teacher') {
-      allowed = league?.teacher_id === req.user.id;
+      allowed = canAccessLeague(req.user, league) && hasAssistantPermission(req.user, 'files');
     } else if (req.user.role === 'student') {
       const student = db.prepare('SELECT id FROM students WHERE user_id = ? AND league_id = ?').get(req.user.id, file.league_id);
       allowed = Boolean(student);
@@ -183,10 +183,12 @@ export function createFilesRouter({ db }) {
     const file = Number.isFinite(id) ? db.prepare('SELECT * FROM files WHERE id = ?').get(id) : null;
     if (!file) throw notFound('فایل یافت نشد');
     const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(file.league_id);
-    if (league?.teacher_id !== req.user.id) throw forbidden('این فایل به لیگ شما تعلق ندارد');
+    if (!canAccessLeague(req.user, league) || !hasAssistantPermission(req.user, 'files')) {
+      throw forbidden('این فایل به لیگ شما تعلق ندارد');
+    }
     db.prepare('DELETE FROM files WHERE id = ?').run(file.id);
     removeUploadedFile(file.stored_name);
-    res.json({ ok: true, storage: teacherStorageUsage(db, req.user.id) });
+    res.json({ ok: true, storage: teacherStorageUsage(db, teacherId(req)) });
   });
 
   return router;

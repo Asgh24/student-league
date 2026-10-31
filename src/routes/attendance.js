@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { todayIso } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
 import { readSettings } from '../repositories/leagues.js';
-import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import { requireTeacher, loadOwnedLeague, requirePermission } from '../middleware/auth.js';
 import {
   attendanceSheet,
   bulkSetAttendance,
@@ -14,7 +14,7 @@ import {
 
 export function createAttendanceRouter({ db }) {
   const router = Router({ mergeParams: true });
-  router.use(requireTeacher, loadOwnedLeague(db));
+  router.use(requireTeacher, loadOwnedLeague(db), requirePermission('attendance'));
 
   router.get('/', validate({ query: schemas.listQuery }), (req, res) => {
     const date = req.query.date ?? todayIso();

@@ -20,6 +20,7 @@ import {
   touchAdminLogin,
   updateAdminPassword,
 } from '../repositories/admins.js';
+import { assistantIdentityForUser, parsePermissions } from '../services/assistants.js';
 import { ensureCsrfToken } from '../middleware/csrf.js';
 import { requireAuth } from '../middleware/auth.js';
 import { loginRateLimit } from '../middleware/rateLimit.js';
@@ -88,8 +89,32 @@ export function createAuthRouter({ db }) {
         return res.json({ user: publicAdmin(admin), csrfToken: req.session.csrfToken });
       }
 
+      // Revoked assistants keep the users row but lose the scoped account.
+      // They must not fall through and behave like a normal teacher.
+      const assistant = user.is_assistant === 1 ? assistantIdentityForUser(db, user.id) : null;
+      if (user.is_assistant === 1 && (!assistant || assistant.active !== 1)) {
+        throw forbidden('دسترسی همیار لغو شده است. با معلم خود تماس بگیرید');
+      }
+
       await startSession(req, { userId: user.id });
-      return res.json({ user: withSubscription(publicUser(user)), csrfToken: req.session.csrfToken });
+      const payload = publicUser(user);
+      if (assistant) {
+        Object.assign(payload, {
+          ownerId: assistant.owner_id,
+          ownerDisplayName: assistant.owner_display_name,
+          trialEndsAt: assistant.owner_trial_ends_at,
+          subscriptionEndsAt: assistant.owner_subscription_ends_at,
+          subscriptionPlanId: assistant.owner_subscription_plan_id,
+          subscriptionNote: assistant.owner_subscription_note,
+          assistant: {
+            id: assistant.id,
+            leagueId: assistant.league_id,
+            studentId: assistant.student_id,
+            permissions: parsePermissions(assistant.permissions),
+          },
+        });
+      }
+      return res.json({ user: withSubscription(payload), csrfToken: req.session.csrfToken });
     }),
   );
 

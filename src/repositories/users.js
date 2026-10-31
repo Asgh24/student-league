@@ -83,13 +83,14 @@ export function createUser(db, {
   subscriptionEndsAt = null,
   subscriptionPlanId = null,
   subscriptionNote = '',
+  isAssistant = false,
 }) {
   const info = db
     .prepare(`
       INSERT INTO users (
         username, password_hash, role, display_name, persian_digits, created_at,
-        trial_ends_at, subscription_ends_at, subscription_plan_id, subscription_note
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        trial_ends_at, subscription_ends_at, subscription_plan_id, subscription_note, is_assistant
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
       String(username).trim(),
@@ -102,6 +103,7 @@ export function createUser(db, {
       subscriptionEndsAt,
       subscriptionPlanId,
       String(subscriptionNote ?? ''),
+      isAssistant ? 1 : 0,
     );
   return findById(db, info.lastInsertRowid);
 }

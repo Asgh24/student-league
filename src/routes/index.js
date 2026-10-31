@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { createAnswersRouter, createLeagueQuestionsRouter, createLeagueQuizRouter, createQuestionsRouter } from './qa.js';
 import { createAdminRouter } from './admin.js';
 import { createAiSettingsRouter, createLeagueAiRouter } from './ai.js';
+import { createAssistantsRouter } from './assistants.js';
 import { createAttendanceRouter } from './attendance.js';
 import { createAuthRouter } from './auth.js';
 import { createColumnsRouter, createLeagueColumnsRouter } from './columns.js';
@@ -34,6 +35,7 @@ export function createApiRouter(ctx) {
   router.use('/messages', createMessagesRouter(ctx));
   router.use('/sms', createSmsSettingsRouter(ctx));
   router.use('/ai', createAiSettingsRouter(ctx));
+  router.use('/assistants', createAssistantsRouter(ctx));
 
   // Teacher resources scoped to a league the teacher owns.
   router.use('/leagues/:id/students', createLeagueStudentsRouter(ctx));

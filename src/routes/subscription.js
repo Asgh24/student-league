@@ -6,7 +6,7 @@ import { AppError, badRequest, conflict, notFound } from '../lib/errors.js';
 import { asyncHandler, isoNow } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
 import { findById } from '../repositories/users.js';
-import { requireTeacherAccount } from '../middleware/auth.js';
+import { requireTeacherAccount, requireOwnerTeacher } from '../middleware/auth.js';
 import { cancelCardPayment } from '../services/manualPayments.js';
 import { getCardSettings, isCardConfigured } from '../services/paymentSettings.js';
 import { paymentProviderInfo, requestZarinpalPayment } from '../services/payments.js';
@@ -28,7 +28,7 @@ import { decodeUploadFilename, sanitizeFilename } from './files.js';
 /** `/api/v1/subscription` — current window, plans, checkout and history. */
 export function createSubscriptionRouter({ db }) {
   const router = Router();
-  router.use(requireTeacherAccount);
+  router.use(requireTeacherAccount, requireOwnerTeacher);
 
   const receiptUpload = multer({
     storage: multer.memoryStorage(),

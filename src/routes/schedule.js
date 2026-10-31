@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { isoNow } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
-import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
+import { requireTeacher, loadOwnedLeague, requirePermission } from '../middleware/auth.js';
 import { JALALI_WEEKDAYS } from '../lib/jalali.js';
 
 export const SCHEDULE_PERIODS = 7;
@@ -14,7 +14,7 @@ export function readSchedule(db, leagueId) {
 
 export function createScheduleRouter({ db }) {
   const router = Router({ mergeParams: true });
-  router.use(requireTeacher, loadOwnedLeague(db));
+  router.use(requireTeacher, loadOwnedLeague(db), requirePermission('schedule'));
 
   router.get('/', (req, res) => {
     res.json(readSchedule(db, req.league.id));
