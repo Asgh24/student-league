@@ -198,6 +198,32 @@ export function createScoresTable({ leagueId, columns, students, reload }) {
   ]));
   table.appendChild(tbody);
 
+  // Add scroll listener to enhance header visibility when scrolling down
+  function updateHeaderVisibility() {
+    const wrap = table.parentElement;
+    if (!wrap) return;
+    
+    const scrollY = wrap.scrollTop;
+    const hasScrolled = scrollY > 20;
+    
+    // Add/remove highlight class based on scroll position
+    if (hasScrolled !== wrap.classList.contains('is-scrolled')) {
+      wrap.classList.toggle('is-scrolled', hasScrolled);
+    }
+    
+    requestAnimationFrame(updateHeaderVisibility);
+  }
+  
+  setTimeout(() => {
+    const wrap = table.parentElement;
+    if (wrap && wrap.addEventListener) {
+      wrap.addEventListener('scroll', () => {
+        requestAnimationFrame(updateHeaderVisibility);
+      });
+      updateHeaderVisibility();
+    }
+  }, 0);
+
   const toolbar = el('div.row', { style: { marginBottom: '10px' } }, [
     el('div', { style: { flex: '1 1 200px' } }, [searchInput]),
     button('افزودن دانش‌آموز جدید', { kind: 'soft', icon: '➕', onClick: () => addStudent(leagueId, reload) }),
@@ -208,7 +234,7 @@ export function createScoresTable({ leagueId, columns, students, reload }) {
 
   return el('div', {}, [
     toolbar,
-    el('div.table-wrap.score-table-wrap', {}, [table]),
+    el('div.table-wrap.score-table-wrap', { classList: { 'is-scrollable': true } }, [table]),
     footer,
     el('p.small.muted', { style: { marginTop: '6px' }, text: 'برای ثبت مقدار دلخواه روی عدد امتیاز بزنید.' }),
   ]);

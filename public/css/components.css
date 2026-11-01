@@ -373,6 +373,9 @@ textarea:focus {
   border: 1px solid var(--line);
   background: var(--surface);
   max-width: 100%;
+  /* Ensure headers stay visible when scrolling table content */
+  position: relative;
+  overflow-anchor: auto;
 }
 table.grid-table {
   /* width of the pinned operations rail; also its sticky offset */
@@ -396,7 +399,70 @@ table.grid-table th {
   background: linear-gradient(180deg, #f7f3ff, #f1e9ff);
   color: var(--ink-soft);
   font-size: 0.82rem;
-  z-index: 2;
+  z-index: 10;
+}
+
+/* Improve sticky header visibility with better layering */
+table.grid-table.score-table thead tr th {
+  z-index: 20;
+}
+
+table.grid-table th.name-cell,
+table.grid-table th.col-rank {
+  z-index: 30;
+}
+
+/* Add a subtle shadow to make header stand out when scrolling */
+table.grid-table thead {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* Ensure table headers stay above all other content */
+.table-wrap {
+  position: relative;
+  overflow-anchor: auto;
+}
+
+/* Make scrollable container work better with sticky headers */
+@media (min-width: 701px) {
+  .table-wrap {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    /* Smooth scrolling for better UX */
+    scroll-behavior: smooth;
+  }
+  
+  /* Custom scrollbar styling */
+  .table-wrap::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+  
+  .table-wrap::-webkit-scrollbar-track {
+    background: var(--surface);
+    border-radius: 4px;
+  }
+  
+  .table-wrap::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: 4px;
+  }
+  
+  .table-wrap::-webkit-scrollbar-thumb:hover {
+    background: var(--ink-soft);
+  }
+}
+
+/* Add visual indicator when table is scrollable */
+.table-wrap.is-scrollable::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 50px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--line));
+  pointer-events: none;
 }
 table.grid-table td.name-cell {
   text-align: start;
@@ -2448,9 +2514,29 @@ body.quiz-open {
     border-radius: 0;
     background: transparent;
   }
-  table.grid-table.score-table {
-    display: block;
-    width: 100%;
+}
+
+/* Enhanced sticky header behavior for desktop/tablet */
+@media (min-width: 701px) {
+  /* Darker gradient on scroll for better contrast */
+  .table-wrap.is-scrolled > .score-table thead tr th {
+    background: linear-gradient(180deg, #e8dff5, #dfd6f5);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+  
+  /* Add visual indicator when scrolled */
+  .table-wrap.is-scrolled::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--brand), var(--accent));
+    opacity: 0.8;
+    pointer-events: none;
+  }
+}
     min-width: 0;
     font-size: 0.9rem;
   }
