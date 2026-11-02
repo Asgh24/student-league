@@ -546,4 +546,47 @@ export const schemas = {
   assistantListQuery: z.object({
     leagueId: z.preprocess(blankToUndefined, z.coerce.number().int().positive().optional()),
   }),
+
+  // ===== Report Card Schemas =====
+  
+  reportCardSubjectCreate: z.object({
+    name: z.string().trim().min(1, 'نام درس الزامی است').max(64, 'نام درس نباید از ۶۴ حرف بیشتر باشد'),
+    orderIndex: z.coerce.number().int().nonnegative().optional(),
+    color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'رنگ باید به فرمت HEX باشد (مثال: #6366f1)').optional(),
+  }),
+
+  reportCardSubjectUpdate: z.object({
+    name: z.string().trim().min(1, 'نام درس الزامی است').max(64).optional(),
+    orderIndex: z.coerce.number().int().nonnegative().optional(),
+    color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'رنگ باید به فرمت HEX باشد').optional(),
+  }).refine((value) => Object.keys(value).length > 0, { message: 'هیچ تغییری ارسال نشده است' }),
+
+  reportCardCreate: z.object({
+    studentId: z.coerce.number().int().positive('دانش‌آموز انتخاب شده است'),
+    semester: z.string().trim().min(1, 'نوبت الزامی است').max(64),
+  }),
+
+  reportCardUpdate: z.object({
+    semester: z.string().trim().min(1).max(64).optional(),
+    notes: z.string().optional(),
+    isPublished: z.boolean().optional(),
+  }).refine((value) => Object.keys(value).length > 0, { message: 'هیچ تغییری ارسال نشده است' }),
+
+  reportCardGradeUpdate: z.object({
+    subjectName: z.string().trim().min(1, 'نام درس الزامی است').max(64),
+    numeric: z.coerce.number().min(0).max(100).optional(),
+    descriptive: z.enum(['very_good', 'good', 'acceptable', 'needs_improvement'], {
+      errorMap: () => ({ message: 'انتخاب سطح توصیفی نامعتبر است' }),
+    }).optional(),
+    notes: z.string().optional(),
+  }),
+
+  reportCardAchievementCreate: z.object({
+    title: z.string().trim().min(1, 'عنوان الزامی است').max(128),
+    description: z.string().optional(),
+    icon: z.string().max(4).optional(),
+    points: z.coerce.number().int().nonnegative().optional(),
+    category: z.string().trim().max(32).optional(),
+    dateAwarded: z.string().datetime().optional(),
+  }),
 };

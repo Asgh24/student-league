@@ -34,7 +34,7 @@ import { renderQa } from './views/qa.js';
 import { renderRaffle } from './views/raffle.js';
 import { renderRepresentative } from './views/representative.js';
 import { renderRepresentativeBoard } from './views/representativeBoard.js';
-import { renderReports } from './views/reports.js';
+import { renderReports, renderReportCards } from './views/reports.js';
 import { renderSchedule } from './views/schedule.js';
 import { renderSeating } from './views/seating.js';
 import { renderSettings } from './views/settings.js';
@@ -239,6 +239,8 @@ const routes = [
   { path: 'teacher/league/:id/seating', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSeating(ctx) },
   { path: 'teacher/league/:id/contacts', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderContacts(ctx) },
   { path: 'teacher/league/:id/reports', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderReports(ctx) },
+  // Report cards (separate from daily reports)
+  { path: 'teacher/league/:id/report-cards', guard: () => (isTeacher() && !isAssistant() ? undefined : 'teacher'), view: (ctx) => renderReportCards(ctx) },
   { path: 'admin', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminDashboard(ctx) },
   { path: 'admin/teachers', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminTeachers(ctx) },
   { path: 'admin/expired-users', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminExpiredUsers(ctx) },

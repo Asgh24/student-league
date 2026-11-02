@@ -13,6 +13,7 @@ const TOOLS = [
   { suffix: 'teams', icon: '🛡️', label: 'لیگ تیمی', perm: 'teams' },
   { suffix: 'attendance', icon: '🗓️', label: 'حضور و غیاب', perm: 'attendance' },
   { suffix: 'evaluations', icon: '📝', label: 'ارزشیابی دروس', perm: 'evaluations' },
+  { suffix: 'report-cards', icon: '📊', label: 'کارنامه دانش‌آموزان', perm: 'evaluations' },
   { suffix: 'raffle', icon: '🎲', label: 'قرعه‌کشی', perm: 'raffle' },
   { suffix: 'representative', icon: '👑', label: 'نماینده کلاس', perm: 'representative' },
   { suffix: 'live', icon: '📺', label: 'تابلوی زنده', perm: 'live' },
