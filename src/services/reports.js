@@ -9,7 +9,7 @@
  */
 
 import { isoNow } from '../lib/http.js';
-import { hasAssistantPermission } from './assistants.js';
+import { hasAssistantPermission } from '../middleware/auth.js';
 
 /** Persian descriptive grading scale */
 export const DESCRIPTIVE_GRADES = [
