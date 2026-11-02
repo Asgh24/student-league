@@ -77,7 +77,7 @@ export function createAssistantsRouter({ db }) {
       displayName: resolvedName,
       permissions: sanitizePermissions(permissions),
     });
-    res.status(201).json({ assistant });
+    res.status(201).json({ assistant: publicAssistant(assistant) });
   });
 
   router.patch('/:id', validate({ body: schemas.assistantUpdate }), (req, res) => {

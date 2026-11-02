@@ -307,7 +307,7 @@ describe('teacher dashboard', () => {
     await renderTeacherDashboard();
 
     const tiles = document.querySelectorAll('#view .tile');
-    expect(tiles).toHaveLength(17);
+    expect(tiles).toHaveLength(18);
     expect(document.querySelector('#view').textContent).toContain('کلاس ششم الف');
     expect(document.querySelector('#view').textContent).toContain('لیگ انفرادی');
     expect(document.querySelector('#view').textContent).toContain('ارزشیابی دروس');
@@ -352,7 +352,7 @@ describe('teacher dashboard', () => {
 
     // no manual refresh and no second call to renderTeacherDashboard
     await vi.waitFor(() => expect(document.querySelector('#view').textContent).toContain('لیگ تازه'));
-    expect(document.querySelectorAll('#view .tile')).toHaveLength(17);
+    expect(document.querySelectorAll('#view .tile')).toHaveLength(18);
     expect(api.get).toHaveBeenCalledWith('/leagues/7');
   });
 });

@@ -1,374 +1,436 @@
 /**
- * Student Report Card View - Manual grade entry for students
- * 
- * Features:
- *  - Configure subjects per league (once, reused for all students)
- *  - Select students manually one-by-one
- *  - Enter numeric (%) or descriptive grades (خیلی خوب، خوب، etc.)
- *  - Display achievements from evaluations + monthly league points
- *  - Show student performance overview at bottom
+ * «گزارش روزانه» — condensed daily change report for parents.
+ *
+ * The teacher picks a Shamsi day, selects the students (students with a change
+ * and a parent number are selected by default), reviews the exact message and
+ * sends it through sms.ir. Without provider credentials the message is stored
+ * in the local outbox and the UI says so.
  */
 
 import { api } from '../api.js';
 import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
-import { renderView, setTopbarTitle } from '../shell.js';
-import { notify, openModal, formDialog, confirmDialog } from '../ui.js';
-import { button, card, faDate as _faDate, pageHead, emptyState } from './common.js';
-import { can } from '../store.js';
+import { formatJalaliDate, todayIso } from '../jalali.js';
+import { jalaliDateInput } from '../jalaliDate.js';
+import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
+import { setLeagueId } from '../store.js';
+import { confirmDialog, emptyState, notify } from '../ui.js';
+import { backToWorkbench, button, card, chip, fa, faDateTime, loadingNode, pageHead, statCard } from './common.js';
+import { smsSettingsCard } from './smsSettings.js';
 
-// Persian descriptive grading scale (not yet used)
-const _DESCRIPTIVE_GRADES = [
-  { value: 'very_good', label: 'خیلی خوب', icon: '⭐' },
-  { value: 'good', label: 'خوب', icon: '✅' },
-  { value: 'acceptable', label: 'قابل قبول', icon: '⚠️' },
-  { value: 'needs_improvement', label: 'نیاز به تلاش بیشتر', icon: '📚' },
-];
+const STATUS_LABELS = {
+  sent: { label: 'ارسال شد', kind: 'ok' },
+  queued: { label: 'در صف', kind: 'amber' },
+  failed: { label: 'ناموفق', kind: 'bad' },
+  skipped: { label: 'بدون شماره', kind: 'muted' },
+};
 
-export async function renderReportCards() {
-  if (!can('evaluations')) {
-    notify.error('دسترسی به بخش کارنامه ندارید');
-    return;
+function signed(value) {
+  const number = Number(value) || 0;
+  if (number === 0) return fa(0);
+  return `${number > 0 ? '+' : '−'}${fa(Math.abs(number))}`;
+}
+
+function deltaKind(value) {
+  if (value > 0) return 'ok';
+  if (value < 0) return 'bad';
+  return 'muted';
+}
+
+export async function renderReports({ params }) {
+  const leagueId = Number(params.id);
+  setTopbarTitle('گزارش روزانه والدین');
+  setLeagueId(leagueId);
+
+  const body = el('div', {}, [loadingNode()]);
+  renderView([body]);
+
+  let report = null;
+  let date = todayIso();
+  let selected = new Set();
+  let lastResult = null;
+  let sending = false;
+
+  async function load() {
+    body.replaceChildren(loadingNode());
+    try {
+      report = await api.get(`/leagues/${leagueId}/reports/daily?date=${encodeURIComponent(date)}`);
+    } catch (error) {
+      body.replaceChildren(
+        pageHead({ icon: '📨', title: 'گزارش روزانه والدین', actions: [backToWorkbench()] }),
+        emptyState({ icon: '⚠️', title: 'دریافت گزارش ناموفق بود', hint: errorMessage(error) }),
+      );
+      return;
+    }
+    date = report.date;
+    setLeaguePill({ name: report.league?.name ?? '' });
+    selected = new Set(
+      report.items.filter((item) => item.changes > 0 && item.hasParentPhone).map((item) => item.studentId),
+    );
+    paint();
   }
 
-  setTopbarTitle('کارنامه دانش‌آموزان');
-  
-  const body = el('div.report-cards-container');
-  renderView([pageHead({
-    icon: '📊',
-    title: 'کارنامه دانش‌آموزان',
-    subtitle: 'ثبت دستی نمرات توصیفی و کمی برای دانش‌آموزان (در حال توسعه)',
-    actions: [],
-  }), body]);
+  function itemsForDisplay() {
+    return [...report.items].sort((a, b) => {
+      if (b.changes !== a.changes) return b.changes - a.changes;
+      return a.studentId - b.studentId;
+    });
+  }
 
-  body.textContent = '';
-  body.appendChild(el('div.empty-state', {}, [
-    el('span.empty-icon', { text: '🔨' }),
-    el('h2', { text: 'در حال توسعه است' }),
-    el('p.muted', { text: 'این بخش در حال پیاده‌سازی کامل است. لطفاً بعداً مراجعه کنید.' }),
-  ]));
-}
-  const wrap = el('div.grid', { style: { gap: '16px' } });
+  function selectedItems() {
+    return report.items.filter((item) => selected.has(item.studentId));
+  }
 
-  // Summary cards
-  wrap.appendChild(el('div.row', { style: { gap: '12px' } }, [
-    card({ title: `درس‌های تعریف‌شده (0)`, icon: '📚' }),
-    card({ title: `دانش‌آموزان (0)`, icon: '👨‍🎓' }),
-    card({ title: `کارنامه‌های تکمیل‌شده (0)`, icon: '✅' }),
-  ]));
-
-  // Main sections
-  wrap.appendChild(card({
-    title: 'درس‌های کارنامه (یک بار تنظیم کنید)',
-    icon: '✏️',
-  }, renderSubjectsSection()));
-
-  wrap.appendChild(card({
-    title: 'انتخاب دانش‌آموز و ورود نمرات',
-    icon: '👤',
-  }, renderStudentSelection({})));
-
-  return wrap;
-}
-
-function renderSubjectsSection() {
-  return el('div.empty-message', { text: 'لطفاً ابتدا درس‌های کارنامه را تعریف کنید' });
-}
-
-function renderStudentSelection({ _subjects, _reload }) {
-  const wrap = el('div');
-
-  wrap.appendChild(emptyState({
-    icon: '',
-    title: 'در حال بارگذاری دانش‌آموزان...',
-    hint: 'منتظر انتخاب معلم.',
-  }));
-
-  return wrap;
-}
-
-async function selectStudent(_studentId, _subjects, _reload) {
-  if (!_studentId) return;
-
-  const modal = openModal({
-    title: 'کارنامه دانش‌آموز',
-    body: el('div.loading', { text: 'در حال بارگذاری...' }),
-    onClose: () => null,
-  });
-
-  try {
-    // Check if report card exists
-    let card = null;
-    try {
-      const existingCards = await api.get(`/leagues/cards?studentId=${studentId}`);
-      const firstCard = existingCards.items?.[0];
-      if (firstCard) {
-        card = firstCard;
-        // TODO: Load card details
-      }
-    } catch {
-      // No card exists yet
+  function refreshSelectionUi() {
+    const chosen = selectedItems();
+    const withPhone = chosen.filter((item) => item.hasParentPhone).length;
+    const missing = chosen.length - withPhone;
+    selectionInfo.textContent = chosen.length
+      ? `${fa(chosen.length)} دانش‌آموز انتخاب شده — ${fa(withPhone)} شماره والد دارد${missing ? `، ${fa(missing)} بدون شماره` : ''}`
+      : 'هیچ دانش‌آموزی انتخاب نشده است.';
+    selectionInfo.className = chosen.length ? 'small' : 'small muted';
+    sendButton.disabled = sending || withPhone === 0;
+    sendButton.title = withPhone === 0 ? 'برای ارسال، حداقل یک دانش‌آموز با شماره والد انتخاب کنید' : 'ارسال پیامک گزارش';
+    if (customSendButton) {
+      const hasText = customMessage.value.trim().length > 0;
+      customSendButton.disabled = sending || withPhone === 0 || !hasText;
+      customSendButton.title = withPhone === 0
+        ? 'برای ارسال، حداقل یک دانش‌آموز با شماره والد انتخاب کنید'
+        : hasText
+          ? 'ارسال پیام دلخواه به والدین'
+          : 'متن پیام را وارد کنید';
     }
+    previewHost.replaceChildren(...(chosen.length
+      ? chosen.map((item) => el('div.report-message', {}, [
+        el('div.report-message__head', {}, [
+          el('strong', { text: item.name }),
+          item.hasParentPhone
+            ? chip(item.parentPhone, 'muted')
+            : chip('شماره والد ثبت نشده', 'bad'),
+          el('span.spacer'),
+          el(`span.chip.chip--${deltaKind(item.totalDelta)}`, { text: `جمع ${signed(item.totalDelta)}` }),
+        ]),
+        el('pre.report-message__body', { dir: 'rtl', text: item.message }),
+      ]))
+      : [el('p.muted.small', { text: 'با انتخاب دانش‌آموزان، متن دقیق پیامک اینجا نمایش داده می‌شود.' })]));
+    for (const row of rowsByStudent.values()) {
+      const active = selected.has(row.item.studentId);
+      row.node.classList.toggle('is-selected', active);
+      row.checkbox.checked = active;
+    }
+  }
 
-    modal.body.textContent = '';
-    
-    el('div.card-header', {}, [
-      el('h2', { text: 'نام دانش‌آموز' }),
-      button('ویرایش', {
-        kind: 'ghost',
-        icon: '✏️',
-        onClick: () => editStudentInfo(null),
-      }),
+  const selectionInfo = el('p.small.muted');
+  const previewHost = el('div.report-previews');
+  const rowsByStudent = new Map();
+  const customMessage = el('textarea', {
+    id: 'custom-sms-message',
+    rows: '4',
+    maxlength: '1000',
+    dir: 'rtl',
+    placeholder: 'مثلاً: سلام، احتراماً به اطلاع می‌رسانم آرش امروز در کلاس ... لطفاً در خانه پیگیری کنید.',
+    'aria-label': 'متن پیام دلخواه برای والدین',
+  });
+  customMessage.addEventListener('input', refreshSelectionUi);
+  let sendButton = null;
+  let customSendButton = null;
+
+  function toggle(studentId, value) {
+    if (value) selected.add(studentId);
+    else selected.delete(studentId);
+    refreshSelectionUi();
+  }
+
+  function selectWhere(predicate) {
+    selected = new Set(report.items.filter(predicate).map((item) => item.studentId));
+    refreshSelectionUi();
+  }
+
+  function dateCard() {
+    const field = jalaliDateInput({
+      id: 'report-date',
+      value: date,
+      onChange: (iso) => {
+        if (!iso || iso === date) return;
+        date = iso;
+        lastResult = null;
+        void load();
+      },
+    });
+    return card({ title: 'روز گزارش', icon: '📅' }, [
+      el('div.row', { style: { flexWrap: 'wrap', alignItems: 'flex-end' } }, [
+        el('div.field', { style: { minWidth: '220px' } }, [el('label', { for: 'report-date', text: 'تاریخ (شمسی)' }), field]),
+        button('امروز', { kind: 'ghost', icon: '📆', onClick: () => { date = todayIso(); void load(); } }),
+        el('span.small.muted', { text: `تغییرات ثبت‌شده در ${formatJalaliDate(date)}` }),
+      ]),
     ]);
+  }
 
-    // If no card exists, show create form
-    if (!card) {
-      const semesterInput = el('input', {
-        type: 'text',
-        placeholder: 'مثلاً: نوبت اول',
-        required: true,
-        style: { width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--line)' },
+  function smsSettings() {
+    return smsSettingsCard({
+      config: report.sms ?? {},
+      sampleMessage: report.sampleMessage ?? '',
+      onSaved: (config) => {
+        report.sms = config;
+        paint();
+      },
+    });
+  }
+
+  function reportTable() {
+    const table = el('table.grid-table.report-table');
+    table.appendChild(el('thead', {}, [
+      el('tr', {}, [
+        el('th', { scope: 'col', text: 'انتخاب' }),
+        el('th', { scope: 'col', text: 'دانش‌آموز' }),
+        el('th', { scope: 'col', text: 'تغییرات امروز' }),
+        el('th', { scope: 'col', text: 'جمع' }),
+        el('th', { scope: 'col', text: 'شماره والد' }),
+      ]),
+    ]));
+    const tbody = el('tbody');
+    for (const item of itemsForDisplay()) {
+      const checkbox = el('input', {
+        type: 'checkbox',
+        checked: selected.has(item.studentId),
+        'aria-label': `انتخاب ${item.name}`,
+        onchange: () => toggle(item.studentId, checkbox.checked),
       });
+      const changesCell = el('td', {}, item.lines.length
+        ? item.lines.map((line) => el(`span.chip.chip--${deltaKind(line.delta)}`, {
+          text: `${line.columnName} ${signed(line.delta)}`,
+        }))
+        : [el('span.small.muted', { text: 'بدون تغییر' })]);
+      const node = el('tr', { class: selected.has(item.studentId) ? 'is-selected' : '' }, [
+        el('td', {}, [el('label.report-check', {}, [checkbox])]),
+        el('td.name-cell', {}, [el('strong', { text: item.name })]),
+        changesCell,
+        el('td', {}, [el(`span.chip.chip--${deltaKind(item.totalDelta)}`, { text: signed(item.totalDelta) })]),
+        el('td', {}, item.hasParentPhone
+          ? [el('span.small', { text: item.parentPhone })]
+          : [el('span.chip.chip--bad', { text: 'ثبت نشده' })]),
+      ]);
+      tbody.appendChild(node);
+      rowsByStudent.set(item.studentId, { item, node, checkbox });
+    }
+    if (report.items.length === 0) {
+      tbody.appendChild(el('tr', {}, [el('td', { colspan: '5' }, [el('p.muted.small', { text: 'هنوز دانش‌آموزی در این لیگ نیست.' })])]));
+    }
+    table.appendChild(tbody);
+    return el('div.table-wrap', {}, [table]);
+  }
 
-      const createBtn = button('ایجاد کارنامه جدید', {
-        onClick: async () => {
-          if (!semesterInput.value.trim()) {
-            notify.error('لطفاً نام نوبت را وارد کنید');
-            return;
-          }
+  function resultsCard() {
+    if (!lastResult) return null;
+    const counts = lastResult.counts ?? {};
+    return card({ title: 'نتیجهٔ ارسال', icon: '📬' }, [
+      el('div.row', { style: { flexWrap: 'wrap' } }, [
+        chip(`ارسال‌شده ${fa(counts.sent ?? 0)}`, 'ok'),
+        chip(`در صف ${fa(counts.queued ?? 0)}`, 'amber'),
+        chip(`ناموفق ${fa(counts.failed ?? 0)}`, 'bad'),
+        chip(`بدون شماره ${fa(counts.skipped ?? 0)}`, 'muted'),
+      ]),
+      el('div.table-wrap', { style: { marginTop: '10px' } }, [
+        el('table.grid-table', {}, [
+          el('thead', {}, [el('tr', {}, [
+            el('th', { text: 'دانش‌آموز' }),
+            el('th', { text: 'وضعیت' }),
+            el('th', { text: 'توضیح' }),
+          ])]),
+          el('tbody', {}, (lastResult.results ?? []).map((result) => {
+            const meta = STATUS_LABELS[result.status] ?? { label: result.status, kind: 'muted' };
+            return el('tr', {}, [
+              el('td', { text: result.name }),
+              el('td', {}, [chip(meta.label, meta.kind)]),
+              el('td.small', { text: result.status === 'skipped' ? 'شماره والد ثبت نشده است.' : result.error ?? '' }),
+            ]);
+          })),
+        ]),
+      ]),
+    ]);
+  }
 
-          try {
-            await api.post('/leagues/cards', {
-              studentId: Number(studentId),
-              semester: semesterInput.value.trim(),
-            });
-
-            notify.ok('کارنامه با موفقیت ایجاد شد');
-            modal.close();
-            void _reload; // suppress unused warning
-          } catch (_err) {
-            // Handle error silently for now
-            void _err; // suppress unused warning
-          }
-        },
-      });
-
-      modal.body.appendChild(el('div.form-section', {}, [
-        el('p.muted', { text: 'برای ایجاد کارنامه جدید، نام نوبت را وارد کنید' }),
-        el('div.field-row', {}, [semesterInput, createBtn]),
+  function recentCard() {
+    if (!report.recent?.length) {
+      return card({ title: 'ارسال‌های اخیر این روز', icon: '🕘' }, [el('p.muted.small', { text: 'برای این روز هنوز پیامکی ثبت نشده است.' })]);
+    }
+    const list = el('div.report-recent');
+    for (const message of report.recent) {
+      const meta = STATUS_LABELS[message.status] ?? { label: message.status, kind: 'muted' };
+      list.appendChild(el('div.report-recent__item', {}, [
+        el('div.row', { style: { flexWrap: 'wrap' } }, [
+          el('strong', { text: message.studentName || '—' }),
+          el('span.small.muted', { text: message.mobile }),
+          chip(meta.label, meta.kind),
+          el('span.spacer'),
+          el('span.small.muted', { text: faDateTime(message.createdAt) }),
+        ]),
+        el('pre.report-message__body', { dir: 'rtl', text: message.body }),
+        message.error ? el('p.small', { style: { color: '#b91c1c' }, text: message.error }) : null,
       ]));
+    }
+    return card({ title: 'ارسال‌های اخیر این روز', icon: '🕘' }, [list]);
+  }
+
+  async function sendCustomMessage() {
+    const chosen = selectedItems();
+    const withPhone = chosen.filter((item) => item.hasParentPhone);
+    const text = customMessage.value.trim();
+    if (sending) return;
+    if (!text) {
+      notify.error('متن پیام را وارد کنید');
+      customMessage.focus();
+      return;
+    }
+    if (withPhone.length === 0) {
+      notify.error('برای ارسال، حداقل یک دانش‌آموز با شماره والد انتخاب کنید');
       return;
     }
 
-    // Existing card - show grades table
-    modal.body.appendChild(el('div.report-card-body', {}, [
-      el('div.card-meta', { text: `نوبت: ${card.semester}` },
-        el('span.chip', { text: card.is_published ? 'منتشر شده' : 'پیش‌نویس' })
-      ),
-      el('table.grades-table', {}, [
-        el('thead', {}, [
-          el('tr', {}, [
-            el('th.th-subject', { text: 'درس' }),
-            el('th.th-numeric', { text: 'نمره درصد' }),
-            el('th.th-descriptive', { text: 'سطح توصیفی' }),
-            el('th.th-notes', { text: 'توضیحات معلم' }),
-          ]),
-        ]),
-        el('tbody', {}),
-      ]),
-      el('div.card-footer', {}, [
-        button('ذخیره همه تغییرات', {
-          kind: 'primary',
-          icon: '💾',
-          onclick: () => saveGrades(card.id),
-        }),
-        card.is_published
-          ? button('لغو انتشار', { onclick: () => togglePublish(card.id, false) })
-          : button('انتشار کارنامه', {
-              kind: 'success',
-              onclick: () => togglePublish(card.id, true),
-            }),
-      ]),
-    ]));
+    const agreed = await confirmDialog({
+      title: 'ارسال پیام دلخواه',
+      message: `این پیام برای والدین ${fa(withPhone.length)} دانش‌آموز انتخاب‌شده ارسال شود؟`,
+      confirmLabel: 'ارسال پیام',
+    });
+    if (!agreed) return;
 
-  } catch (error) {
-    modal.body.textContent = '';
-    modal.body.appendChild(el('p.error', { text: errorMessage(error) }));
-  }
-}
-
-async function openSubjectConfigModal() {
-  let currentSubjects = [];
-
-  try {
-    const res = await api.get('/leagues/report/subjects');
-    currentSubjects = res.items ?? [];
-  } catch (error) {
-    console.warn('Failed to load subjects:', error);
-  }
-
-  openModal({
-    title: 'تنظیم درس‌های کارنامه',
-    body: el('div.subject-config', {}, [
-      el('div.subject-list', {}, currentSubjects.map(subject => renderSubjectItem(subject))),
-      el('div.add-subject-form', {}, [
-        el('input#new-subject-name', {
-          type: 'text',
-          placeholder: 'نام درس جدید (مثلاً: ریاضی)',
-          style: { width: '100%', padding: '8px', marginBottom: '8px', borderRadius: '8px', border: '1px solid var(--line)' },
-        }),
-        el('div.field-row', {}, [
-          el('input#new-subject-color', {
-            type: 'color',
-            value: '#6366f1',
-            style: { width: '60px', height: '40px', borderRadius: '8px', border: '1px solid var(--line)', cursor: 'pointer' },
-          }),
-          button('افزودن درس', {
-            icon: '➕',
-            onclick: async () => {
-              const name = document.getElementById('new-subject-name').value.trim();
-              const color = document.getElementById('new-subject-color').value;
-
-              if (!name) {
-                notify.error('لطفاً نام درس را وارد کنید');
-                return;
-              }
-
-              try {
-                await api.post('/leagues/report/subjects', {
-                  name,
-                  color,
-                });
-
-                notify.ok('درس با موفقیت افزوده شد');
-                document.getElementById('new-subject-name').value = '';
-                
-                // Reload subjects
-                const res = await api.get('/leagues/report/subjects');
-                openModal({
-                  title: 'تنظیم درس‌های کارنامه',
-                  body: el('div.subject-config', {}, [
-                    el('div.subject-list', {}, [...res.items, ...currentSubjects].map(s => renderSubjectItem(s))),
-                    el('div.add-subject-form', {}, [
-                      el('input#new-subject-name', {
-                        type: 'text',
-                        placeholder: 'نام درس جدید',
-                        style: { width: '100%', padding: '8px', marginBottom: '8px' },
-                      }),
-                      el('input#new-subject-color', {
-                        type: 'color',
-                        value: '#6366f1',
-                        style: { width: '60px', height: '40px' },
-                      }),
-                      button('افزودن درس', { onclick: () => location.reload() }),
-                    ]),
-                  ]),
-                  actions: [{
-                    label: 'بستن',
-                    kind: 'secondary',
-                    onClick: ({ close }) => close(),
-                  }],
-                });
-
-              } catch (error) {
-                notify.error(errorMessage(error));
-              }
-            },
-          }),
-        ]),
-      ]),
-    ]),
-    actions: [{
-      label: 'بستن',
-      kind: 'secondary',
-      onClick: ({ close }) => close(),
-    }],
-  });
-}
-
-function renderSubjectItem(subject) {
-  return el('div.subject-item', {}, [
-    el('div.subject-info', {}, [
-      el('strong', { text: subject.name }),
-      el('span.chip', { text: `مرتب‌سازی: ${subject.order_index || 0}` }),
-    ]),
-    el('div.row', { style: { gap: '8px' } }, [
-      el('div.color-picker', { style: { display: 'flex', alignItems: 'center', gap: '4px' } }, [
-        el('input', {
-          type: 'color',
-          value: subject.color || '#6366f1',
-          onchange: async (e) => {
-            try {
-              await api.patch(`/leagues/report/subjects/${subject.id}`, { color: e.target.value });
-              notify.ok('رنگ به‌روزرسانی شد');
-            } catch (error) {
-              notify.error(errorMessage(error));
-            }
-          },
-        }),
-        el('small.muted', { text: subject.color || '#6366f1' }),
-      ]),
-      button('ویرایش', {
-        kind: 'ghost',
-        size: 'xs',
-        onClick: async () => {
-          // TODO: Implement edit
-        },
-      }),
-      button('حذف', {
-        kind: 'danger',
-        size: 'xs',
-        onClick: async () => {
-          const agreed = await confirmDialog({
-            title: 'حذف درس',
-            message: `آیا از حذف درس «${subject.name}» مطمئن هستید؟`,
-            confirmLabel: 'حذف',
-            danger: true,
-          });
-
-          if (agreed) {
-            try {
-              await api.del(`/leagues/report/subjects/${subject.id}`);
-              notify.ok('درس حذف شد');
-              location.reload();
-            } catch (error) {
-              notify.error(errorMessage(error));
-            }
-          }
-        },
-      }),
-    ]),
-  ]);
-}
-
-// Helper functions
-async function editStudentInfo(_studentId) {
-  const values = await formDialog({
-    title: 'ویرایش اطلاعات دانش‌آموز',
-    submitLabel: 'ذخیره',
-    fields: [],
-  });
-
-  if (values) {
+    sending = true;
+    if (customSendButton) customSendButton.disabled = true;
     try {
-      // TODO: Implement student info update
-      notify.ok('اطلاعات ذخیره شد');
+      const result = await api.post(`/leagues/${leagueId}/reports/custom/send`, {
+        studentIds: chosen.map((item) => item.studentId),
+        message: text,
+      });
+      lastResult = result;
+      customMessage.value = '';
+      const counts = result.counts ?? {};
+      if (counts.sent) notify.ok(`${fa(counts.sent)} پیام ارسال شد`);
+      if (counts.queued) notify.info(`${fa(counts.queued)} پیام در صف ذخیره شد (کلید و خط sms.ir را در تنظیمات پیامک کامل کنید)`);
+      if (counts.failed) notify.error(`${fa(counts.failed)} پیام ناموفق بود`);
+      if (counts.skipped) notify.warn(`${fa(counts.skipped)} دانش‌آموز شماره والد ندارد`);
+      await load();
     } catch (error) {
       notify.error(errorMessage(error));
+    } finally {
+      sending = false;
+      refreshSelectionUi();
     }
   }
-}
 
-async function saveGrades(_cardId) {
-  // TODO: Implement save logic
-  notify.ok('تغییرات ذخیره شد');
-}
-
-async function togglePublish(_cardId, isPublished) {
-  try {
-    // TODO: Implement publish toggle
-    notify.ok(isPublished ? 'کارنامه منتشر شد' : 'کارنامه لغو انتشار شد');
-  } catch (error) {
-    notify.error(errorMessage(error));
+  async function sendSelected() {
+    const chosen = selectedItems();
+    const withPhone = chosen.filter((item) => item.hasParentPhone);
+    if (withPhone.length === 0 || sending) return;
+    const agreed = await confirmDialog({
+      title: 'ارسال گزارش روزانه',
+      message: `پیامک تغییرات ${formatJalaliDate(date)} برای ${fa(withPhone.length)} دانش‌آموز به شماره والدین ارسال شود؟`,
+      confirmLabel: 'ارسال پیامک',
+    });
+    if (!agreed) return;
+    sending = true;
+    if (sendButton) sendButton.disabled = true;
+    try {
+      lastResult = await api.post(`/leagues/${leagueId}/reports/daily/send`, {
+        date,
+        // Students without a parent number are sent too, so the server reports
+        // them as «skipped» instead of silently dropping the selection.
+        studentIds: chosen.map((item) => item.studentId),
+      });
+      report = lastResult;
+      const counts = lastResult.counts ?? {};
+      if (counts.sent) notify.ok(`${fa(counts.sent)} پیامک ارسال شد`);
+      if (counts.queued) notify.info(`${fa(counts.queued)} پیامک در صف ذخیره شد (کلید و خط sms.ir را در تنظیمات پیامک کامل کنید)`);
+      if (counts.failed) notify.error(`${fa(counts.failed)} پیامک ناموفق بود`);
+      if (counts.skipped) notify.warn(`${fa(counts.skipped)} دانش‌آموز شماره والد ندارد`);
+      paint();
+    } catch (error) {
+      notify.error(errorMessage(error));
+    } finally {
+      sending = false;
+      if (sendButton) sendButton.disabled = false;
+    }
   }
+
+  function customMessageCard() {
+    customSendButton = button('ارسال پیام به والدین', { icon: '✍️', onClick: () => { void sendCustomMessage(); } });
+    return card({ title: 'پیام دلخواه به والدین', icon: '✍️' }, [
+      el('p.small.muted', {
+        text: 'متن دلخواه خود را بنویسید؛ برای والدین دانش‌آموزان انتخاب‌شده ارسال می‌شود. برای یک دانش‌آموز، فقط همان را انتخاب کنید.',
+      }),
+      customMessage,
+      el('div.row', { style: { marginTop: '8px', flexWrap: 'wrap' } }, [
+        el('span.small.muted', { text: 'حداکثر ۱۰۰۰ نویسه · ارسال از همان حساب پیامک صفحهٔ بالا' }),
+        el('span.spacer'),
+        customSendButton,
+      ]),
+    ]);
+  }
+
+  function paint() {
+    const summary = report.summary ?? {};
+    sendButton = button('ارسال پیامک به والدین', { icon: '📤', onClick: () => { void sendSelected(); } });
+    rowsByStudent.clear();
+
+    const cards = [
+      resultsCard(),
+      recentCard(),
+    ].filter(Boolean);
+
+    body.replaceChildren(
+      pageHead({
+        icon: '📨',
+        title: 'گزارش روزانه والدین',
+        subtitle: 'خلاصهٔ تغییرات هر روز، برای والدین دانش‌آموزان انتخاب‌شده',
+        actions: [backToWorkbench()],
+      }),
+      el('div.grid.grid--stats', {}, [
+        statCard({ label: 'دانش‌آموزان با تغییر', value: fa(summary.changed ?? 0), icon: '📝' }),
+        statCard({ label: 'بدون شماره والد', value: fa(summary.withoutParentPhone ?? 0), kind: (summary.withoutParentPhone ?? 0) ? 'warn' : 'ok', icon: '⚠️' }),
+        statCard({ label: 'پیامک ارسال‌شده', value: fa(summary.sent ?? 0), kind: 'ok', icon: '✅' }),
+        statCard({ label: 'در صف ارسال', value: fa(summary.queued ?? 0), icon: '📬' }),
+      ]),
+      dateCard(),
+      smsSettings(),
+      card({ title: 'انتخاب دانش‌آموزان', icon: '☑️' }, [
+        el('div.row', { style: { flexWrap: 'wrap', marginBottom: '8px' } }, [
+          button('فقط دارای تغییر', { kind: 'ghost', icon: '📝', onClick: () => selectWhere((item) => item.changes > 0) }),
+          button('همه', { kind: 'ghost', icon: '👥', onClick: () => selectWhere(() => true) }),
+          button('هیچ‌کدام', { kind: 'ghost', icon: '🚫', onClick: () => selectWhere(() => false) }),
+          el('span.spacer'),
+          sendButton,
+        ]),
+        selectionInfo,
+        reportTable(),
+      ]),
+      customMessageCard(),
+      card({ title: 'پیش‌نمایش پیامک', icon: '👁️' }, [previewHost]),
+      ...cards,
+    );
+    refreshSelectionUi();
+  }
+
+  await load();
+  return undefined;
+}
+
+/**
+ * «کارنامه دانش‌آموزان» — the manual report-card screen is still under
+ * construction. Keeping a valid placeholder here lets the router import it
+ * without breaking every other view (a bad module import blanks the whole app).
+ */
+export async function renderReportCards() {
+  setTopbarTitle('کارنامه دانش‌آموزان');
+  renderView([
+    pageHead({
+      icon: '📊',
+      title: 'کارنامه دانش‌آموزان',
+      subtitle: 'ثبت دستی نمرات توصیفی و کمی برای دانش‌آموزان',
+      actions: [backToWorkbench()],
+    }),
+    emptyState({
+      icon: '🔨',
+      title: 'در حال توسعه است',
+      hint: 'این بخش در حال پیاده‌سازی کامل است. لطفاً بعداً مراجعه کنید.',
+    }),
+  ]);
 }

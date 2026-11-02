@@ -188,13 +188,13 @@ describe('authorization - assistant (student helper) isolation', () => {
     const createRes = await clientA.post('/api/v1/assistants', {
       leagueId: fixture.leagueA.id,
       username: 'assistant-limited',
-      password: 'limited',
+      password: 'limited-pass',
       permissions: ['scores'],
     });
     expect(createRes.status).toBe(201);
 
     const limited = createClient(ctx.db);
-    await limited.login('assistant-limited', 'limited');
+    await limited.login('assistant-limited', 'limited-pass');
 
     // Check if assistant has access (may depend on middleware setup)
     // For now, verify that login works and basic endpoints work
