@@ -11,8 +11,7 @@
 import { Router } from 'express';
 import { badRequest, notFound } from '../lib/errors.js';
 import { schemas, validate } from '../lib/validate.js';
-import { requireTeacher, loadOwnedLeague } from '../middleware/auth.js';
-import { requirePermission } from '../middleware/ownership.js';
+import { requireTeacher, loadOwnedLeague, requirePermission } from '../middleware/auth.js';
 import {
   listReportCardSubjects,
   createReportCardSubject,
