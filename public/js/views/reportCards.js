@@ -178,23 +178,28 @@ export async function renderReportCards({ params }) {
     }
   }
 
-  async function saveCard() {
-    if (!card) return;
-    saving = true;
-    paint();
-    try {
-      const rows = [...document.querySelectorAll('tr[data-subject-id]')].map((row) => ({
+  /** Reads the visible editor without repainting, so typed marks are never lost. */
+  function readEditor() {
+    return {
+      semester,
+      notes: document.querySelector('#report-card-notes')?.value ?? '',
+      grades: [...document.querySelectorAll('tr[data-subject-id]')].map((row) => ({
         subjectId: Number(row.dataset.subjectId),
         numeric: row.querySelector('.report-card-grade')?.value ?? '',
         descriptive: row.querySelector('.report-card-level')?.value ?? '',
         notes: row.querySelector('.report-card-notes')?.value ?? '',
-      }));
-      const notes = document.querySelector('#report-card-notes')?.value ?? '';
-      const res = await api.put(`/leagues/${leagueId}/report-cards/cards/${card.id}`, {
-        semester,
-        notes,
-        grades: rows,
-      });
+      })),
+    };
+  }
+
+  async function saveCard() {
+    if (!card || saving) return;
+    // Read the form *before* any repaint; a repaint rebuilds the inputs from the
+    // last saved card and would silently discard what the teacher just typed.
+    const payload = readEditor();
+    saving = true;
+    try {
+      const res = await api.put(`/leagues/${leagueId}/report-cards/cards/${card.id}`, payload);
       card = res.card;
       notify.ok('کارنامه ذخیره شد');
       await loadMeta();
@@ -207,13 +212,13 @@ export async function renderReportCards({ params }) {
   }
 
   async function togglePublish() {
-    if (!card) return;
+    if (!card || saving) return;
+    // Publishing also saves the visible marks, so a teacher can fill the card and
+    // publish it in one step without losing the last entries.
+    const payload = { ...readEditor(), isPublished: !card.isPublished };
     saving = true;
-    paint();
     try {
-      const res = await api.put(`/leagues/${leagueId}/report-cards/cards/${card.id}`, {
-        isPublished: !card.isPublished,
-      });
+      const res = await api.put(`/leagues/${leagueId}/report-cards/cards/${card.id}`, payload);
       card = res.card;
       notify.ok(card.isPublished ? 'کارنامه برای دانش‌آموز منتشر شد' : 'انتشار کارنامه لغو شد');
       await loadMeta();

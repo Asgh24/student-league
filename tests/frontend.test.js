@@ -58,6 +58,7 @@ const { renderStudentEvaluations } = await import('../public/js/views/student/ev
 const { renderStudentQuestions } = await import('../public/js/views/student/questions.js');
 const { renderContacts } = await import('../public/js/views/contacts.js');
 const { renderReports } = await import('../public/js/views/reports.js');
+const { renderReportCards } = await import('../public/js/views/reportCards.js');
 const { renderFun } = await import('../public/js/views/fun.js');
 const { renderSettings } = await import('../public/js/views/settings.js');
 
@@ -1684,6 +1685,119 @@ describe('password settings', () => {
     renderSettings();
     expect(document.querySelector('#pw-current')).toBeNull();
     expect(document.querySelector('#view').textContent).toContain('تغییر گذرواژه فقط توسط معلم انجام می‌شود');
+  });
+});
+
+describe('manual report card editor', () => {
+  function cardPayload(overrides = {}) {
+    return {
+      id: 5,
+      studentId: 11,
+      studentName: 'آرش آزمون',
+      leagueId: 3,
+      leagueName: 'لیگ تست',
+      semester: 'نوبت اول',
+      totalPercent: 0,
+      level: null,
+      isPublished: false,
+      notes: '',
+      createdAt: '2026-10-20T08:00:00.000Z',
+      updatedAt: '2026-10-20T08:00:00.000Z',
+      grades: [{
+        id: 1,
+        subjectId: 1,
+        subjectName: 'ریاضی',
+        color: '#6366f1',
+        numeric: null,
+        descriptive: null,
+        notes: '',
+      }],
+      ...overrides,
+    };
+  }
+
+  function mockReportCards(card) {
+    api.get.mockImplementation((url) => {
+      if (url === '/leagues/3/report-cards/subjects') {
+        return Promise.resolve({ items: [{ id: 1, name: 'ریاضی', color: '#6366f1', orderIndex: 1 }] });
+      }
+      if (url === '/leagues/3/students') {
+        return Promise.resolve({ items: [{ id: 11, name: 'آرش آزمون' }] });
+      }
+      if (url === '/leagues/3/report-cards') {
+        return Promise.resolve({ items: [] });
+      }
+      if (url === '/leagues/3') {
+        return Promise.resolve({ league: { id: 3, name: 'لیگ تست' } });
+      }
+      if (url.startsWith('/leagues/3/report-cards/students/11')) {
+        return Promise.resolve({ card });
+      }
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+  }
+
+  it('keeps the descriptive level and numeric mark after save and publish', async () => {
+    const emptyCard = cardPayload();
+    const savedCard = cardPayload({
+      totalPercent: 80,
+      level: { value: 'good', label: 'خوب', icon: '👍', percent: 80 },
+      grades: [{
+        id: 1,
+        subjectId: 1,
+        subjectName: 'ریاضی',
+        color: '#6366f1',
+        numeric: 90,
+        descriptive: 'good',
+        notes: 'پیشرفت خوب',
+      }],
+    });
+    mockReportCards(emptyCard);
+    api.put.mockImplementation((url, body) => Promise.resolve({
+      card: savedCard,
+      isPublished: Boolean(body.isPublished),
+    }));
+
+    await renderReportCards({ params: { id: '3' } });
+    const studentSelect = document.querySelector('#report-card-student');
+    studentSelect.value = '11';
+    studentSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    await vi.waitFor(() => expect(document.querySelector('.report-card-level')).not.toBeNull());
+    const level = document.querySelector('.report-card-level');
+    const numeric = document.querySelector('.report-card-grade');
+    level.value = 'good';
+    level.dispatchEvent(new window.Event('change', { bubbles: true }));
+    numeric.value = '90';
+    numeric.dispatchEvent(new window.Event('input', { bubbles: true }));
+
+    [...document.querySelectorAll('#view button')]
+      .find((node) => node.textContent.includes('ذخیره نمرات')).click();
+
+    await vi.waitFor(() => expect(api.put).toHaveBeenCalled());
+    expect(api.put).toHaveBeenCalledWith('/leagues/3/report-cards/cards/5', {
+      semester: 'نوبت اول',
+      notes: '',
+      grades: [{ subjectId: 1, numeric: '90', descriptive: 'good', notes: '' }],
+    });
+
+    await vi.waitFor(() => expect(document.querySelector('.report-card-level').value).toBe('good'));
+    await vi.waitFor(() => expect(document.querySelector('.report-card-grade').value).toBe('90'));
+    expect(document.querySelector('#view').textContent).toContain('خوب');
+
+    // Wait for the save round trip and its repaint: the publish button is
+    // disabled while `saving` is true, so clicking too early would be ignored.
+    const publishButton = () => [...document.querySelectorAll('#view button')]
+      .find((node) => node.textContent.includes('انتشار برای دانش‌آموز'));
+    await vi.waitFor(() => expect(publishButton()?.disabled).toBe(false));
+
+    // Publishing uses the visible marks, so a filled card is never lost.
+    publishButton().click();
+    await vi.waitFor(() => expect(api.put).toHaveBeenCalledTimes(2));
+    expect(api.put.mock.calls[1][1]).toMatchObject({
+      isPublished: true,
+      grades: [{ subjectId: 1, numeric: '90', descriptive: 'good', notes: 'پیشرفت خوب' }],
+    });
   });
 });
 
