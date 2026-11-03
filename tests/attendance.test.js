@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildFixture } from './fixtures.js';
 import { createClient, createTestDatabase } from './helpers.js';
 
@@ -15,6 +15,9 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
+  delete process.env.SMSIR_API_KEY;
+  delete process.env.SMSIR_LINE_NUMBER;
   ctx.cleanup();
 });
 
@@ -127,5 +130,94 @@ describe('attendance', () => {
     expect(res.body.summary.absentToday).toBe(0);
     expect(res.body.summary.studentCount).toBe(3);
     expect(res.body.summary.teamCount).toBe(2);
+  });
+});
+
+describe('sending absentees to the manager', () => {
+  async function markAbsent() {
+    await client.post(`/api/v1/leagues/${fixture.leagueA.id}/attendance`, {
+      date: DAY,
+      records: [
+        { studentId: fixture.studentsA[0].id, status: 'absent' },
+        { studentId: fixture.studentsA[1].id, status: 'absent' },
+        { studentId: fixture.studentsA[2].id, status: 'present' },
+      ],
+    });
+  }
+
+  const send = (phone = '09123456789') => client.post(`/api/v1/leagues/${fixture.leagueA.id}/attendance/absentees/sms`, {
+    date: DAY,
+    phone,
+  });
+
+  it('queues the absentees message when sms.ir is not configured', async () => {
+    await markAbsent();
+    const res = await send('+98 912 345 6789');
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('queued');
+    expect(res.body.smsConfigured).toBe(false);
+    expect(res.body.mobile).toBe('09123456789');
+    expect(res.body.absentees.map((student) => student.name).sort()).toEqual(['آرش آزمون', 'بهار بنفش'].sort());
+    expect(res.body.message).toContain('آرش آزمون');
+    expect(res.body.message).toContain('بهار بنفش');
+    expect(res.body.message).toContain('تعداد غایب: ۲');
+    expect(res.body.message).toContain('۱۴۰۵/۰۵/۱۹');
+
+    const stored = ctx.db.prepare('SELECT mobile, kind, status, report_date FROM sms_messages').get();
+    expect(stored).toEqual({ mobile: '09123456789', kind: 'absentees', status: 'queued', report_date: DAY });
+  });
+
+  it('delivers the message through the configured sms.ir account', async () => {
+    await markAbsent();
+    process.env.SMSIR_API_KEY = 'test-api-key';
+    process.env.SMSIR_LINE_NUMBER = '30001234';
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ status: 1, message: 'موفق', data: { packId: 7, messageIds: [123], cost: 1200 } }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await send();
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('sent');
+    expect(res.body.smsConfigured).toBe(true);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://api.sms.ir/v1/send/bulk');
+    const body = JSON.parse(init.body);
+    expect(body.mobiles).toEqual(['09123456789']);
+    expect(body.messageText).toContain('آرش آزمون');
+
+    const stored = ctx.db.prepare('SELECT status, provider_message_id FROM sms_messages').get();
+    expect(stored).toEqual({ status: 'sent', provider_message_id: '123' });
+  });
+
+  it('validates the phone and refuses a day without absentees', async () => {
+    await markAbsent();
+
+    const badPhone = await send('12345');
+    expect(badPhone.status).toBe(400);
+    expect(badPhone.body.error.code).toBe('INVALID_PHONE');
+
+    const empty = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/attendance/absentees/sms`, {
+      date: '2026-08-11',
+      phone: '09123456789',
+    });
+    expect(empty.status).toBe(400);
+    expect(empty.body.error.code).toBe('NO_ABSENTEES');
+  });
+
+  it('is private to the owning league', async () => {
+    await markAbsent();
+    const other = createClient(ctx.db);
+    await other.login('teacher-b', 'password-b1');
+    const res = await other.post(`/api/v1/leagues/${fixture.leagueA.id}/attendance/absentees/sms`, {
+      date: DAY,
+      phone: '09123456789',
+    });
+    expect(res.status).toBe(403);
   });
 });

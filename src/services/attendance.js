@@ -1,6 +1,11 @@
+import { badRequest } from '../lib/errors.js';
 import { isoNow } from '../lib/http.js';
-import { findDisciplineColumn, readSettings } from '../repositories/leagues.js';
+import { formatJalaliDate } from '../lib/jalali.js';
+import { toPersianDigits } from '../lib/normalize.js';
+import { normalizeMobile } from '../lib/phone.js';
+import { findDisciplineColumn, getLeague, readSettings } from '../repositories/leagues.js';
 import { applyScoreDelta } from './scoring.js';
+import { deliverSms, markMessage, queueMessage, resolveSmsProvider } from './sms.js';
 
 export const ATTENDANCE_STATUSES = ['present', 'absent', 'late'];
 
@@ -117,6 +122,71 @@ export function leagueHistory(db, leagueId, { limit = 50, offset = 0 } = {}) {
   `).all(leagueId, limit, offset);
   const count = db.prepare('SELECT COUNT(DISTINCT day) AS n FROM attendance WHERE league_id = ?').get(leagueId).n;
   return { items: days, total: count };
+}
+
+/** Students marked absent on the selected day, in class order. */
+export function absenteesForDay(db, leagueId, day) {
+  return db.prepare(`
+    SELECT s.id AS studentId, s.name
+    FROM attendance a
+    JOIN students s ON s.id = a.student_id
+    WHERE a.league_id = ? AND a.day = ? AND a.status = 'absent'
+    ORDER BY s.name ASC, s.id ASC
+  `).all(leagueId, day);
+}
+
+/** SMS text sent to the school manager / vice principal. */
+export function buildAbsenteesMessage({ leagueName, date, absentees = [] }) {
+  const names = absentees.map((student) => student.name).join('، ');
+  return `${leagueName} | غایبین ${formatJalaliDate(date)}\nتعداد غایب: ${toPersianDigits(absentees.length)}\n${names}`;
+}
+
+/**
+ * Sends the names of one day's absentees to the phone the teacher enters.
+ * Uses the same per-teacher sms.ir credentials as parent reports; when the
+ * provider is not configured the message stays in the outbox as `queued`.
+ */
+export async function sendAbsenteesReport(db, { leagueId, day, phone, fetchImpl }) {
+  const league = getLeague(db, leagueId);
+  if (!league) throw badRequest('LEAGUE_NOT_FOUND', 'لیگ یافت نشد');
+
+  const mobile = normalizeMobile(phone);
+  if (!mobile) throw badRequest('INVALID_PHONE', 'شماره موبایل مدیر یا معاون آموزشی معتبر نیست');
+
+  const absentees = absenteesForDay(db, leagueId, day);
+  if (absentees.length === 0) {
+    throw badRequest('NO_ABSENTEES', 'برای این روز دانش‌آموز غایبی ثبت نشده است');
+  }
+
+  const body = buildAbsenteesMessage({ leagueName: league.name, date: day, absentees });
+  const messageId = queueMessage(db, {
+    leagueId,
+    mobile,
+    body,
+    kind: 'absentees',
+    reportDate: day,
+  });
+  const credentials = resolveSmsProvider(db, { teacherId: league.teacher_id });
+  const outcome = await deliverSms({ mobile, text: body, fetchImpl, credentials });
+
+  if (outcome.ok) {
+    markMessage(db, messageId, { status: 'sent', providerMessageId: outcome.providerMessageId });
+  } else if (outcome.queued) {
+    markMessage(db, messageId, { status: 'queued' });
+  } else {
+    markMessage(db, messageId, { status: 'failed', error: outcome.error });
+  }
+
+  return {
+    messageId,
+    mobile,
+    date: day,
+    absentees,
+    message: body,
+    smsConfigured: Boolean(credentials.enabled),
+    status: outcome.ok ? 'sent' : outcome.queued ? 'queued' : 'failed',
+    error: outcome.ok || outcome.queued ? '' : (outcome.error ?? 'ارسال ناموفق'),
+  };
 }
 
 export function studentAttendance(db, studentId, { limit = 100, offset = 0 } = {}) {

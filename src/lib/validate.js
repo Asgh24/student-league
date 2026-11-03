@@ -408,6 +408,11 @@ export const schemas = {
     status: z.enum(['present', 'absent', 'late']),
   }),
 
+  attendanceAbsenteesSms: z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ نامعتبر است'),
+    phone: z.string().trim().min(1, 'شماره مدیر یا معاون آموزشی الزامی است').max(24),
+  }),
+
   dateQuery: z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ نامعتبر است').optional(),
   }),

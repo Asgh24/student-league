@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { todayIso } from '../lib/http.js';
+import { asyncHandler, todayIso } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
 import { readSettings } from '../repositories/leagues.js';
 import { requireTeacher, loadOwnedLeague, requirePermission } from '../middleware/auth.js';
@@ -7,6 +7,7 @@ import {
   attendanceSheet,
   bulkSetAttendance,
   leagueHistory,
+  sendAbsenteesReport,
   setAttendance,
   STATUS_LABELS,
   todayCounters,
@@ -50,6 +51,16 @@ export function createAttendanceRouter({ db }) {
     });
     res.json({ ...result, items: attendanceSheet(db, req.league.id, req.body.date) });
   });
+
+  /** Sends the names of the selected day's absentees to the manager's phone. */
+  router.post('/absentees/sms', validate({ body: schemas.attendanceAbsenteesSms }), asyncHandler(async (req, res) => {
+    const result = await sendAbsenteesReport(db, {
+      leagueId: req.league.id,
+      day: req.body.date,
+      phone: req.body.phone,
+    });
+    res.json(result);
+  }));
 
   router.get('/history', validate({ query: schemas.pagination }), (req, res) => {
     const { page, limit } = req.query;

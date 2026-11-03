@@ -5,13 +5,56 @@ import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
-import { emptyState, notify } from '../ui.js';
+import { emptyState, formDialog, notify } from '../ui.js';
 import { backToWorkbench, button, card, chip, fa, faDate, grid, loadingNode, pageHead, ratioChip, STATUS_KIND, STATUS_LABELS, statCard } from './common.js';
 
 function shiftIso(iso, days) {
   const date = new Date(`${iso}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+/** Last manager/vice-principal number, kept for the current page session. */
+let managerPhone = '';
+
+async function sendAbsenteesSms(leagueId, day, items) {
+  const absentees = items.filter((student) => student.status === 'absent');
+  if (absentees.length === 0) {
+    notify.error('برای این روز دانش‌آموز غایبی ثبت نشده است');
+    return;
+  }
+
+  const values = await formDialog({
+    title: 'ارسال غایبین به مدیر',
+    description: `${fa(absentees.length)} دانش‌آموز غایب در ${faDate(day)}؛ اسامی برای شماره زیر پیامک می‌شود.`,
+    submitLabel: 'ارسال پیامک',
+    fields: [{
+      name: 'phone',
+      label: 'شماره موبایل مدیر یا معاون آموزشی',
+      type: 'tel',
+      value: managerPhone,
+      placeholder: '09121234567',
+      required: true,
+    }],
+  });
+  if (!values) return;
+
+  managerPhone = values.phone.trim();
+  try {
+    const result = await api.post(`/leagues/${leagueId}/attendance/absentees/sms`, {
+      date: day,
+      phone: managerPhone,
+    });
+    if (result.status === 'sent') {
+      notify.ok(`اسامی ${fa(result.absentees.length)} غایب برای مدیر پیامک شد`);
+    } else if (result.status === 'queued') {
+      notify.info('پیام در صف ارسال ماند؛ تنظیمات API پیامک را کامل کنید');
+    } else {
+      notify.error(result.error || 'ارسال پیامک غایبین ناموفق بود');
+    }
+  } catch (error) {
+    notify.error(errorMessage(error));
+  }
 }
 
 function statusButtons(student, onSet) {
@@ -170,6 +213,7 @@ export async function renderAttendance({ params }) {
           button('همه حاضر', { icon: '✅', onClick: () => bulk('present') }),
           button('همه غایب', { kind: 'danger', icon: '❌', onClick: () => bulk('absent') }),
           button('همه با تأخیر', { kind: 'amber', icon: '⏰', onClick: () => bulk('late') }),
+          button('ارسال غایبین', { kind: 'soft', icon: '📨', onClick: () => sendAbsenteesSms(leagueId, day, sheet.items) }),
         ]),
         sheet.items.length === 0
           ? emptyState({ icon: '🧑‍🎓', title: 'دانش‌آموزی در این لیگ نیست', hint: 'ابتدا از صفحه لیگ دانش‌آموز اضافه کنید.' })
