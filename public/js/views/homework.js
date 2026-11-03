@@ -15,7 +15,7 @@ async function createHomework(leagueId, reload) {
     fields: [
       { name: 'title', label: 'عنوان', type: 'text', required: true, placeholder: 'مثلاً تمرین فصل سوم' },
       { name: 'description', label: 'توضیح', type: 'textarea', placeholder: 'شرح تکلیف برای دانش‌آموزان' },
-      { name: 'dueDate', label: 'مهلت (میلادی، اختیاری)', type: 'date' },
+      { name: 'dueDate', label: 'مهلت (شمسی، اختیاری)', type: 'jalali-date', allowEmpty: true },
     ],
   });
   if (!values) return;
@@ -39,7 +39,7 @@ async function editHomework(item, reload) {
     fields: [
       { name: 'title', label: 'عنوان', type: 'text', value: item.title, required: true },
       { name: 'description', label: 'توضیح', type: 'textarea', value: item.description ?? '' },
-      { name: 'dueDate', label: 'مهلت (میلادی)', type: 'date', value: item.dueDate ?? '' },
+      { name: 'dueDate', label: 'مهلت (شمسی)', type: 'jalali-date', allowEmpty: true, value: item.dueDate ?? '' },
     ],
   });
   if (!values) return;
