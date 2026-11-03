@@ -589,4 +589,28 @@ export const schemas = {
     category: z.string().trim().max(32).optional(),
     dateAwarded: z.string().datetime().optional(),
   }),
+
+  reportCardSave: z.object({
+    semester: z.string().trim().min(1, 'نام نوبت الزامی است').max(64).optional(),
+    notes: z.string().max(2000).optional(),
+    isPublished: z.boolean().optional(),
+    grades: z.array(z.object({
+      subjectId: z.coerce.number().int().positive(),
+      numeric: z.preprocess(
+        (value) => (value === '' || value === null || value === undefined ? null : value),
+        z.union([z.coerce.number().min(0, 'نمره نمی‌تواند منفی باشد').max(100, 'نمره حداکثر ۱۰۰ است'), z.null()]),
+      ).optional(),
+      descriptive: z.preprocess(
+        (value) => (value === '' || value === null ? null : value),
+        z.union([
+          z.enum(['very_good', 'good', 'acceptable', 'needs_improvement']),
+          z.null(),
+        ]),
+      ).optional(),
+      notes: z.string().max(500).optional(),
+    })).max(100).optional(),
+  }).refine(
+    (value) => Object.keys(value).length > 0,
+    { message: 'هیچ تغییری ارسال نشده است' },
+  ),
 };

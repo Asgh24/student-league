@@ -3119,3 +3119,132 @@ body.quiz-open {
 }
 
 
+
+/* --------------------------------------------------------- report cards */
+.report-card-page {
+  display: grid;
+  gap: 14px;
+}
+.report-card-section-title {
+  margin: 6px 0 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.report-card-list {
+  display: grid;
+  gap: 14px;
+}
+.report-card-subjects {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.report-card-subject {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2, var(--surface));
+}
+.report-card-subject__dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  margin-inline-end: 6px;
+}
+.report-card-add-subject {
+  padding-top: 4px;
+}
+.report-card-add-subject input[type="text"] {
+  flex: 1 1 220px;
+}
+.report-card-add-subject input[type="color"] {
+  width: 44px;
+  height: 38px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.report-card-picker {
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.report-card-picker .field {
+  flex: 1 1 200px;
+  margin: 0;
+}
+.report-card-editor {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+.report-card-editor__head {
+  gap: 8px;
+}
+.report-card-editor__actions {
+  gap: 8px;
+  margin-top: 4px;
+}
+.report-card-grades input.report-card-grade {
+  width: 100%;
+  max-width: 120px;
+}
+.report-card-grades select.report-card-level {
+  min-width: 150px;
+}
+.report-card-grades input.report-card-notes {
+  width: 100%;
+}
+#report-card-notes {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+}
+.report-card-performance {
+  display: grid;
+  gap: 14px;
+}
+.report-card-performance__two {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+}
+.report-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.report-card-achievements {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.report-card-achievement {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.report-card-columns {
+  display: grid;
+  gap: 6px;
+}
+.report-card-column {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px dashed var(--line);
+}
+.report-card-column:last-child {
+  border-bottom: 0;
+}

@@ -34,7 +34,8 @@ import { renderQa } from './views/qa.js';
 import { renderRaffle } from './views/raffle.js';
 import { renderRepresentative } from './views/representative.js';
 import { renderRepresentativeBoard } from './views/representativeBoard.js';
-import { renderReports, renderReportCards } from './views/reports.js';
+import { renderReportCards } from './views/reportCards.js';
+import { renderReports } from './views/reports.js';
 import { renderSchedule } from './views/schedule.js';
 import { renderSeating } from './views/seating.js';
 import { renderSettings } from './views/settings.js';
@@ -53,6 +54,7 @@ import { renderStudentRanking } from './views/student/ranking.js';
 import { renderReportCard } from './views/student/reportcard.js';
 import { renderStudentSchedule } from './views/student/schedule.js';
 import { renderStudentTeam } from './views/student/team.js';
+import { renderStudentReportCard as renderManualReportCard } from './views/student/reportcard-manual.js';
 
 import { renderAdminDashboard } from './views/admin/dashboard.js';
 import { renderAdminBackup } from './views/admin/backup.js';
@@ -68,6 +70,7 @@ const LEAGUE_NAV = [
   ['teams', '🛡️', 'لیگ تیمی', 'teams'],
   ['attendance', '🗓️', 'حضور و غیاب', 'attendance'],
   ['evaluations', '📝', 'ارزشیابی', 'evaluations'],
+  ['report-cards', '📊', 'کارنامه دانش‌آموز', 'evaluations'],
   ['raffle', '🎲', 'قرعه‌کشی', 'raffle'],
   ['representative', '👑', 'نماینده کلاس', 'representative'],
   ['wheel', '🎡', 'گردونه شانس', 'wheel'],
@@ -152,6 +155,7 @@ function studentNav() {
   const tabs = [
     ['student', '🏠', 'میزکار'],
     ['student/report-card', '📄', 'کارنامه'],
+    ['student/report-cards', '📊', 'کارنامه دستی'],
     ['student/evaluations', '📝', 'ارزشیابی'],
     ['student/attendance', '🗓️', 'حضور و غیاب'],
     ['student/schedule', '📅', 'برنامه هفتگی'],
@@ -240,7 +244,7 @@ const routes = [
   { path: 'teacher/league/:id/contacts', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderContacts(ctx) },
   { path: 'teacher/league/:id/reports', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderReports(ctx) },
   // Report cards (separate from daily reports)
-  { path: 'teacher/league/:id/report-cards', guard: () => (isTeacher() && !isAssistant() ? undefined : 'teacher'), view: (ctx) => renderReportCards(ctx) },
+  { path: 'teacher/league/:id/report-cards', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderReportCards(ctx) },
   { path: 'admin', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminDashboard(ctx) },
   { path: 'admin/teachers', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminTeachers(ctx) },
   { path: 'admin/expired-users', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminExpiredUsers(ctx) },
@@ -262,6 +266,7 @@ const routes = [
   { path: 'student/likes', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentLikes(ctx) },
   { path: 'student/questions', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentQuestions(ctx) },
   { path: 'student/messages', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentMessages(ctx) },
+  { path: 'student/report-cards', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderManualReportCard(ctx) },
   { path: 'student/settings', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderSettings(ctx) },
 ];
 

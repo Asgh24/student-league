@@ -13,6 +13,7 @@ import { createHomeworkRouter, createLeagueHomeworkRouter } from './homework.js'
 import { createLeaguesRouter } from './leagues.js';
 import { createMessagesRouter } from './messages.js';
 import { createMetaRouter } from './meta.js';
+import { createLeagueReportCardsRouter } from './reportCards.js';
 import { createLeagueReportsRouter } from './reports.js';
 import { createScheduleRouter } from './schedule.js';
 import { createLeagueSeatingRouter } from './seating.js';
@@ -50,6 +51,7 @@ export function createApiRouter(ctx) {
   router.use('/leagues/:id/quiz-sessions', createLeagueQuizRouter(ctx));
   router.use('/leagues/:id/seating', createLeagueSeatingRouter(ctx));
   router.use('/leagues/:id/contacts', createLeagueContactsRouter(ctx));
+  router.use('/leagues/:id/report-cards', createLeagueReportCardsRouter(ctx));
   router.use('/leagues/:id/reports', createLeagueReportsRouter(ctx));
   router.use('/leagues/:id/tools', createToolsRouter(ctx));
   router.use('/leagues/:id/schedule', createScheduleRouter(ctx));

@@ -8,6 +8,7 @@ import { requireStudent } from '../middleware/auth.js';
 import { setPersianDigits } from '../repositories/users.js';
 import { readSettings } from '../repositories/leagues.js';
 import { listForStudent } from '../services/evaluations.js';
+import { getPublishedReportCard, listPublishedReportCards } from '../services/reports.js';
 import { parseStoredOptions, serializeQuestion } from '../services/questions.js';
 import { readSchedule } from './schedule.js';
 import {
@@ -52,6 +53,19 @@ export function createStudentPortalRouter({ db }) {
   router.get('/report-card', validate({ query: schemas.reportCardQuery }), (req, res) => {
     const { columnId, from, to, limit } = req.query;
     res.json(reportCard(db, contextOf(db, req), { columnId, from, to, limit }));
+  });
+
+  /** Manual report cards published by the teacher, with the performance panel. */
+  router.get('/report-cards', (req, res) => {
+    const student = contextOf(db, req);
+    res.json({ items: listPublishedReportCards(db, student.leagueId, student.id) });
+  });
+
+  router.get('/report-cards/:cardId', (req, res) => {
+    const student = contextOf(db, req);
+    const cardId = Number.parseInt(req.params.cardId, 10);
+    if (!Number.isFinite(cardId)) throw notFound('کارنامه یافت نشد');
+    res.json({ card: getPublishedReportCard(db, student.leagueId, student.id, cardId) });
   });
 
   router.get('/attendance', validate({ query: schemas.pagination }), (req, res) => {

@@ -4,7 +4,8 @@ import { el } from '../../dom.js';
 
 export const STUDENT_TABS = [
   ['student', '🏠', 'میزکار'],
-  ['student/report-card', '📄', 'کارنامه'],
+  ['student/report-card', '📄', 'کارنامه (فعالیت‌ها)'],
+  ['student/report-cards', '📊', 'کارنامه دستی'],
   ['student/evaluations', '📝', 'ارزشیابی'],
   ['student/attendance', '🗓️', 'حضور و غیاب'],
   ['student/schedule', '📅', 'برنامه هفتگی'],
