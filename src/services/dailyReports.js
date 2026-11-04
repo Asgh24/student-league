@@ -12,6 +12,7 @@ import { toPersianDigits } from '../lib/normalize.js';
 import { normalizeMobile } from '../lib/phone.js';
 import { getLeague } from '../repositories/leagues.js';
 import { contactsList } from './contacts.js';
+import { reportChannels } from './reportChannels.js';
 import {
   deliverSms,
   markMessage,
@@ -88,6 +89,7 @@ export function dailyReport(db, leagueId, date) {
   }
 
   const contacts = new Map(contactsList(db, leagueId).map((row) => [row.id, row]));
+  const channels = reportChannels(db, league.teacher_id);
   const items = [];
   for (const contact of contacts.values()) {
     const lines = byStudent.get(contact.id) ?? [];
@@ -98,7 +100,9 @@ export function dailyReport(db, leagueId, date) {
       name: contact.name,
       parentPhone: contact.parentPhone,
       studentPhone: contact.studentPhone,
+      shadPvUrl: contact.shadPvUrl,
       hasParentPhone: contact.hasParentPhone,
+      hasShadPvUrl: contact.hasShadPvUrl,
       totalDelta,
       changes,
       lines,
@@ -111,10 +115,13 @@ export function dailyReport(db, leagueId, date) {
     date,
     league: { id: league.id, name: league.name },
     items,
+    channels,
     summary: {
       students: items.length,
       changed: items.filter((item) => item.changes > 0).length,
       withoutParentPhone: items.filter((item) => !item.hasParentPhone).length,
+      withoutShadUrl: items.filter((item) => !item.hasShadPvUrl).length,
+      shadReady: items.filter((item) => item.hasShadPvUrl).length,
       sent: messages.filter((message) => message.status === 'sent').length,
       queued: messages.filter((message) => message.status === 'queued').length,
       failed: messages.filter((message) => message.status === 'failed').length,
@@ -138,6 +145,9 @@ export async function sendDailyReports(db, { leagueId, date, studentIds, fetchIm
   const selected = new Set(studentIds);
   const chosen = report.items.filter((item) => selected.has(item.studentId));
   if (chosen.length === 0) throw badRequest('NO_STUDENTS', 'هیچ دانش‌آموزی برای ارسال انتخاب نشده است');
+  if (!report.channels.sms) {
+    throw badRequest('SMS_DISABLED', 'ارسال پیامکی در تنظیمات گزارش روزانه غیرفعال شده است؛ ابتدا آن را فعال کنید');
+  }
 
   const results = [];
   for (const item of chosen) {
@@ -190,6 +200,9 @@ export async function sendCustomParentMessages(db, { leagueId, studentIds, messa
   const selected = new Set(studentIds);
   const chosen = contactsList(db, leagueId).filter((contact) => selected.has(contact.id));
   if (chosen.length === 0) throw badRequest('NO_STUDENTS', 'هیچ دانش‌آموزی برای ارسال انتخاب نشده است');
+  if (!reportChannels(db, league.teacher_id).sms) {
+    throw badRequest('SMS_DISABLED', 'ارسال پیامکی در تنظیمات گزارش روزانه غیرفعال شده است؛ ابتدا آن را فعال کنید');
+  }
 
   const credentials = resolveSmsProvider(db, { teacherId: league.teacher_id });
   const reportDate = todayIso();

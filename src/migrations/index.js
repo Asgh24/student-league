@@ -16,6 +16,7 @@ import * as studentReports from './015_student_reports.js';
 import * as fixReportCardGradesFk from './016_fix_report_card_grades_fk.js';
 import * as reportCardSubjectLinks from './017_report_card_subject_links.js';
 import * as reportCardGradeNullable from './018_report_card_grade_nullable.js';
+import * as reportChannelsShad from './019_report_channels_shad.js';
 
 /** Ordered list of migrations applied automatically on boot. */
 export const migrations = [
@@ -37,4 +38,5 @@ export const migrations = [
   fixReportCardGradesFk,
   reportCardSubjectLinks,
   reportCardGradeNullable,
+  reportChannelsShad,
 ];

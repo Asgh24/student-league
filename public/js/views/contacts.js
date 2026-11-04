@@ -29,6 +29,18 @@ export function normalizeMobile(value) {
   return MOBILE_PATTERN.test(text) ? text : '';
 }
 
+/** Mirrors `src/lib/url.js`: only absolute http(s) links are accepted. */
+export function isValidShadUrl(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return false;
+  try {
+    const url = new URL(text);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export async function renderContacts({ params }) {
   const leagueId = Number(params.id);
   setTopbarTitle('شماره‌های والدین و دانش‌آموزان');
@@ -53,6 +65,7 @@ export async function renderContacts({ params }) {
     ...item,
     parentPhone: normalizeMobile(item.parentPhone) || item.parentPhone || '',
     studentPhone: normalizeMobile(item.studentPhone) || item.studentPhone || '',
+    shadPvUrl: item.shadPvUrl ?? '',
   }));
 
   const statsNode = el('div.grid.grid--stats');
@@ -62,10 +75,12 @@ export async function renderContacts({ params }) {
   function stats() {
     const withParent = rows.filter((row) => normalizeMobile(row.parentPhone)).length;
     const withStudent = rows.filter((row) => normalizeMobile(row.studentPhone)).length;
+    const withShad = rows.filter((row) => isValidShadUrl(row.shadPvUrl)).length;
     statsNode.replaceChildren(
       statCard({ label: 'دانش‌آموزان', value: fa(rows.length), icon: '🧑‍🎓' }),
       statCard({ label: 'شماره والدین', value: fa(withParent), kind: 'ok', icon: '👨‍👩‍👧' }),
       statCard({ label: 'شماره دانش‌آموز', value: fa(withStudent), icon: '📱' }),
+      statCard({ label: 'لینک شاد', value: fa(withShad), kind: withShad === rows.length ? 'ok' : 'warn', icon: '🟢' }),
       statCard({ label: 'بدون شماره والد', value: fa(rows.length - withParent), kind: withParent === rows.length ? 'ok' : 'warn', icon: '⚠️' }),
     );
   }
@@ -74,12 +89,15 @@ export async function renderContacts({ params }) {
     return {
       parentPhone: row.draftParent ?? row.parentPhone,
       studentPhone: row.draftStudent ?? row.studentPhone,
+      shadPvUrl: row.draftShad ?? row.shadPvUrl,
     };
   }
 
   function rowChanged(row) {
     const draft = draftOf(row);
-    return draft.parentPhone.trim() !== row.parentPhone || draft.studentPhone.trim() !== row.studentPhone;
+    return draft.parentPhone.trim() !== row.parentPhone
+      || draft.studentPhone.trim() !== row.studentPhone
+      || draft.shadPvUrl.trim() !== row.shadPvUrl;
   }
 
   function refreshDirty() {
@@ -97,6 +115,7 @@ export async function renderContacts({ params }) {
     const draft = draftOf(row);
     const parentRaw = draft.parentPhone.trim();
     const studentRaw = draft.studentPhone.trim();
+    const shadRaw = draft.shadPvUrl.trim();
     const parentPhone = parentRaw ? normalizeMobile(parentRaw) : '';
     const studentPhone = studentRaw ? normalizeMobile(studentRaw) : '';
     if (parentRaw && !parentPhone) {
@@ -109,19 +128,32 @@ export async function renderContacts({ params }) {
       row.studentInput.focus();
       return false;
     }
+    if (shadRaw && !isValidShadUrl(shadRaw)) {
+      notify.error('لینک شاد باید یک آدرس کامل با http یا https باشد');
+      row.shadInput.focus();
+      return false;
+    }
 
     row.busy = true;
     refreshDirty();
     try {
-      const response = await api.patch(`/leagues/${leagueId}/contacts/${row.id}`, { parentPhone, studentPhone });
+      const response = await api.patch(`/leagues/${leagueId}/contacts/${row.id}`, {
+        parentPhone,
+        studentPhone,
+        shadPvUrl: shadRaw,
+      });
       const saved = response?.student;
       row.parentPhone = saved?.parentPhone ?? parentPhone;
       row.studentPhone = saved?.studentPhone ?? studentPhone;
+      row.shadPvUrl = saved?.shadPvUrl ?? shadRaw;
       row.hasParentPhone = Boolean(row.parentPhone);
+      row.hasShadPvUrl = isValidShadUrl(row.shadPvUrl);
       row.draftParent = null;
       row.draftStudent = null;
+      row.draftShad = null;
       row.parentInput.value = row.parentPhone;
       row.studentInput.value = row.studentPhone;
+      row.shadInput.value = row.shadPvUrl;
       return true;
     } catch (error) {
       notify.error(errorMessage(error));
@@ -141,7 +173,7 @@ export async function renderContacts({ params }) {
     for (const row of dirty) {
       if (await persist(row)) saved += 1;
     }
-    if (saved) notify.ok(`${fa(saved)} شماره ذخیره شد`);
+    if (saved) notify.ok(`${fa(saved)} ردیف ذخیره شد`);
     refreshDirty();
   }
 
@@ -153,6 +185,7 @@ export async function renderContacts({ params }) {
         el('th', { text: 'دانش‌آموز' }),
         el('th', { text: 'شماره والد' }),
         el('th', { text: 'شماره دانش‌آموز' }),
+        el('th', { text: 'لینک PV شاد' }),
         el('th', { text: 'وضعیت' }),
         el('th', { text: 'ذخیره' }),
       ]),
@@ -179,12 +212,21 @@ export async function renderContacts({ params }) {
         inputmode: 'tel',
         maxlength: '20',
       });
+      row.shadInput = el('input.contacts-input.contacts-input--url', {
+        type: 'url',
+        dir: 'ltr',
+        value: draft.shadPvUrl,
+        placeholder: 'https://web.shad.ir/…',
+        'aria-label': `لینک شاد ${row.name}`,
+        maxlength: '2000',
+      });
       row.status = el('span.chip.chip--muted', { text: 'ذخیره‌شده' });
-      row.saveButton = button('ذخیره', { kind: 'ghost', icon: '💾', disabled: !rowChanged(row), onClick: () => persist(row).then((ok) => ok && notify.ok('شماره ذخیره شد')) });
+      row.saveButton = button('ذخیره', { kind: 'ghost', icon: '💾', disabled: !rowChanged(row), onClick: () => persist(row).then((ok) => ok && notify.ok('اطلاعات ذخیره شد')) });
 
       const onEdit = () => {
         row.draftParent = row.parentInput.value;
         row.draftStudent = row.studentInput.value;
+        row.draftShad = row.shadInput.value;
         row.status.textContent = rowChanged(row) ? 'ذخیره نشده' : 'ذخیره‌شده';
         row.status.className = `chip ${rowChanged(row) ? 'chip--amber' : 'chip--muted'}`;
         row.saveButton.disabled = !rowChanged(row);
@@ -192,6 +234,7 @@ export async function renderContacts({ params }) {
       };
       row.parentInput.addEventListener('input', onEdit);
       row.studentInput.addEventListener('input', onEdit);
+      row.shadInput.addEventListener('input', onEdit);
 
       tbody.appendChild(el('tr', {}, [
         el('td.name-cell', {}, [
@@ -200,6 +243,7 @@ export async function renderContacts({ params }) {
         ]),
         el('td', {}, [row.parentInput]),
         el('td', {}, [row.studentInput]),
+        el('td', {}, [row.shadInput]),
         el('td', {}, [row.status]),
         el('td.actions-td', {}, [row.saveButton]),
       ]));
@@ -216,14 +260,14 @@ export async function renderContacts({ params }) {
       pageHead({
         icon: '📱',
         title: 'شماره‌های والدین و دانش‌آموزان',
-        subtitle: 'این شماره‌ها در گزارش روزانهٔ والدین استفاده می‌شوند.',
+        subtitle: 'این شماره‌ها و لینک‌های شاد در گزارش روزانهٔ والدین استفاده می‌شوند.',
         actions: [saveAllButton, backToWorkbench()],
       }),
       statsNode,
-      card({ title: 'ثبت شماره‌ها', icon: '✍️' }, [
+      card({ title: 'ثبت شماره‌ها و لینک شاد', icon: '✍️' }, [
         el('div.row', { style: { justifyContent: 'space-between', flexWrap: 'wrap' } }, [
           search,
-          el('span.small.muted', { text: 'خالی گذاشتن یعنی «ثبت نشده». شماره با ۰۹ و ۱۱ رقم.' }),
+          el('span.small.muted', { text: 'خالی گذاشتن یعنی «ثبت نشده». شماره با ۰۹ و ۱۱ رقم؛ لینک شاد با http یا https.' }),
         ]),
         list,
       ]),

@@ -3,8 +3,9 @@ import { asyncHandler, todayIso } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
 import { requireTeacher, loadOwnedLeague, requirePermission, requireOwnerTeacher } from '../middleware/auth.js';
 import { dailyReport, sendCustomParentMessages, sendDailyReports } from '../services/dailyReports.js';
+import { saveReportChannels } from '../services/reportChannels.js';
 
-/** «گزارش روزانه»: condensed change report sent to parents over sms.ir. */
+/** «گزارش روزانه»: condensed change report sent to parents over sms.ir or Shad. */
 export function createLeagueReportsRouter({ db }) {
   const router = Router({ mergeParams: true });
   router.use(requireTeacher, loadOwnedLeague(db), requirePermission('reports'));
@@ -13,6 +14,17 @@ export function createLeagueReportsRouter({ db }) {
     const date = req.query.date ?? todayIso();
     res.json(dailyReport(db, req.league.id, date));
   });
+
+  /** Teacher-wide switches; stored on the owner account, not on one league. */
+  router.put(
+    '/channels',
+    requireOwnerTeacher,
+    validate({ body: schemas.reportChannels }),
+    (req, res) => {
+      const channels = saveReportChannels(db, req.league.teacher_id, req.body);
+      res.json({ channels });
+    },
+  );
 
   router.post(
     '/daily/send',

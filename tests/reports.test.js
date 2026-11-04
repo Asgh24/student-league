@@ -29,6 +29,14 @@ async function setParentPhone(studentId, phone) {
   });
 }
 
+async function setShadUrl(studentId, shadPvUrl) {
+  return client.patch(`/api/v1/leagues/${fixture.leagueA.id}/contacts/${studentId}`, {
+    parentPhone: '',
+    studentPhone: '',
+    shadPvUrl,
+  });
+}
+
 beforeEach(async () => {
   ctx = createTestDatabase();
   fixture = buildFixture(ctx.db);
@@ -105,6 +113,81 @@ describe('daily parent report data', () => {
     const other = createClient(ctx.db);
     await other.login('teacher-b', 'password-b1');
     const foreign = await other.get(`/api/v1/leagues/${fixture.leagueA.id}/reports/daily`);
+    expect(foreign.status).toBe(403);
+  });
+});
+
+describe('report delivery channels and Shad links', () => {
+  it('exposes the Shad link of each parent in the daily report', async () => {
+    const first = fixture.studentsA[0];
+    await setShadUrl(first.id, 'https://web.shad.ir/#/pv/abc');
+
+    const res = await client.get(`/api/v1/leagues/${fixture.leagueA.id}/reports/daily?date=${todayIso()}`);
+    expect(res.status).toBe(200);
+    expect(res.body.channels).toEqual({ sms: true, shad: true });
+    expect(res.body.summary.shadReady).toBe(1);
+    expect(res.body.summary.withoutShadUrl).toBe(2);
+
+    const row = res.body.items.find((item) => item.studentId === first.id);
+    expect(row).toMatchObject({
+      shadPvUrl: 'https://web.shad.ir/#/pv/abc',
+      hasShadPvUrl: true,
+    });
+  });
+
+  it('saves teacher-wide channel switches and applies them to the report', async () => {
+    const res = await client.put(`/api/v1/leagues/${fixture.leagueA.id}/reports/channels`, {
+      sms: false,
+      shad: true,
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.channels).toEqual({ sms: false, shad: true });
+
+    const stored = ctx.db.prepare('SELECT report_sms_enabled, report_shad_enabled FROM users WHERE id = ?')
+      .get(fixture.teacherA.id);
+    expect(stored).toEqual({ report_sms_enabled: 0, report_shad_enabled: 1 });
+
+    const report = await client.get(`/api/v1/leagues/${fixture.leagueA.id}/reports/daily?date=${todayIso()}`);
+    expect(report.body.channels).toEqual({ sms: false, shad: true });
+  });
+
+  it('refuses SMS sends while the SMS channel is off', async () => {
+    const first = fixture.studentsA[0];
+    await setParentPhone(first.id, '09123456789');
+
+    await client.put(`/api/v1/leagues/${fixture.leagueA.id}/reports/channels`, {
+      sms: false,
+      shad: true,
+    });
+
+    const daily = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/reports/daily/send`, {
+      date: todayIso(),
+      studentIds: [first.id],
+    });
+    expect(daily.status).toBe(400);
+    expect(daily.body.error.code).toBe('SMS_DISABLED');
+
+    const custom = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/reports/custom/send`, {
+      studentIds: [first.id],
+      message: 'پیام آزمایشی',
+    });
+    expect(custom.status).toBe(400);
+    expect(custom.body.error.code).toBe('SMS_DISABLED');
+
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM sms_messages').get().n).toBe(0);
+  });
+
+  it('validates channel switches and keeps the league private', async () => {
+    const invalid = await client.put(`/api/v1/leagues/${fixture.leagueA.id}/reports/channels`, {});
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.error.code).toBe('VALIDATION_ERROR');
+
+    const other = createClient(ctx.db);
+    await other.login('teacher-b', 'password-b1');
+    const foreign = await other.put(`/api/v1/leagues/${fixture.leagueA.id}/reports/channels`, {
+      sms: false,
+      shad: false,
+    });
     expect(foreign.status).toBe(403);
   });
 });

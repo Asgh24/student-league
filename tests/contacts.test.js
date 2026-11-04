@@ -28,8 +28,10 @@ describe('parent and student contact numbers', () => {
       name: 'آرش آزمون',
       parentPhone: '',
       studentPhone: '',
+      shadPvUrl: '',
       hasLogin: true,
       hasParentPhone: false,
+      hasShadPvUrl: false,
     });
     expect(res.body.items[1].hasLogin).toBe(false);
   });
@@ -81,5 +83,43 @@ describe('parent and student contact numbers', () => {
     await student.login('student-a', 'student-a1');
     const forbidden = await student.get(`/api/v1/leagues/${fixture.leagueA.id}/contacts`);
     expect(forbidden.status).toBe(403);
+  });
+
+  it('stores a valid Shad PV link and rejects dangerous protocols', async () => {
+    const studentId = fixture.studentsA[0].id;
+    const saved = await client.patch(`/api/v1/leagues/${fixture.leagueA.id}/contacts/${studentId}`, {
+      parentPhone: '09120000000',
+      studentPhone: '',
+      shadPvUrl: ' https://web.shad.ir/#/pv/abc ',
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.body.student.shadPvUrl).toBe('https://web.shad.ir/#/pv/abc');
+    expect(saved.body.student.hasShadPvUrl).toBe(true);
+    expect(saved.body.student.parentPhone).toBe('09120000000');
+
+    // A phone-only update keeps the stored link.
+    await client.patch(`/api/v1/leagues/${fixture.leagueA.id}/contacts/${studentId}`, {
+      parentPhone: '09120000001',
+      studentPhone: '',
+    });
+    const kept = await client.get(`/api/v1/leagues/${fixture.leagueA.id}/contacts`);
+    expect(kept.body.items[0].shadPvUrl).toBe('https://web.shad.ir/#/pv/abc');
+
+    const unsafe = await client.patch(`/api/v1/leagues/${fixture.leagueA.id}/contacts/${studentId}`, {
+      parentPhone: '09120000001',
+      studentPhone: '',
+      shadPvUrl: 'javascript:alert(1)',
+    });
+    expect(unsafe.status).toBe(400);
+    expect(unsafe.body.error.code).toBe('INVALID_SHAD_URL');
+
+    const cleared = await client.patch(`/api/v1/leagues/${fixture.leagueA.id}/contacts/${studentId}`, {
+      parentPhone: '09120000001',
+      studentPhone: '',
+      shadPvUrl: '',
+    });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.student.shadPvUrl).toBe('');
+    expect(cleared.body.student.hasShadPvUrl).toBe(false);
   });
 });

@@ -61,7 +61,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | پنل مدیر | Separate site-owner login: teacher search/filter, manual subscription grants, plan CRUD, revenue and payment ledger, inbox/SMS health, and a backup/restore console. The «حذف منقضی‌ها» tab lists teachers whose trial and paid subscription have both ended and lets the owner permanently delete an account after typing its username; leagues, students, linked student logins, scores, uploads and payment history are removed with it |
 | بکاپ و بازیابی | Owner-only manual GitHub backup, consistent local DB download, remote snapshot list, staged restore with checksum verification and cancel; auto-restores an empty/schema-only DB on boot |
 | پیام‌ها | Ticket-like teacher↔student inbox with threads, unread counters, read receipts and polling; both sides can reply from the same shared view |
-| پنل پیامک | Per-teacher sms.ir API key + line number in the teacher's own panel (encrypted, write-only), a built-in «راهنمایی راه‌اندازی سامانه پیامکی» guide with annotated screenshots, credit/lines, test and bulk sends, the daily parent report, a free-text «پیام دلخواه به والدین» box for notices such as a student's misbehavior, league-report outbox and admin campaign retry; without credentials everything stays queued instead of being lost |
+| پنل پیامک | Per-teacher sms.ir API key + line number in the teacher's own panel (encrypted, write-only), a built-in «راهنمایی راه‌اندازی سامانه پیامکی» guide with annotated screenshots, credit/lines, test and bulk sends, the daily parent report, a free-text «پیام دلخواه به والدین» box for notices such as a student's misbehavior, league-report outbox and admin campaign retry; without credentials everything stays queued instead of being lost. The daily report also supports **Shad**: the teacher saves each parent's PV link, toggles SMS/Shad on or off for the whole dashboard, and one click opens the link in a new tab while copying that student's exact report for pasting into the Shad app |
 | دستیار هوش مصنوعی | In the Q&A page, drafts multiple-choice quizzes/questionnaires through Groq (`openai/gpt-oss-20b`), shows a reviewable preview and bulk-saves only the selected questions; supports a server-wide default key plus an encrypted, write-only personal teacher key |
 | پرداخت‌ها | Zarinpal v4 request/verify (Rial conversion, sandbox support) and a local `mock` gateway for development before a merchant ID exists |
 
@@ -773,9 +773,29 @@ number are returned as `skipped` rather than being silently dropped.
 
 | Method | Path | Body | Response |
 | --- | --- | --- | --- |
-| GET | `/leagues/:id/reports/daily` | `?date=YYYY-MM-DD` | the day's per-student changes, generated messages, SMS config, recent sends |
-| POST | `/leagues/:id/reports/daily/send` | `{ date, studentIds[] }` | `{ results, counts{ sent, queued, failed, skipped }, smsConfigured }` |
+| GET | `/leagues/:id/reports/daily` | `?date=YYYY-MM-DD` | the day's per-student changes, generated messages, `channels{ sms, shad }`, per-student `shadPvUrl`, SMS config, recent sends |
+| PUT | `/leagues/:id/reports/channels` | `{ sms?, shad? }` | `{ channels }` — teacher-wide switches, applied to every league of that teacher |
+| POST | `/leagues/:id/reports/daily/send` | `{ date, studentIds[] }` | `{ results, counts{ sent, queued, failed, skipped }, smsConfigured }` — rejected with `SMS_DISABLED` while the SMS channel is off |
 | POST | `/leagues/:id/reports/custom/send` | `{ studentIds[], message }` | `{ results, counts{ sent, queued, failed, skipped }, smsConfigured, message }` — a blank message is rejected with `VALIDATION_ERROR` |
+
+### Shad delivery (manual, no API key)
+
+Each student row in «شماره‌ها» also accepts a **Shad PV link** (`https://…`,
+validated server-side; `javascript:`/`data:` values are rejected). In
+«گزارش روزانه», the **کانال‌های ارسال گزارش** card has two teacher-wide
+checkboxes:
+
+- **پیامک (sms.ir)** — the existing automatic send path.
+- **شاد** — a per-student **ارسال با شاد** button in the preview. It opens the
+  stored PV link in a new tab and copies that student's exact generated report
+  to the clipboard, so the teacher only pastes it into the Shad app. Nothing is
+  sent to Shad automatically and no Shad credentials are stored.
+
+Both switches live on the teacher's `users` row (`report_sms_enabled`,
+`report_shad_enabled`). Turning SMS off hides the SMS settings/send controls and
+makes the send endpoints return `SMS_DISABLED`; the channel card itself stays
+visible so it can be turned back on. A phone-only contact save preserves the
+stored Shad link.
 
 ### SMS console (site owner)
 

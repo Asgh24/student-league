@@ -1453,6 +1453,7 @@ describe('parent contact numbers', () => {
     await vi.waitFor(() => expect(api.patch).toHaveBeenCalledWith('/leagues/1/contacts/11', {
       parentPhone: '09123456789',
       studentPhone: '',
+      shadPvUrl: '',
     }));
     await vi.waitFor(() => expect(parent.value).toBe('09123456789'));
     expect(view.textContent).toContain('شماره والد');
@@ -1461,7 +1462,7 @@ describe('parent contact numbers', () => {
   it('rejects a short parent number before calling the API', async () => {
     api.get.mockResolvedValue({
       league: { id: 1, name: 'لیگ تست' },
-      items: [{ id: 11, name: 'آرش آزمون', parentPhone: '', studentPhone: '', hasLogin: false, hasParentPhone: false }],
+      items: [{ id: 11, name: 'آرش آزمون', parentPhone: '', studentPhone: '', shadPvUrl: '', hasLogin: false, hasParentPhone: false, hasShadPvUrl: false }],
     });
 
     await renderContacts({ params: { id: '1' } });
@@ -1474,6 +1475,46 @@ describe('parent contact numbers', () => {
     await vi.waitFor(() => expect(document.getElementById('toasts').textContent).toContain('شماره والد باید'));
     expect(api.patch).not.toHaveBeenCalled();
   });
+
+  it('saves the Shad PV link and rejects an invalid URL before the request', async () => {
+    const student = {
+      id: 11,
+      name: 'آرش آزمون',
+      parentPhone: '',
+      studentPhone: '',
+      shadPvUrl: '',
+      hasLogin: false,
+      hasParentPhone: false,
+      hasShadPvUrl: false,
+    };
+    api.get.mockResolvedValue({ league: { id: 1, name: 'لیگ تست' }, items: [student] });
+    api.patch.mockResolvedValue({
+      student: { ...student, shadPvUrl: 'https://web.shad.ir/#/pv/abc', hasShadPvUrl: true },
+    });
+
+    await renderContacts({ params: { id: '1' } });
+    const view = document.querySelector('#view');
+    const shad = view.querySelector('[aria-label="لینک شاد آرش آزمون"]');
+    expect(shad).not.toBeNull();
+
+    shad.value = 'https://web.shad.ir/#/pv/abc';
+    shad.dispatchEvent(new window.Event('input', { bubbles: true }));
+    view.querySelector('tbody tr button').click();
+
+    await vi.waitFor(() => expect(api.patch).toHaveBeenCalledWith('/leagues/1/contacts/11', {
+      parentPhone: '',
+      studentPhone: '',
+      shadPvUrl: 'https://web.shad.ir/#/pv/abc',
+    }));
+    await vi.waitFor(() => expect(shad.value).toBe('https://web.shad.ir/#/pv/abc'));
+
+    shad.value = 'javascript:alert(1)';
+    shad.dispatchEvent(new window.Event('input', { bubbles: true }));
+    view.querySelector('tbody tr button').click();
+
+    await vi.waitFor(() => expect(document.getElementById('toasts').textContent).toContain('لینک شاد باید'));
+    expect(api.patch).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('daily parent report', () => {
@@ -1484,18 +1525,21 @@ describe('daily parent report', () => {
       items: [
         {
           studentId: 11, name: 'آرش آزمون', parentPhone: '09123456789', studentPhone: '', hasParentPhone: true,
+          shadPvUrl: 'https://web.shad.ir/#/pv/abc', hasShadPvUrl: true,
           totalDelta: -100, changes: 1,
           lines: [{ columnName: 'انضباطی', delta: -100, changes: 1 }],
           message: 'لیگ تست | گزارش روزانه ۱۴۰۵/۰۷/۲۹\nآرش آزمون: انضباطی -۱۰۰\nجمع تغییرات: -۱۰۰',
         },
         {
           studentId: 12, name: 'بهار بنفش', parentPhone: '', studentPhone: '', hasParentPhone: false,
+          shadPvUrl: '', hasShadPvUrl: false,
           totalDelta: 25, changes: 1,
           lines: [{ columnName: 'ریاضی', delta: 25, changes: 1 }],
           message: 'لیگ تست | گزارش روزانه ۱۴۰۵/۰۷/۲۹\nبهار بنفش: ریاضی +۲۵\nجمع تغییرات: +۲۵',
         },
       ],
-      summary: { students: 2, changed: 2, withoutParentPhone: 1, sent: 0, queued: 0, failed: 0 },
+      channels: { sms: true, shad: true },
+      summary: { students: 2, changed: 2, withoutParentPhone: 1, withoutShadUrl: 1, shadReady: 1, sent: 0, queued: 0, failed: 0 },
       sms: {
         provider: 'sms.ir', configured: false, source: 'none', lineNumber: '', hasApiKey: false,
         own: { hasApiKey: false, lineNumber: '', updatedAt: null }, partialOwnSettings: false,
@@ -1652,6 +1696,77 @@ describe('daily parent report', () => {
     }));
     await vi.waitFor(() => expect(document.getElementById('toasts').textContent).toContain('۱ پیام ارسال شد'));
     expect(document.querySelector('#view').querySelector('#custom-sms-message').value).toBe('');
+  });
+
+  it('saves the SMS / Shad channel switches for the whole dashboard', async () => {
+    api.get.mockResolvedValue(reportPayload());
+    api.put.mockImplementation((url, payload) => {
+      expect(url).toBe('/leagues/1/reports/channels');
+      return Promise.resolve({ channels: payload });
+    });
+
+    await renderReports({ params: { id: '1' } });
+    const smsBox = document.querySelector('#report-channel-sms');
+    const shadBox = document.querySelector('#report-channel-shad');
+    expect(smsBox.checked).toBe(true);
+    expect(shadBox.checked).toBe(true);
+
+    smsBox.checked = false;
+    smsBox.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    await vi.waitFor(() => expect(api.put).toHaveBeenCalledWith('/leagues/1/reports/channels', {
+      sms: false,
+      shad: true,
+    }));
+    await vi.waitFor(() => expect(document.querySelector('#report-channel-sms').checked).toBe(false));
+    expect(document.querySelector('#sms-api-key')).toBeNull();
+    expect(document.querySelector('#custom-sms-message')).toBeNull();
+    const labels = [...document.querySelectorAll('#view button')].map((node) => node.textContent);
+    expect(labels.some((text) => text.includes('ارسال پیامک به والدین'))).toBe(false);
+    expect(labels.some((text) => text.includes('ارسال با شاد'))).toBe(true);
+  });
+
+  it('opens the parent Shad link and copies that student message', async () => {
+    api.get.mockResolvedValue(reportPayload());
+    const open = vi.spyOn(window, 'open').mockReturnValue({ opener: null });
+    const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+    try {
+      await renderReports({ params: { id: '1' } });
+      const shadButton = [...document.querySelectorAll('#view .report-message button')]
+        .find((node) => node.textContent.includes('ارسال با شاد'));
+      expect(shadButton).not.toBeUndefined();
+      expect(shadButton.disabled).toBe(false);
+      shadButton.click();
+
+      await vi.waitFor(() => expect(open).toHaveBeenCalledWith('https://web.shad.ir/#/pv/abc', '_blank'));
+      await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('آرش آزمون: انضباطی -۱۰۰')));
+      await vi.waitFor(() => expect(document.getElementById('toasts').textContent).toContain('متن گزارش کپی شد'));
+    } finally {
+      open.mockRestore();
+      if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard);
+      else delete navigator.clipboard;
+    }
+  });
+
+  it('keeps the Shad actions and hides SMS controls when only Shad is enabled', async () => {
+    const payload = reportPayload();
+    payload.channels = { sms: false, shad: true };
+    api.get.mockResolvedValue(payload);
+
+    await renderReports({ params: { id: '1' } });
+    const view = document.querySelector('#view');
+    expect(view.querySelector('#report-channel-sms').checked).toBe(false);
+    expect(view.querySelector('#report-channel-shad').checked).toBe(true);
+    expect(view.querySelector('#sms-api-key')).toBeNull();
+    expect(view.querySelector('#custom-sms-message')).toBeNull();
+    expect([...view.querySelectorAll('button')].some((node) => node.textContent.includes('ارسال پیامک به والدین'))).toBe(false);
+    const shadButton = [...view.querySelectorAll('.report-message button')]
+      .find((node) => node.textContent.includes('ارسال با شاد'));
+    expect(shadButton).not.toBeUndefined();
+    expect(shadButton.disabled).toBe(false);
   });
 });
 

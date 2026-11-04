@@ -2191,6 +2191,10 @@ body.quiz-open {
   text-align: left;
   font-variant-numeric: tabular-nums;
 }
+.contacts-input--url {
+  max-width: 320px;
+  font-size: 0.82rem;
+}
 .contacts-table td {
   vertical-align: middle;
 }
@@ -2375,14 +2379,21 @@ body.quiz-open {
   .contacts-table td:nth-child(3)::before {
     content: 'شماره دانش‌آموز';
   }
+  .contacts-table td:nth-child(4)::before {
+    content: 'لینک PV شاد';
+  }
   .contacts-table td:nth-child(2)::before,
-  .contacts-table td:nth-child(3)::before {
+  .contacts-table td:nth-child(3)::before,
+  .contacts-table td:nth-child(4)::before {
     display: block;
     margin-bottom: 2px;
     font-size: 0.75rem;
     color: var(--muted);
   }
   .contacts-table td:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+  .contacts-table td:nth-child(5) {
     align-self: center;
   }
   table.grid-table.contacts-table td.actions-td {

@@ -491,11 +491,18 @@ export const schemas = {
     })).max(400),
   }),
 
-  /** «شماره‌ها»: parent and student mobile numbers (empty = not provided). */
+  /** «شماره‌ها»: parent and student mobile numbers plus the Shad PV link. */
   contactSave: z.object({
     parentPhone: z.string().trim().max(20).default(''),
     studentPhone: z.string().trim().max(20).default(''),
+    shadPvUrl: z.string().trim().max(2000).optional(),
   }),
+
+  /** Teacher-wide on/off switches of the daily-report delivery channels. */
+  reportChannels: z.object({
+    sms: z.boolean().optional(),
+    shad: z.boolean().optional(),
+  }).refine((value) => Object.keys(value).length > 0, { message: 'هیچ تغییری ارسال نشده است' }),
 
   /** «گزارش روزانه»: the day plus the students whose parents receive it. */
   dailyReportSend: z.object({

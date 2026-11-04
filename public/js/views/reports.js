@@ -25,6 +25,34 @@ const STATUS_LABELS = {
   skipped: { label: 'بدون شماره', kind: 'muted' },
 };
 
+/** Clipboard write with a selection fallback for older browsers. */
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to the textarea fallback */
+  }
+
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.appendChild(area);
+  area.select();
+  let copied = false;
+  try {
+    copied = Boolean(document.execCommand?.('copy'));
+  } catch {
+    copied = false;
+  }
+  area.remove();
+  return copied;
+}
+
 function signed(value) {
   const number = Number(value) || 0;
   if (number === 0) return fa(0);
@@ -50,6 +78,13 @@ export async function renderReports({ params }) {
   let selected = new Set();
   let lastResult = null;
   let sending = false;
+  let savingChannels = false;
+  let channels = { sms: true, shad: true };
+
+  /** True when at least one enabled channel can reach this student. */
+  function reachable(item) {
+    return (channels.sms && item.hasParentPhone) || (channels.shad && item.hasShadPvUrl);
+  }
 
   async function load() {
     body.replaceChildren(loadingNode());
@@ -63,9 +98,10 @@ export async function renderReports({ params }) {
       return;
     }
     date = report.date;
+    channels = report.channels ?? { sms: true, shad: true };
     setLeaguePill({ name: report.league?.name ?? '' });
     selected = new Set(
-      report.items.filter((item) => item.changes > 0 && item.hasParentPhone).map((item) => item.studentId),
+      report.items.filter((item) => item.changes > 0 && reachable(item)).map((item) => item.studentId),
     );
     paint();
   }
@@ -84,13 +120,24 @@ export async function renderReports({ params }) {
   function refreshSelectionUi() {
     const chosen = selectedItems();
     const withPhone = chosen.filter((item) => item.hasParentPhone).length;
-    const missing = chosen.length - withPhone;
-    selectionInfo.textContent = chosen.length
-      ? `${fa(chosen.length)} دانش‌آموز انتخاب شده — ${fa(withPhone)} شماره والد دارد${missing ? `، ${fa(missing)} بدون شماره` : ''}`
-      : 'هیچ دانش‌آموزی انتخاب نشده است.';
-    selectionInfo.className = chosen.length ? 'small' : 'small muted';
-    sendButton.disabled = sending || withPhone === 0;
-    sendButton.title = withPhone === 0 ? 'برای ارسال، حداقل یک دانش‌آموز با شماره والد انتخاب کنید' : 'ارسال پیامک گزارش';
+    const withShad = chosen.filter((item) => item.hasShadPvUrl).length;
+    const reach = [];
+    if (channels.sms) reach.push(`${fa(withPhone)} شماره والد`);
+    if (channels.shad) reach.push(`${fa(withShad)} لینک شاد`);
+    const missing = [];
+    if (channels.sms && withPhone < chosen.length) missing.push(`${fa(chosen.length - withPhone)} بدون شماره`);
+    if (channels.shad && withShad < chosen.length) missing.push(`${fa(chosen.length - withShad)} بدون لینک شاد`);
+    const noChannels = !channels.sms && !channels.shad;
+    selectionInfo.textContent = noChannels
+      ? 'هیچ کانال ارسالی فعال نیست؛ ابتدا پیامک یا شاد را فعال کنید.'
+      : chosen.length
+        ? `${fa(chosen.length)} دانش‌آموز انتخاب شده — ${reach.join('، ')}${missing.length ? `، ${missing.join('، ')}` : ''}`
+        : 'هیچ دانش‌آموزی انتخاب نشده است.';
+    selectionInfo.className = chosen.length && !noChannels ? 'small' : 'small muted';
+    if (sendButton) {
+      sendButton.disabled = sending || withPhone === 0;
+      sendButton.title = withPhone === 0 ? 'برای ارسال، حداقل یک دانش‌آموز با شماره والد انتخاب کنید' : 'ارسال پیامک گزارش';
+    }
     if (customSendButton) {
       const hasText = customMessage.value.trim().length > 0;
       customSendButton.disabled = sending || withPhone === 0 || !hasText;
@@ -107,10 +154,24 @@ export async function renderReports({ params }) {
           item.hasParentPhone
             ? chip(item.parentPhone, 'muted')
             : chip('شماره والد ثبت نشده', 'bad'),
+          channels.shad
+            ? (item.hasShadPvUrl ? chip('شاد ✓', 'ok') : chip('لینک شاد ثبت نشده', 'bad'))
+            : null,
           el('span.spacer'),
           el(`span.chip.chip--${deltaKind(item.totalDelta)}`, { text: `جمع ${signed(item.totalDelta)}` }),
         ]),
         el('pre.report-message__body', { dir: 'rtl', text: item.message }),
+        el('div.row.report-message__actions', { style: { marginTop: '6px', flexWrap: 'wrap' } }, [
+          button('کپی متن', { kind: 'ghost', icon: '📋', onClick: () => { void copyReportText(item); } }),
+          channels.shad
+            ? button(item.hasShadPvUrl ? 'ارسال با شاد' : 'لینک شاد ثبت نشده', {
+              kind: 'soft',
+              icon: '🟢',
+              disabled: !item.hasShadPvUrl,
+              onClick: () => { void openShad(item); },
+            })
+            : null,
+        ]),
       ]))
       : [el('p.muted.small', { text: 'با انتخاب دانش‌آموزان، متن دقیق پیامک اینجا نمایش داده می‌شود.' })]));
     for (const row of rowsByStudent.values()) {
@@ -118,6 +179,41 @@ export async function renderReports({ params }) {
       row.node.classList.toggle('is-selected', active);
       row.checkbox.checked = active;
     }
+  }
+
+  async function copyReportText(item) {
+    const copied = await copyToClipboard(item.message);
+    if (copied) notify.ok(`متن گزارش ${item.name} کپی شد`);
+    else notify.error('کپی خودکار ممکن نشد؛ متن را از کادر پیش‌نمایش انتخاب و کپی کنید');
+  }
+
+  /** Opens the parent's Shad PV link and copies that student's exact message. */
+  async function openShad(item) {
+    if (!channels.shad) {
+      notify.error('ارسال با شاد در تنظیمات گزارش روزانه غیرفعال است');
+      return;
+    }
+    if (!item.hasShadPvUrl || !item.shadPvUrl) {
+      notify.error(`برای ${item.name} لینک شاد ثبت نشده است`);
+      return;
+    }
+
+    // Open first, while the click still counts as a user gesture; copy next so
+    // the teacher can immediately paste the message in the Shad app.
+    const tab = window.open(item.shadPvUrl, '_blank');
+    if (tab) {
+      try {
+        tab.opener = null;
+      } catch {
+        /* cross-origin windows may reject the assignment */
+      }
+    } else {
+      notify.warn('مرورگر پنجرهٔ شاد را مسدود کرد؛ اجازهٔ باز شدن پنجره را بدهید و دوباره تلاش کنید');
+    }
+
+    const copied = await copyToClipboard(item.message);
+    if (copied) notify.ok(`لینک شاد ${item.name} باز شد و متن گزارش کپی شد`);
+    else notify.info(`لینک شاد ${item.name} باز شد؛ متن را از پیش‌نمایش کپی کنید`);
   }
 
   const selectionInfo = el('p.small.muted');
@@ -166,6 +262,69 @@ export async function renderReports({ params }) {
     ]);
   }
 
+  function channelsCard() {
+    const smsBox = el('input', {
+      id: 'report-channel-sms',
+      type: 'checkbox',
+      checked: channels.sms,
+      disabled: savingChannels,
+      onchange: () => { void saveChannels({ ...channels, sms: smsBox.checked }); },
+    });
+    const shadBox = el('input', {
+      id: 'report-channel-shad',
+      type: 'checkbox',
+      checked: channels.shad,
+      disabled: savingChannels,
+      onchange: () => { void saveChannels({ ...channels, shad: shadBox.checked }); },
+    });
+    return card({ title: 'کانال‌های ارسال گزارش', icon: '🔀' }, [
+      el('p.small.muted', {
+        text: 'این دو گزینه برای همهٔ لیگ‌های شما ذخیره می‌شوند؛ هر کدام را خواستید خاموش کنید.',
+      }),
+      el('div.row', { style: { flexWrap: 'wrap', gap: '18px', margin: '6px 0' } }, [
+        el('label.row', { style: { gap: '6px', alignItems: 'center' } }, [
+          smsBox,
+          el('span', { text: '📱 ارسال با پیامک (sms.ir)' }),
+        ]),
+        el('label.row', { style: { gap: '6px', alignItems: 'center' } }, [
+          shadBox,
+          el('span', { text: '🟢 ارسال با شاد (باز کردن لینک و کپی متن)' }),
+        ]),
+      ]),
+      channels.sms || channels.shad
+        ? null
+        : chip('هیچ کانالی فعال نیست؛ ارسال گزارش ممکن نیست', 'bad'),
+      el('p.small.muted', {
+        text: 'در روش شاد، لینک PV هر والد را در بخش «شماره‌ها» ثبت کنید. هنگام زدن دکمهٔ شاد، لینک در تب جدید باز می‌شود و متن همان دانش‌آموز در کلیپ‌بورد کپی می‌شود تا در برنامهٔ شاد بچسبانید.',
+      }),
+      el('div.row', { style: { flexWrap: 'wrap' } }, [
+        el('a.btn.btn--ghost', {
+          href: `#/teacher/league/${leagueId}/contacts`,
+          text: '📱 ثبت لینک‌های شاد در شماره‌ها',
+        }),
+      ]),
+    ]);
+  }
+
+  async function saveChannels(next) {
+    if (savingChannels) return;
+    const previous = channels;
+    savingChannels = true;
+    channels = next;
+    try {
+      const result = await api.put(`/leagues/${leagueId}/reports/channels`, next);
+      channels = result.channels ?? next;
+      report.channels = channels;
+      notify.ok('کانال‌های ارسال ذخیره شد');
+    } catch (error) {
+      channels = previous;
+      notify.error(errorMessage(error));
+    } finally {
+      savingChannels = false;
+      paint();
+    }
+  }
+
   function smsSettings() {
     return smsSettingsCard({
       config: report.sms ?? {},
@@ -203,7 +362,12 @@ export async function renderReports({ params }) {
         : [el('span.small.muted', { text: 'بدون تغییر' })]);
       const node = el('tr', { class: selected.has(item.studentId) ? 'is-selected' : '' }, [
         el('td', {}, [el('label.report-check', {}, [checkbox])]),
-        el('td.name-cell', {}, [el('strong', { text: item.name })]),
+        el('td.name-cell', {}, [
+          el('strong', { text: item.name }),
+          channels.shad
+            ? (item.hasShadPvUrl ? chip('شاد ✓', 'ok') : chip('شاد ثبت نشده', 'bad'))
+            : null,
+        ]),
         changesCell,
         el('td', {}, [el(`span.chip.chip--${deltaKind(item.totalDelta)}`, { text: signed(item.totalDelta) })]),
         el('td', {}, item.hasParentPhone
@@ -273,6 +437,10 @@ export async function renderReports({ params }) {
   }
 
   async function sendCustomMessage() {
+    if (!channels.sms) {
+      notify.error('ارسال پیامکی در تنظیمات گزارش روزانه غیرفعال است');
+      return;
+    }
     const chosen = selectedItems();
     const withPhone = chosen.filter((item) => item.hasParentPhone);
     const text = customMessage.value.trim();
@@ -318,6 +486,10 @@ export async function renderReports({ params }) {
   }
 
   async function sendSelected() {
+    if (!channels.sms) {
+      notify.error('ارسال پیامکی در تنظیمات گزارش روزانه غیرفعال است');
+      return;
+    }
     const chosen = selectedItems();
     const withPhone = chosen.filter((item) => item.hasParentPhone);
     if (withPhone.length === 0 || sending) return;
@@ -337,6 +509,7 @@ export async function renderReports({ params }) {
         studentIds: chosen.map((item) => item.studentId),
       });
       report = lastResult;
+      channels = report.channels ?? channels;
       const counts = lastResult.counts ?? {};
       if (counts.sent) notify.ok(`${fa(counts.sent)} پیامک ارسال شد`);
       if (counts.queued) notify.info(`${fa(counts.queued)} پیامک در صف ذخیره شد (کلید و خط sms.ir را در تنظیمات پیامک کامل کنید)`);
@@ -368,29 +541,45 @@ export async function renderReports({ params }) {
 
   function paint() {
     const summary = report.summary ?? {};
-    sendButton = button('ارسال پیامک به والدین', { icon: '📤', onClick: () => { void sendSelected(); } });
+    sendButton = channels.sms ? button('ارسال پیامک به والدین', { icon: '📤', onClick: () => { void sendSelected(); } }) : null;
+    customSendButton = null;
     rowsByStudent.clear();
 
+    const stats = [
+      statCard({ label: 'دانش‌آموزان با تغییر', value: fa(summary.changed ?? 0), icon: '📝' }),
+      channels.sms
+        ? statCard({ label: 'بدون شماره والد', value: fa(summary.withoutParentPhone ?? 0), kind: (summary.withoutParentPhone ?? 0) ? 'warn' : 'ok', icon: '⚠️' })
+        : null,
+      channels.shad
+        ? statCard({ label: 'بدون لینک شاد', value: fa(summary.withoutShadUrl ?? 0), kind: (summary.withoutShadUrl ?? 0) ? 'warn' : 'ok', icon: '🟢' })
+        : null,
+      channels.shad
+        ? statCard({ label: 'لینک شاد ثبت‌شده', value: fa(summary.shadReady ?? 0), kind: 'ok', icon: '🔗' })
+        : null,
+      channels.sms
+        ? statCard({ label: 'پیامک ارسال‌شده', value: fa(summary.sent ?? 0), kind: 'ok', icon: '✅' })
+        : null,
+      channels.sms
+        ? statCard({ label: 'در صف ارسال', value: fa(summary.queued ?? 0), icon: '📬' })
+        : null,
+    ].filter(Boolean);
+
     const cards = [
-      resultsCard(),
-      recentCard(),
+      channels.sms ? resultsCard() : null,
+      channels.sms ? recentCard() : null,
     ].filter(Boolean);
 
     body.replaceChildren(
       pageHead({
         icon: '📨',
         title: 'گزارش روزانه والدین',
-        subtitle: 'خلاصهٔ تغییرات هر روز، برای والدین دانش‌آموزان انتخاب‌شده',
+        subtitle: 'خلاصهٔ تغییرات هر روز؛ تحویل با پیامک یا شاد، با انتخاب خودتان',
         actions: [backToWorkbench()],
       }),
-      el('div.grid.grid--stats', {}, [
-        statCard({ label: 'دانش‌آموزان با تغییر', value: fa(summary.changed ?? 0), icon: '📝' }),
-        statCard({ label: 'بدون شماره والد', value: fa(summary.withoutParentPhone ?? 0), kind: (summary.withoutParentPhone ?? 0) ? 'warn' : 'ok', icon: '⚠️' }),
-        statCard({ label: 'پیامک ارسال‌شده', value: fa(summary.sent ?? 0), kind: 'ok', icon: '✅' }),
-        statCard({ label: 'در صف ارسال', value: fa(summary.queued ?? 0), icon: '📬' }),
-      ]),
+      el('div.grid.grid--stats', {}, stats),
       dateCard(),
-      smsSettings(),
+      channelsCard(),
+      channels.sms ? smsSettings() : null,
       card({ title: 'انتخاب دانش‌آموزان', icon: '☑️' }, [
         el('div.row', { style: { flexWrap: 'wrap', marginBottom: '8px' } }, [
           button('فقط دارای تغییر', { kind: 'ghost', icon: '📝', onClick: () => selectWhere((item) => item.changes > 0) }),
@@ -398,12 +587,15 @@ export async function renderReports({ params }) {
           button('هیچ‌کدام', { kind: 'ghost', icon: '🚫', onClick: () => selectWhere(() => false) }),
           el('span.spacer'),
           sendButton,
+          !channels.sms && channels.shad
+            ? el('span.small.muted', { text: 'برای شاد، از دکمهٔ هر دانش‌آموز در پیش‌نمایش استفاده کنید.' })
+            : null,
         ]),
         selectionInfo,
         reportTable(),
       ]),
-      customMessageCard(),
-      card({ title: 'پیش‌نمایش پیامک', icon: '👁️' }, [previewHost]),
+      channels.sms ? customMessageCard() : null,
+      card({ title: 'پیش‌نمایش پیام', icon: '👁️' }, [previewHost]),
       ...cards,
     );
     refreshSelectionUi();
