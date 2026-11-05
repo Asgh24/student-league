@@ -56,6 +56,7 @@ const { renderQa } = await import('../public/js/views/qa.js');
 const { renderSeating } = await import('../public/js/views/seating.js');
 const { renderStudentEvaluations } = await import('../public/js/views/student/evaluations.js');
 const { renderStudentQuestions } = await import('../public/js/views/student/questions.js');
+const { renderStudentHomework } = await import('../public/js/views/student/homework.js');
 const { renderContacts } = await import('../public/js/views/contacts.js');
 const { renderReports } = await import('../public/js/views/reports.js');
 const { renderReportCards } = await import('../public/js/views/reportCards.js');
@@ -1420,6 +1421,38 @@ describe('student class questions', () => {
     await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/student/questions/2/answers', {
       body: 'به خاطر پراکندگی نور',
     }));
+  });
+});
+
+describe('student homework', () => {
+  it('lists own homework with own status and due date', async () => {
+    api.get.mockResolvedValue({
+      items: [
+        { id: 1, title: 'تکلیف ریاضی', description: 'تمرین ۱ تا ۵', dueDate: '2026-11-10', createdAt: '2026-11-04T10:00:00.000Z', status: 'done' },
+        { id: 2, title: 'خواندن درس', description: '', dueDate: null, createdAt: '2026-11-04T11:00:00.000Z', status: 'not_done' },
+      ],
+    });
+
+    await renderStudentHomework();
+    const view = document.querySelector('#view');
+    expect(api.get).toHaveBeenCalledWith('/student/homework');
+    expect(view.textContent).toContain('تکالیف من');
+    expect(view.textContent).toContain('تکلیف ریاضی');
+    expect(view.textContent).toContain('تمرین ۱ تا ۵');
+    expect(view.textContent).toContain('خواندن درس');
+    expect(view.querySelectorAll('.timeline-item')).toHaveLength(2);
+    expect(view.textContent).toContain('انجام‌شده');
+    expect(view.textContent).toContain('انجام‌نشده');
+    // Read-only: no teacher edit/delete controls.
+    expect(view.textContent).not.toContain('تکلیف جدید');
+  });
+
+  it('shows an empty state when no homework exists', async () => {
+    api.get.mockResolvedValue({ items: [] });
+    await renderStudentHomework();
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('هنوز تکلیفی ثبت نشده است');
+    expect(view.querySelectorAll('.timeline-item')).toHaveLength(0);
   });
 });
 
