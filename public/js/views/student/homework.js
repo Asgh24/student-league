@@ -9,9 +9,10 @@ import { card, chip, fa, faDate, grid, loadingNode, pageHead, statCard } from '.
 import { studentTabs } from './tabs.js';
 
 function statusChip(status) {
-  return status === 'done'
-    ? chip('✅ انجام‌شده', 'ok')
-    : chip('⏳ انجام‌نشده', 'muted');
+  if (status === 'done') return chip('✅ انجام‌شده', 'ok');
+  if (status === 'absent') return chip('🚫 غایب', 'bad');
+  if (status === 'incomplete') return chip('📝 ناقص', 'amber');
+  return chip('⏳ انجام‌نشده', 'muted');
 }
 
 export async function renderStudentHomework() {
@@ -49,6 +50,7 @@ export async function renderStudentHomework() {
         item.description ? el('div.small.muted', { text: item.description }) : null,
         el('div.row', { style: { gap: '6px', marginTop: '4px' } }, [
           statusChip(item.status),
+          item.points ? chip(`⭐ ${fa(item.points)} امتیاز`, 'muted') : null,
         ]),
       ]),
     ]));

@@ -437,17 +437,19 @@ export const schemas = {
     title: z.string().trim().min(1, 'عنوان تکلیف الزامی است').max(120),
     description: z.string().trim().max(2000).default(''),
     dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ نامعتبر است').nullable().optional(),
+    points: z.coerce.number().int('امتیاز باید عدد صحیح باشد').min(0).max(10000).default(0),
   }),
 
   homeworkUpdate: z.object({
     title: z.string().trim().min(1).max(120).optional(),
     description: z.string().trim().max(2000).optional(),
     dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    points: z.coerce.number().int('امتیاز باید عدد صحیح باشد').min(0).max(10000).optional(),
   }).refine((v) => Object.keys(v).length > 0, { message: 'هیچ تغییری ارسال نشده است' }),
 
   homeworkStatus: z.object({
     studentId: z.coerce.number().int().positive(),
-    status: z.enum(['done', 'not_done']),
+    status: z.enum(['done', 'not_done', 'incomplete', 'absent']),
   }),
 
   questionCreate: questionCreateSchema,

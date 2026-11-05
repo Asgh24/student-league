@@ -157,7 +157,7 @@ export function createStudentPortalRouter({ db }) {
   router.get('/homework', (req, res) => {
     const student = contextOf(db, req);
     const items = db.prepare(`
-      SELECT h.id, h.title, h.description, h.due_date AS dueDate, h.created_at AS createdAt,
+      SELECT h.id, h.title, h.description, h.due_date AS dueDate, h.points, h.created_at AS createdAt,
              COALESCE(hs.status, 'not_done') AS status
       FROM homework h
       LEFT JOIN homework_status hs ON hs.homework_id = h.id AND hs.student_id = ?

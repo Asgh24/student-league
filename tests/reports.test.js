@@ -115,6 +115,67 @@ describe('daily parent report data', () => {
     const foreign = await other.get(`/api/v1/leagues/${fixture.leagueA.id}/reports/daily`);
     expect(foreign.status).toBe(403);
   });
+
+  it('adds homework due on the report date with each student own status', async () => {
+    const today = todayIso();
+    const [first, second] = fixture.studentsA;
+    const created = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/homework`, {
+      title: 'تمرین ریاضی', points: 10, dueDate: today,
+    });
+    const homeworkId = created.body.homework.id;
+    const otherDay = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/homework`, {
+      title: 'تکلیف دیروز', points: 5, dueDate: '2026-01-01',
+    });
+    expect(otherDay.status).toBe(201);
+
+    await client.post(`/api/v1/homework/${homeworkId}/status`, { studentId: first.id, status: 'done' });
+    await client.post(`/api/v1/homework/${homeworkId}/status`, { studentId: second.id, status: 'absent' });
+
+    const res = await client.get(`/api/v1/leagues/${fixture.leagueA.id}/reports/daily?date=${today}`);
+    expect(res.status).toBe(200);
+
+    const row = res.body.items.find((item) => item.studentId === first.id);
+    expect(row.homework).toEqual([{ title: 'تمرین ریاضی', points: 10, status: 'done' }]);
+    expect(row.message).toContain('تکالیف: تمرین ریاضی (انجام شد، +۱۰)');
+    // The homework points are real score history of the same day also.
+    expect(row.lines).toEqual(expect.arrayContaining([
+      expect.objectContaining({ columnName: 'انضباطی', delta: 10 }),
+    ]));
+
+    const absentRow = res.body.items.find((item) => item.studentId === second.id);
+    expect(absentRow.homework).toEqual([{ title: 'تمرین ریاضی', points: 10, status: 'absent' }]);
+    expect(absentRow.message).toContain('تکالیف: تمرین ریاضی (غایب، -۱۰)');
+    expect(absentRow.lines).toEqual(expect.arrayContaining([
+      expect.objectContaining({ columnName: 'انضباطی', delta: -10 }),
+    ]));
+
+    // A student with no status recorded defaults to انجام نشد, and homework
+    // due on another day never appears.
+    const untouched = res.body.items.find((item) => item.studentId === fixture.studentsA[2].id);
+    expect(untouched.homework).toEqual([{ title: 'تمرین ریاضی', points: 10, status: 'not_done' }]);
+    expect(untouched.message).toContain('تکالیف: تمرین ریاضی (انجام نشد)');
+    expect(res.body.items.every((item) => !item.message.includes('تکلیف دیروز'))).toBe(true);
+  });
+
+  it('renders the homework line in buildDailyMessage and the sample message', () => {
+    const message = buildDailyMessage({
+      leagueName: 'لیگ نمونه',
+      studentName: 'علی رضایی',
+      date: '2026-10-21',
+      lines: [{ columnName: 'انضباطی', delta: 10 }],
+      totalDelta: 10,
+      homework: [
+        { title: 'تمرین ریاضی', points: 10, status: 'done' },
+        { title: 'خواندن', points: 5, status: 'incomplete' },
+      ],
+    });
+    expect(message).toContain('تکالیف: تمرین ریاضی (انجام شد، +۱۰)، خواندن (ناقص)');
+    const withoutHomework = buildDailyMessage({
+      leagueName: 'لیگ نمونه', studentName: 'علی رضایی', date: '2026-10-21',
+      lines: [], totalDelta: 0,
+    });
+    expect(withoutHomework).not.toContain('تکالیف:');
+  });
 });
 
 describe('report delivery channels and Shad links', () => {

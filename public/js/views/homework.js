@@ -8,6 +8,17 @@ import { setLeagueId } from '../store.js';
 import { confirmDialog, emptyState, formDialog, notify, openModal } from '../ui.js';
 import { backToWorkbench, button, card, chip, fa, faDate, grid, iconButton, loadingNode, pageHead } from './common.js';
 
+const STATUS_OPTIONS = [
+  { value: 'done', label: '✅ انجام شد', chipKind: 'ok' },
+  { value: 'not_done', label: '⏳ انجام نشده', chipKind: 'muted' },
+  { value: 'incomplete', label: '📝 ناقص', chipKind: 'amber' },
+  { value: 'absent', label: '🚫 غایب', chipKind: 'bad' },
+];
+
+function statusLabel(status) {
+  return STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status;
+}
+
 async function createHomework(leagueId, reload) {
   const values = await formDialog({
     title: 'تکلیف جدید',
@@ -16,6 +27,7 @@ async function createHomework(leagueId, reload) {
       { name: 'title', label: 'عنوان', type: 'text', required: true, placeholder: 'مثلاً تمرین فصل سوم' },
       { name: 'description', label: 'توضیح', type: 'textarea', placeholder: 'شرح تکلیف برای دانش‌آموزان' },
       { name: 'dueDate', label: 'مهلت (شمسی، اختیاری)', type: 'jalali-date', allowEmpty: true },
+      { name: 'points', label: 'امتیاز تکلیف', type: 'number', min: 0, max: 10000, step: 1, value: 10, hint: 'انجام‌شده: +امتیاز، غایب: −امتیاز، انجام‌نشده/ناقص: بدون تغییر' },
     ],
   });
   if (!values) return;
@@ -24,6 +36,7 @@ async function createHomework(leagueId, reload) {
       title: values.title.trim(),
       description: values.description.trim(),
       dueDate: values.dueDate || null,
+      points: Number(values.points) || 0,
     });
     notify.ok('تکلیف ثبت شد');
     reload();
@@ -40,6 +53,7 @@ async function editHomework(item, reload) {
       { name: 'title', label: 'عنوان', type: 'text', value: item.title, required: true },
       { name: 'description', label: 'توضیح', type: 'textarea', value: item.description ?? '' },
       { name: 'dueDate', label: 'مهلت (شمسی)', type: 'jalali-date', allowEmpty: true, value: item.dueDate ?? '' },
+      { name: 'points', label: 'امتیاز تکلیف', type: 'number', min: 0, max: 10000, step: 1, value: item.points ?? 0, hint: 'تغییر امتیاز، امتیاز ثبت‌شده دانش‌آموزان را هم اصلاح می‌کند.' },
     ],
   });
   if (!values) return;
@@ -48,6 +62,7 @@ async function editHomework(item, reload) {
       title: values.title.trim(),
       description: values.description.trim(),
       dueDate: values.dueDate || null,
+      points: Number(values.points) || 0,
     });
     notify.ok('تکلیف ذخیره شد');
     reload();
@@ -59,7 +74,7 @@ async function editHomework(item, reload) {
 async function deleteHomework(item, reload) {
   const agreed = await confirmDialog({
     title: 'حذف تکلیف',
-    message: `تکلیف «${item.title}» و وضعیت انجام آن حذف شود؟`,
+    message: `تکلیف «${item.title}» و وضعیت انجام آن حذف شود؟ امتیازهای ثبت‌شده‌ی آن هم پس گرفته می‌شود.`,
     confirmLabel: 'حذف',
     danger: true,
   });
@@ -80,33 +95,37 @@ async function openStatus(item, reload) {
   async function refresh() {
     try {
       const payload = await api.get(`/homework/${item.id}/status`);
+      const points = payload.homework?.points ?? item.points ?? 0;
       const list = el('div');
       for (const student of payload.items) {
-        const done = student.status === 'done';
+        const select = el('select', { 'aria-label': `وضعیت ${student.name}` });
+        for (const option of STATUS_OPTIONS) {
+          select.appendChild(el('option', {
+            value: option.value,
+            text: option.label,
+            selected: option.value === student.status,
+          }));
+        }
+        select.addEventListener('change', async () => {
+          try {
+            await api.post(`/homework/${item.id}/status`, { studentId: student.studentId, status: select.value });
+            await refresh();
+            reload();
+          } catch (error) {
+            notify.error(errorMessage(error));
+          }
+        });
         list.appendChild(el('div.row', { style: { justifyContent: 'space-between', borderBottom: '1px solid var(--line)', padding: '6px 0' } }, [
           el('span', { text: student.name }),
-          el('button.chip.chip--button', {
-            type: 'button',
-            text: done ? '✅ انجام شد' : '⏳ انجام نشده',
-            title: 'تغییر وضعیت',
-            onclick: async () => {
-              try {
-                await api.post(`/homework/${item.id}/status`, { studentId: student.studentId, status: done ? 'not_done' : 'done' });
-                await refresh();
-                reload();
-              } catch (error) {
-                notify.error(errorMessage(error));
-              }
-            },
-          }),
+          select,
         ]));
       }
       modal.setContent([
         el('h2.modal__title', { text: `وضعیت تکلیف: ${item.title}` }),
-        el('div.row', {}, [
-          button('همه انجام شد', { kind: 'soft', icon: '✅', onClick: () => bulk('done', refresh, reload) }),
-          button('همه انجام نشده', { kind: 'ghost', icon: '⏳', onClick: () => bulk('not_done', refresh, reload) }),
-        ]),
+        el('p.small.muted', { text: `⭐ ${fa(points)} امتیاز — انجام‌شده +امتیاز، غایب −امتیاز، انجام‌نشده/ناقص بدون تغییر` }),
+        el('div.row', { style: { flexWrap: 'wrap' } }, STATUS_OPTIONS.map((option) => (
+          button(`همه: ${option.label}`, { kind: 'soft', onClick: () => bulk(option.value, refresh, reload) })
+        ))),
         list,
       ]);
     } catch (error) {
@@ -117,7 +136,7 @@ async function openStatus(item, reload) {
   async function bulk(status, refresh, reload) {
     try {
       await api.post(`/homework/${item.id}/status/bulk`, { status });
-      notify.ok('وضعیت همه دانش‌آموزان ثبت شد');
+      notify.ok(`وضعیت همه: ${statusLabel(status)} ثبت شد`);
       await refresh();
       reload();
     } catch (error) {
@@ -164,8 +183,11 @@ export async function renderHomework({ params }) {
           ]),
           item.description ? el('div.small.muted', { text: item.description }) : null,
           el('div.row', { style: { gap: '6px', marginTop: '4px' } }, [
+            chip(`⭐ ${fa(item.points ?? 0)} امتیاز`, 'muted'),
             chip(`✅ ${fa(item.doneCount)} انجام‌شده`, 'ok'),
             chip(`⏳ ${fa(item.pendingCount)} باقی‌مانده`, 'muted'),
+            item.absentCount ? chip(`🚫 ${fa(item.absentCount)} غایب`, 'bad') : null,
+            item.incompleteCount ? chip(`📝 ${fa(item.incompleteCount)} ناقص`, 'amber') : null,
           ]),
         ]),
         el('span.row', { style: { gap: '3px' } }, [

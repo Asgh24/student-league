@@ -71,6 +71,148 @@ describe('homework', () => {
   });
 });
 
+describe('homework points', () => {
+  function totalOf(studentId) {
+    return ctx.db.prepare('SELECT COALESCE(SUM(value), 0) AS t FROM scores WHERE student_id = ?').get(studentId).t;
+  }
+
+  function historyOf(studentId, reasonPart) {
+    return ctx.db.prepare("SELECT * FROM score_history WHERE student_id = ? AND reason LIKE ? ORDER BY id ASC")
+      .all(studentId, `%${reasonPart}%`);
+  }
+
+  async function createWithPoints(points = 10, extra = {}) {
+    const created = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/homework`, {
+      title: 'تمرین ریاضی',
+      points,
+      ...extra,
+    });
+    expect(created.status).toBe(201);
+    return created.body.homework;
+  }
+
+  async function mark(homeworkId, studentId, status) {
+    return client.post(`/api/v1/homework/${homeworkId}/status`, { studentId, status });
+  }
+
+  it('awards +points for done, nothing for not_done/incomplete and -points for absent', async () => {
+    const homework = await createWithPoints(10);
+    const [first, second, third] = fixture.studentsA;
+
+    expect((await mark(homework.id, first.id, 'done')).status).toBe(200);
+    expect(totalOf(first.id)).toBe(10);
+    expect(historyOf(first.id, 'تمرین ریاضی')).toHaveLength(1);
+    expect(historyOf(first.id, 'تمرین ریاضی')[0].delta).toBe(10);
+
+    expect((await mark(homework.id, second.id, 'not_done')).status).toBe(200);
+    expect(totalOf(second.id)).toBe(0);
+    expect(historyOf(second.id, 'تمرین ریاضی')).toHaveLength(0);
+
+    expect((await mark(homework.id, third.id, 'incomplete')).status).toBe(200);
+    expect(totalOf(third.id)).toBe(0);
+    expect(historyOf(third.id, 'تمرین ریاضی')).toHaveLength(0);
+
+    const other = await createWithPoints(10, { title: 'خواندن' });
+    expect((await mark(other.id, first.id, 'absent')).status).toBe(200);
+    expect(totalOf(first.id)).toBe(0); // +10 (done) and −10 (absent)
+    const rows = historyOf(first.id, 'خواندن');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].delta).toBe(-10);
+  });
+
+  it('is idempotent: re-marking the same status never double-counts', async () => {
+    const homework = await createWithPoints(10);
+    const student = fixture.studentsA[0];
+    await mark(homework.id, student.id, 'done');
+    await mark(homework.id, student.id, 'done');
+    await mark(homework.id, student.id, 'done');
+    expect(totalOf(student.id)).toBe(10);
+    expect(historyOf(student.id, 'تمرین ریاضی')).toHaveLength(1);
+    const row = ctx.db.prepare('SELECT awarded FROM homework_status WHERE homework_id = ? AND student_id = ?')
+      .get(homework.id, student.id);
+    expect(row.awarded).toBe(10);
+  });
+
+  it('moves only the difference when the status changes', async () => {
+    const homework = await createWithPoints(10);
+    const student = fixture.studentsA[0];
+    await mark(homework.id, student.id, 'done');
+    expect(totalOf(student.id)).toBe(10);
+    // done -> absent: revoke +10 and deduct 10 => delta −20
+    await mark(homework.id, student.id, 'absent');
+    expect(totalOf(student.id)).toBe(-10);
+    const rows = historyOf(student.id, 'تمرین ریاضی');
+    expect(rows.map((r) => r.delta)).toEqual([10, -20]);
+    // absent -> incomplete: revoke the −10 penalty only
+    await mark(homework.id, student.id, 'incomplete');
+    expect(totalOf(student.id)).toBe(0);
+    expect(historyOf(student.id, 'تمرین ریاضی').map((r) => r.delta)).toEqual([10, -20, 10]);
+  });
+
+  it('applies the same points through bulk marking', async () => {
+    const homework = await createWithPoints(5);
+    const res = await client.post(`/api/v1/homework/${homework.id}/status/bulk`, { status: 'done' });
+    expect(res.status).toBe(200);
+    for (const student of fixture.studentsA) expect(totalOf(student.id)).toBe(5);
+    const resAbsent = await client.post(`/api/v1/homework/${homework.id}/status/bulk`, { status: 'absent' });
+    expect(resAbsent.status).toBe(200);
+    for (const student of fixture.studentsA) expect(totalOf(student.id)).toBe(-5);
+  });
+
+  it('reconciles every award when the points are edited', async () => {
+    const homework = await createWithPoints(10);
+    const student = fixture.studentsA[0];
+    await mark(homework.id, student.id, 'done');
+    expect(totalOf(student.id)).toBe(10);
+    const updated = await client.patch(`/api/v1/homework/${homework.id}`, { points: 25 });
+    expect(updated.status).toBe(200);
+    expect(updated.body.homework.points).toBe(25);
+    expect(totalOf(student.id)).toBe(25);
+    // Re-saving the same points moves nothing.
+    await client.patch(`/api/v1/homework/${homework.id}`, { points: 25 });
+    expect(totalOf(student.id)).toBe(25);
+    expect(historyOf(student.id, 'تمرین ریاضی')).toHaveLength(2);
+  });
+
+  it('reverses every award when the assignment is deleted', async () => {
+    const homework = await createWithPoints(10);
+    const [first, second] = fixture.studentsA;
+    await mark(homework.id, first.id, 'done');
+    await mark(homework.id, second.id, 'absent');
+    expect(totalOf(first.id)).toBe(10);
+    expect(totalOf(second.id)).toBe(-10);
+    const removed = await client.del(`/api/v1/homework/${homework.id}`);
+    expect(removed.status).toBe(200);
+    expect(totalOf(first.id)).toBe(0);
+    expect(totalOf(second.id)).toBe(0);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM homework_status').get().n).toBe(0);
+  });
+
+  it('rejects invalid points and invalid statuses', async () => {
+    const negative = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/homework`, { title: 'بد', points: -5 });
+    expect(negative.status).toBe(400);
+    const fraction = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/homework`, { title: 'بد', points: 2.5 });
+    expect(fraction.status).toBe(400);
+    const homework = await createWithPoints(10);
+    const badStatus = await mark(homework.id, fixture.studentsA[0].id, 'half_done');
+    expect(badStatus.status).toBe(400);
+    expect(totalOf(fixture.studentsA[0].id)).toBe(0);
+  });
+
+  it('exposes points and awarded in the status payload', async () => {
+    const homework = await createWithPoints(10);
+    await mark(homework.id, fixture.studentsA[0].id, 'done');
+    const payload = await client.get(`/api/v1/homework/${homework.id}/status`);
+    expect(payload.body.homework.points).toBe(10);
+    const item = payload.body.items.find((i) => i.studentId === fixture.studentsA[0].id);
+    expect(item.status).toBe('done');
+    expect(item.awarded).toBe(10);
+    const list = await client.get(`/api/v1/leagues/${fixture.leagueA.id}/homework`);
+    expect(list.body.items[0].points).toBe(10);
+    expect(list.body.items[0].doneCount).toBe(1);
+  });
+});
+
 describe('questions and answers', () => {
   it('creates a multiple-choice question and collects the selected option', async () => {
     const created = await client.post(

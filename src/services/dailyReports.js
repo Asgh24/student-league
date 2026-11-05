@@ -8,6 +8,7 @@ import { config } from '../config.js';
 import { badRequest } from '../lib/errors.js';
 import { todayIso } from '../lib/http.js';
 import { formatJalaliDate } from '../lib/jalali.js';
+import { HOMEWORK_STATUS_LABELS, pointsForStatus } from '../lib/homeworkStatus.js';
 import { toPersianDigits } from '../lib/normalize.js';
 import { normalizeMobile } from '../lib/phone.js';
 import { getLeague } from '../repositories/leagues.js';
@@ -38,7 +39,7 @@ function signedFa(value) {
 export const MAX_REPORT_LINES = 4;
 
 /** Builds the SMS text of one student's day (exported for tests). */
-export function buildDailyMessage({ leagueName, studentName, date, lines = [], totalDelta = 0 }) {
+export function buildDailyMessage({ leagueName, studentName, date, lines = [], totalDelta = 0, homework = [] }) {
   const dateText = formatJalaliDate(date);
   const breakdown = [...lines]
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
@@ -46,7 +47,17 @@ export function buildDailyMessage({ leagueName, studentName, date, lines = [], t
     .map((line) => `${line.columnName} ${signedFa(line.delta)}`);
   if (lines.length > MAX_REPORT_LINES) breakdown.push(`و ${toPersianDigits(lines.length - MAX_REPORT_LINES)} مورد دیگر`);
   const detail = breakdown.length ? breakdown.join('، ') : 'امروز تغییری ثبت نشده است';
-  return `${leagueName} | گزارش روزانه ${dateText}\n${studentName}: ${detail}\nجمع تغییرات: ${signedFa(totalDelta)}`;
+
+  // Homework due on the report date, with each student's own status, so the
+  // parent sees whether the assignment was done (and what it was worth).
+  const homeworkLine = homework.length
+    ? `\nتکالیف: ${homework.map((item) => {
+      const effect = pointsForStatus(item.status, item.points);
+      return `${item.title} (${HOMEWORK_STATUS_LABELS[item.status] ?? item.status}${effect ? `، ${signedFa(effect)}` : ''})`;
+    }).join('، ')}`
+    : '';
+
+  return `${leagueName} | گزارش روزانه ${dateText}\n${studentName}: ${detail}${homeworkLine}\nجمع تغییرات: ${signedFa(totalDelta)}`;
 }
 
 /**
@@ -64,6 +75,7 @@ export function buildSampleDailyMessage({ leagueName = 'لیگ نمونه', date
       { columnName: 'فارسی', delta: 1 },
     ],
     totalDelta: 2,
+    homework: [{ title: 'تمرین ریاضی', points: 10, status: 'done' }],
   });
 }
 
@@ -88,11 +100,31 @@ export function dailyReport(db, leagueId, date) {
     byStudent.get(row.studentId).push({ columnName: row.columnName, delta: row.delta, changes: row.changes });
   }
 
+  // Homework due on the report date (due_date is stored as an ISO day, the
+  // same format as the report date), with each student's own status. The
+  // join goes through students so a student with no recorded status still
+  // appears as انجام‌نشده.
+  const homeworkRows = db.prepare(`
+    SELECT s.id AS studentId, h.title AS title, h.points AS points,
+           COALESCE(hs.status, 'not_done') AS status
+    FROM students s
+    JOIN homework h ON h.league_id = s.league_id
+    LEFT JOIN homework_status hs ON hs.homework_id = h.id AND hs.student_id = s.id
+    WHERE s.league_id = ? AND h.due_date = ?
+    ORDER BY h.id ASC, s.id ASC
+  `).all(leagueId, date);
+  const homeworkByStudent = new Map();
+  for (const row of homeworkRows) {
+    if (!homeworkByStudent.has(row.studentId)) homeworkByStudent.set(row.studentId, []);
+    homeworkByStudent.get(row.studentId).push({ title: row.title, points: row.points, status: row.status });
+  }
+
   const contacts = new Map(contactsList(db, leagueId).map((row) => [row.id, row]));
   const channels = reportChannels(db, league.teacher_id);
   const items = [];
   for (const contact of contacts.values()) {
     const lines = byStudent.get(contact.id) ?? [];
+    const homework = homeworkByStudent.get(contact.id) ?? [];
     const totalDelta = lines.reduce((sum, line) => sum + line.delta, 0);
     const changes = lines.reduce((sum, line) => sum + line.changes, 0);
     items.push({
@@ -106,7 +138,8 @@ export function dailyReport(db, leagueId, date) {
       totalDelta,
       changes,
       lines,
-      message: buildDailyMessage({ leagueName: league.name, studentName: contact.name, date, lines, totalDelta }),
+      homework,
+      message: buildDailyMessage({ leagueName: league.name, studentName: contact.name, date, lines, totalDelta, homework }),
     });
   }
 

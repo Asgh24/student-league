@@ -57,6 +57,7 @@ const { renderSeating } = await import('../public/js/views/seating.js');
 const { renderStudentEvaluations } = await import('../public/js/views/student/evaluations.js');
 const { renderStudentQuestions } = await import('../public/js/views/student/questions.js');
 const { renderStudentHomework } = await import('../public/js/views/student/homework.js');
+const { renderHomework } = await import('../public/js/views/homework.js');
 const { renderContacts } = await import('../public/js/views/contacts.js');
 const { renderReports } = await import('../public/js/views/reports.js');
 const { renderReportCards } = await import('../public/js/views/reportCards.js');
@@ -1428,8 +1429,10 @@ describe('student homework', () => {
   it('lists own homework with own status and due date', async () => {
     api.get.mockResolvedValue({
       items: [
-        { id: 1, title: 'تکلیف ریاضی', description: 'تمرین ۱ تا ۵', dueDate: '2026-11-10', createdAt: '2026-11-04T10:00:00.000Z', status: 'done' },
-        { id: 2, title: 'خواندن درس', description: '', dueDate: null, createdAt: '2026-11-04T11:00:00.000Z', status: 'not_done' },
+        { id: 1, title: 'تکلیف ریاضی', description: 'تمرین ۱ تا ۵', dueDate: '2026-11-10', points: 10, createdAt: '2026-11-04T10:00:00.000Z', status: 'done' },
+        { id: 2, title: 'خواندن درس', description: '', dueDate: null, points: 5, createdAt: '2026-11-04T11:00:00.000Z', status: 'not_done' },
+        { id: 3, title: 'انشا', description: '', dueDate: null, points: 5, createdAt: '2026-11-04T12:00:00.000Z', status: 'incomplete' },
+        { id: 4, title: 'املا', description: '', dueDate: null, points: 5, createdAt: '2026-11-04T13:00:00.000Z', status: 'absent' },
       ],
     });
 
@@ -1440,9 +1443,14 @@ describe('student homework', () => {
     expect(view.textContent).toContain('تکلیف ریاضی');
     expect(view.textContent).toContain('تمرین ۱ تا ۵');
     expect(view.textContent).toContain('خواندن درس');
-    expect(view.querySelectorAll('.timeline-item')).toHaveLength(2);
+    expect(view.textContent).toContain('انشا');
+    expect(view.textContent).toContain('املا');
+    expect(view.querySelectorAll('.timeline-item')).toHaveLength(4);
     expect(view.textContent).toContain('انجام‌شده');
     expect(view.textContent).toContain('انجام‌نشده');
+    expect(view.textContent).toContain('ناقص');
+    expect(view.textContent).toContain('غایب');
+    expect(view.textContent).toContain('۱۰ امتیاز');
     // Read-only: no teacher edit/delete controls.
     expect(view.textContent).not.toContain('تکلیف جدید');
   });
@@ -1453,6 +1461,50 @@ describe('student homework', () => {
     const view = document.querySelector('#view');
     expect(view.textContent).toContain('هنوز تکلیفی ثبت نشده است');
     expect(view.querySelectorAll('.timeline-item')).toHaveLength(0);
+  });
+});
+
+describe('teacher homework points and statuses', () => {
+  it('shows points and lets the teacher set any of the four statuses', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/leagues/1') return Promise.resolve({ league: { id: 1, name: 'لیگ تست' } });
+      if (url === '/leagues/1/homework') {
+        return Promise.resolve({
+          items: [{ id: 1, title: 'تمرین ریاضی', description: '', dueDate: null, points: 10, doneCount: 1, pendingCount: 2, absentCount: 1, incompleteCount: 0 }],
+        });
+      }
+      if (url === '/homework/1/status') {
+        return Promise.resolve({
+          homework: { id: 1, title: 'تمرین ریاضی', points: 10 },
+          items: [
+            { studentId: 11, name: 'آرش آزمون', status: 'done', awarded: 10 },
+            { studentId: 12, name: 'بهار بنفش', status: 'absent', awarded: -10 },
+          ],
+        });
+      }
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+    api.post.mockResolvedValue({ items: [] });
+
+    await renderHomework({ params: { id: '1' } });
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('تمرین ریاضی');
+    expect(view.textContent).toContain('۱۰ امتیاز');
+    expect(view.textContent).toContain('۱ انجام‌شده');
+    expect(view.textContent).toContain('۱ غایب');
+
+    view.querySelector('button[aria-label="وضعیت دانش‌آموزان"]').click();
+    await vi.waitFor(() => expect(document.querySelectorAll('.modal select')).toHaveLength(2));
+    const selects = document.querySelectorAll('.modal select');
+    expect(selects[0].value).toBe('done');
+    expect(selects[1].value).toBe('absent');
+    expect(document.querySelector('.modal').textContent).toContain('ناقص');
+    expect(document.querySelector('.modal').textContent).toContain('غایب');
+    expect(document.querySelector('.modal').textContent).toContain('۱۰ امتیاز');
+
+    selects[0].value = 'incomplete';
+    selects[0].dispatchEvent(new window.Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/homework/1/status', { studentId: 11, status: 'incomplete' }));
   });
 });
 
