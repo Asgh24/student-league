@@ -9,6 +9,7 @@ import { createUser, findByUsername, findById, publicUser } from '../repositorie
 import { requireAdmin } from '../middleware/auth.js';
 import { createAdminBackupRouter } from './adminBackup.js';
 import { createAdminSmsRouter } from './adminSms.js';
+import { createAdminSupportRouter } from './support.js';
 import {
   approveCardPayment,
   countPendingCardPayments,
@@ -112,6 +113,8 @@ export function createAdminRouter({ db }) {
     const students = db.prepare('SELECT COUNT(*) AS n FROM students').get().n;
     const threads = db.prepare('SELECT COUNT(*) AS n FROM conversations').get().n;
     const messages = db.prepare('SELECT COUNT(*) AS n FROM messages').get().n;
+    const supportThreads = db.prepare('SELECT COUNT(*) AS n FROM support_threads').get().n;
+    const supportUnread = db.prepare("SELECT COUNT(*) AS n FROM support_messages WHERE read_at IS NULL AND sender_role = 'user'").get().n;
     const recentPayments = db.prepare(`
       SELECT p.*, u.display_name AS teacher_name
       FROM payments p JOIN users u ON u.id = p.teacher_id
@@ -130,6 +133,7 @@ export function createAdminRouter({ db }) {
       leagues,
       students,
       messages: { threads, messages },
+      support: { threads: supportThreads, unread: supportUnread },
       sms: { ...smsCounts(db), config: smsConfig() },
       plans: { total: listPlans(db).length, active: listPlans(db, { activeOnly: true }).length },
       recentPayments,
@@ -427,6 +431,7 @@ export function createAdminRouter({ db }) {
 
   router.use('/sms', createAdminSmsRouter({ db }));
   router.use('/backup', createAdminBackupRouter({ db }));
+  router.use('/support', createAdminSupportRouter({ db }));
 
   return router;
 }

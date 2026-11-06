@@ -18,6 +18,7 @@ import * as reportCardSubjectLinks from './017_report_card_subject_links.js';
 import * as reportCardGradeNullable from './018_report_card_grade_nullable.js';
 import * as reportChannelsShad from './019_report_channels_shad.js';
 import * as homeworkPoints from './020_homework_points.js';
+import * as supportMessages from './021_support_messages.js';
 
 /** Ordered list of migrations applied automatically on boot. */
 export const migrations = [
@@ -41,4 +42,5 @@ export const migrations = [
   reportCardGradeNullable,
   reportChannelsShad,
   homeworkPoints,
+  supportMessages,
 ];

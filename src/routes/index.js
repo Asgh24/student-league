@@ -12,6 +12,7 @@ import { createFilesRouter, createLeagueFilesRouter } from './files.js';
 import { createHomeworkRouter, createLeagueHomeworkRouter } from './homework.js';
 import { createLeaguesRouter } from './leagues.js';
 import { createMessagesRouter } from './messages.js';
+import { createSupportRouter } from './support.js';
 import { createMetaRouter } from './meta.js';
 import { createLeagueReportCardsRouter } from './reportCards.js';
 import { createLeagueReportsRouter } from './reports.js';
@@ -34,6 +35,7 @@ export function createApiRouter(ctx) {
   router.use('/admin', createAdminRouter(ctx));
   router.use('/subscription', createSubscriptionRouter(ctx));
   router.use('/messages', createMessagesRouter(ctx));
+  router.use('/support', createSupportRouter(ctx));
   router.use('/sms', createSmsSettingsRouter(ctx));
   router.use('/ai', createAiSettingsRouter(ctx));
   router.use('/assistants', createAssistantsRouter(ctx));

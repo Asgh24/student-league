@@ -174,6 +174,16 @@ export const schemas = {
     before: z.coerce.number().int().positive().optional(),
   }),
 
+  /** Support ticket opened by a site user (teacher or student). */
+  supportStart: z.object({
+    subject: z.string().trim().max(120).default(''),
+    body: z.string().trim().min(1, 'متن پیام خالی است').max(4000),
+  }),
+
+  supportStatus: z.object({
+    status: z.enum(['open', 'answered', 'closed']),
+  }),
+
   /**
    * Per-teacher sms.ir settings. Empty API key means "keep the saved key";
    * `clearApiKey` is the explicit way to remove it. The line number can be

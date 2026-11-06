@@ -42,6 +42,8 @@ const { renderAdminExpiredUsers } = await import('../public/js/views/admin/expir
 const { renderAdminTeachers } = await import('../public/js/views/admin/teachers.js');
 const { renderFiles } = await import('../public/js/views/files.js');
 const { renderTeacherMessages } = await import('../public/js/views/messages.js');
+const { renderSupport } = await import('../public/js/views/support.js');
+const { renderAdminSupport } = await import('../public/js/views/admin/support.js');
 const { renderSettings } = await import('../public/js/views/settings.js');
 const { setMeta, setPersianDigits, setUser } = await import('../public/js/store.js');
 
@@ -334,6 +336,186 @@ describe('shared inbox', () => {
     await vi.waitFor(() => expect(document.body.textContent).toContain('سلام، یک سؤال دارم'));
     expect(document.querySelector('#chat-message')).not.toBeNull();
     expect(document.body.textContent).toContain('ارسال');
+  });
+});
+
+describe('user support inbox', () => {
+  const thread = {
+    id: 3,
+    participantName: 'پشتیبانی سایت',
+    subject: 'مشکل در پرداخت',
+    status: 'answered',
+    unread: 1,
+    userId: 42,
+    username: 'teacher-a',
+    userName: 'خانم الف',
+    userRole: 'teacher',
+    lastMessage: { body: 'سلام، بررسی شد و فعال شد', at: daysFromNow(-1), senderRole: 'admin' },
+  };
+
+  function mockSupportApi() {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/support/threads') return { items: [thread], unreadTotal: 1 };
+      if (url === '/support/threads/3') {
+        return {
+          thread: { ...thread, unread: 0 },
+          messages: [
+            {
+              id: 11, body: 'سلام، اشتراکم فعال نشده است', senderRole: 'user',
+              senderName: 'خانم الف', createdAt: daysFromNow(-2), mine: true, readAt: daysFromNow(-2),
+            },
+            {
+              id: 12, body: 'سلام، بررسی شد و فعال شد', senderRole: 'admin',
+              senderName: 'مدیر سامانه', createdAt: daysFromNow(-1), mine: false, readAt: daysFromNow(-1),
+            },
+          ],
+          unreadTotal: 0,
+        };
+      }
+      throw new Error(`unexpected ${url}`);
+    });
+  }
+
+  it('lists own tickets with status and unread badge, then opens one', async () => {
+    mockSupportApi();
+    await renderSupport();
+    expect(api.get).toHaveBeenCalledWith('/support/threads');
+    expect(document.body.textContent).toContain('مشکل در پرداخت');
+    expect(document.body.textContent).toContain('پاسخ داده شد');
+    expect(document.querySelector('.inbox__unread').textContent).toBe('۱');
+
+    document.querySelector('.inbox__item').click();
+    await vi.waitFor(() => expect(document.body.textContent).toContain('سلام، اشتراکم فعال نشده است'));
+    const chat = document.querySelector('.inbox__chat');
+    expect(chat.textContent).toContain('پشتیبانی سایت');
+    expect(chat.textContent).toContain('سلام، بررسی شد و فعال شد');
+    expect(chat.textContent).toContain('مدیر سامانه');
+    expect(chat.querySelector('.bubble--mine')).not.toBeNull();
+    expect(document.querySelector('#chat-message')).not.toBeNull();
+  });
+
+  it('shows the empty state when the user has no tickets', async () => {
+    api.get.mockResolvedValue({ items: [], unreadTotal: 0 });
+    await renderSupport();
+    const list = document.querySelector('.inbox__list');
+    expect(list.textContent).toContain('هنوز پیامی به پشتیبانی نفرستاده‌اید');
+  });
+
+  it('disables the composer when the ticket is closed', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/support/threads') return { items: [{ ...thread, status: 'closed' }], unreadTotal: 0 };
+      if (url === '/support/threads/3') {
+        return { thread: { ...thread, status: 'closed', unread: 0 }, messages: [], unreadTotal: 0 };
+      }
+      throw new Error(`unexpected ${url}`);
+    });
+    await renderSupport();
+    document.querySelector('.inbox__item').click();
+    await vi.waitFor(() => expect(document.querySelector('#chat-message')).not.toBeNull());
+    expect(document.querySelector('#chat-message').disabled).toBe(true);
+    expect(document.querySelector('.composer [type=submit]').disabled).toBe(true);
+  });
+
+  it('sends a follow-up message through the composer', async () => {
+    mockSupportApi();
+    api.post.mockResolvedValue({
+      message: { id: 13, body: 'ممنون، درست شد', senderRole: 'user', senderName: 'خانم الف', createdAt: daysFromNow(0), mine: true, readAt: null },
+      thread: { ...thread, status: 'open', unread: 0 },
+    });
+    await renderSupport();
+    document.querySelector('.inbox__item').click();
+    await vi.waitFor(() => expect(document.querySelector('#chat-message')).not.toBeNull());
+
+    const composer = document.querySelector('#chat-message');
+    composer.value = 'ممنون، درست شد';
+    document.querySelector('.composer').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/support/threads/3/messages', { body: 'ممنون، درست شد' }));
+    await vi.waitFor(() => expect(document.querySelector('.inbox__chat').textContent).toContain('ممنون، درست شد'));
+  });
+});
+
+describe('admin support inbox', () => {
+  const thread = {
+    id: 3,
+    participantName: 'خانم الف',
+    subject: 'مشکل در پرداخت',
+    status: 'open',
+    unread: 1,
+    userId: 42,
+    username: 'teacher-a',
+    userName: 'خانم الف',
+    userRole: 'teacher',
+    lastMessage: { body: 'سلام، اشتراکم فعال نشده است', at: daysFromNow(-1), senderRole: 'user' },
+  };
+
+  function mockAdminApi() {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/admin/support/threads') return { items: [thread], unreadTotal: 1 };
+      if (url === '/admin/support/threads/3') {
+        return {
+          thread: { ...thread, unread: 0 },
+          messages: [{
+            id: 11, body: 'سلام، اشتراکم فعال نشده است', senderRole: 'user',
+            senderName: 'خانم الف', createdAt: daysFromNow(-1), mine: false, readAt: daysFromNow(-1),
+          }],
+          unreadTotal: 0,
+        };
+      }
+      throw new Error(`unexpected ${url}`);
+    });
+  }
+
+  it('lists tickets with the user identity and opens one', async () => {
+    mockAdminApi();
+    await renderAdminSupport();
+    expect(api.get).toHaveBeenCalledWith('/admin/support/threads');
+    expect(document.body.textContent).toContain('خانم الف');
+    expect(document.body.textContent).toContain('teacher-a');
+    expect(document.body.textContent).toContain('معلم');
+    expect(document.querySelector('.inbox__unread').textContent).toBe('۱');
+
+    document.querySelector('.inbox__item').click();
+    await vi.waitFor(() => expect(document.body.textContent).toContain('سلام، اشتراکم فعال نشده است'));
+    const chat = document.querySelector('.inbox__chat');
+    expect(chat.textContent).toContain('خانم الف');
+    expect(chat.textContent).toContain('وضعیت تیکت:');
+    expect(chat.querySelectorAll('.row button')).toHaveLength(3);
+    expect(document.querySelector('#chat-message')).not.toBeNull();
+  });
+
+  it('shows the empty state when there are no tickets', async () => {
+    api.get.mockResolvedValue({ items: [], unreadTotal: 0 });
+    await renderAdminSupport();
+    expect(document.body.textContent).toContain('هنوز پیامی به پشتیبانی ارسال نشده است');
+  });
+
+  it('replies to the user from the composer', async () => {
+    mockAdminApi();
+    api.post.mockResolvedValue({
+      message: { id: 12, body: 'پاسخ مدیر', senderRole: 'admin', senderName: 'مدیر سامانه', createdAt: daysFromNow(0), mine: true, readAt: null },
+      thread: { ...thread, status: 'answered', unread: 0 },
+    });
+    await renderAdminSupport();
+    document.querySelector('.inbox__item').click();
+    await vi.waitFor(() => expect(document.querySelector('#chat-message')).not.toBeNull());
+
+    const composer = document.querySelector('#chat-message');
+    composer.value = 'پاسخ مدیر';
+    document.querySelector('.composer').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/support/threads/3/messages', { body: 'پاسخ مدیر' }));
+  });
+
+  it('changes the ticket status from the status buttons', async () => {
+    mockAdminApi();
+    api.patch.mockResolvedValue({ thread: { ...thread, status: 'closed', unread: 0 } });
+    await renderAdminSupport();
+    document.querySelector('.inbox__item').click();
+    await vi.waitFor(() => expect(document.querySelector('#chat-message')).not.toBeNull());
+
+    const buttons = [...document.querySelectorAll('.row button')];
+    buttons.find((button) => button.textContent.trim() === 'بسته').click();
+    await vi.waitFor(() => expect(api.patch).toHaveBeenCalledWith('/admin/support/threads/3/status', { status: 'closed' }));
+    await vi.waitFor(() => expect(document.querySelector('.inbox__chat').textContent).toContain('بسته'));
   });
 });
 

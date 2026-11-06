@@ -12,6 +12,7 @@ const TABS = [
   ['admin/payments', '🧾', 'پرداخت‌ها'],
   ['admin/payment-settings', '💳', 'کارت و پرداخت'],
   ['admin/sms', '📨', 'پنل پیامک'],
+  ['admin/support', '🛎️', 'پشتیبانی'],
   ['admin/backup', '🗄️', 'بکاپ و بازیابی'],
 ];
 

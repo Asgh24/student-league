@@ -30,6 +30,7 @@ import { renderLeague } from './views/league.js';
 import { renderLiveBoard } from './views/liveboard.js';
 import { renderLogin } from './views/login.js';
 import { renderStudentMessages, renderTeacherMessages } from './views/messages.js';
+import { renderSupport } from './views/support.js';
 import { renderQa } from './views/qa.js';
 import { renderRaffle } from './views/raffle.js';
 import { renderRepresentative } from './views/representative.js';
@@ -64,6 +65,7 @@ import { renderAdminPaymentSettings } from './views/admin/paymentSettings.js';
 import { renderAdminPayments } from './views/admin/payments.js';
 import { renderAdminPlans } from './views/admin/plans.js';
 import { renderAdminSms } from './views/admin/sms.js';
+import { renderAdminSupport } from './views/admin/support.js';
 import { renderAdminTeachers } from './views/admin/teachers.js';
 
 const LEAGUE_NAV = [
@@ -115,6 +117,7 @@ function teacherNav() {
   if (!isAssistant()) {
     items.push({ group: 'ارتباط و اشتراک' });
     items.push({ label: 'پیام‌ها', icon: '💬', href: 'teacher/messages', active: active === 'teacher/messages' });
+    items.push({ label: 'پشتیبانی', icon: '🛎️', href: 'teacher/support', active: active === 'teacher/support' });
     items.push({ label: 'اشتراک من', icon: '💳', href: 'teacher/subscription', active: active === 'teacher/subscription' });
   }
   items.push({ group: 'حساب کاربری' });
@@ -136,6 +139,7 @@ function adminNav() {
     ['admin/payments', '🧾', 'پرداخت‌ها'],
     ['admin/payment-settings', '💳', 'کارت و پرداخت'],
     ['admin/sms', '📨', 'پنل پیامک'],
+    ['admin/support', '🛎️', 'پشتیبانی'],
     ['admin/backup', '🗄️', 'بکاپ و بازیابی'],
     ['admin/settings', '⚙️', 'تنظیمات'],
   ];
@@ -167,6 +171,7 @@ function studentNav() {
     ['student/likes', '💜', 'لایک'],
     ['student/questions', '❓', 'سوال و پاسخ'],
     ['student/messages', '💬', 'پیام‌ها'],
+    ['student/support', '🛎️', 'پشتیبانی'],
     ['student/settings', '⚙️', 'تنظیمات'],
     ['fun', '🎮', 'سرگرمی'],
   ];
@@ -226,6 +231,7 @@ const routes = [
   { path: 'teacher', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderTeacherDashboard(ctx) },
   { path: 'teacher/settings', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSettings(ctx) },
   { path: 'teacher/messages', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderTeacherMessages(ctx) },
+  { path: 'teacher/support', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSupport(ctx) },
   { path: 'teacher/subscription', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSubscription(ctx) },
   { path: 'teacher/assistants', guard: () => (isTeacher() && !isAssistant() ? undefined : 'teacher'), view: (ctx) => renderAssistants(ctx) },
   { path: 'teacher/league/:id', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderLeague(ctx) },
@@ -254,6 +260,7 @@ const routes = [
   { path: 'admin/payments', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminPayments(ctx) },
   { path: 'admin/payment-settings', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminPaymentSettings(ctx) },
   { path: 'admin/sms', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminSms(ctx) },
+  { path: 'admin/support', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminSupport(ctx) },
   { path: 'admin/backup', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminBackup(ctx) },
   { path: 'admin/settings', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderSettings(ctx) },
   { path: 'fun', guard: () => (state.user ? undefined : 'login'), view: () => renderFun() },
@@ -269,6 +276,7 @@ const routes = [
   { path: 'student/likes', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentLikes(ctx) },
   { path: 'student/questions', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentQuestions(ctx) },
   { path: 'student/messages', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentMessages(ctx) },
+  { path: 'student/support', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderSupport(ctx) },
   { path: 'student/report-cards', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderManualReportCard(ctx) },
   { path: 'student/settings', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderSettings(ctx) },
 ];
