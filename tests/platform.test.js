@@ -236,6 +236,15 @@ describe('subscription checkout', () => {
     expect((await student.get('/api/v1/subscription/status')).status).toBe(403);
     expect((await admin.post('/api/v1/subscription/checkout', { planId: 1 })).status).toBe(403);
   });
+
+  it('exposes the active plans on the public landing metadata', async () => {
+    const guest = createClient(ctx.db);
+    const meta = await guest.get('/api/v1/meta');
+    expect(meta.status).toBe(200);
+    expect(meta.body.plans).toHaveLength(3);
+    expect(meta.body.plans.every((plan) => plan.active)).toBe(true);
+    expect(meta.body.plans.map((plan) => plan.days).sort((a, b) => a - b)).toEqual([30, 90, 365]);
+  });
 });
 
 describe('zarinpal gateway client', () => {

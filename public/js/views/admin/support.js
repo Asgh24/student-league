@@ -5,7 +5,7 @@ import { el } from '../../dom.js';
 import { errorMessage } from '../../format.js';
 import { renderView, setTopbarTitle } from '../../shell.js';
 import { emptyState, notify } from '../../ui.js';
-import { button, chip, fa, faDate, faDateTime, pageHead } from '../common.js';
+import { button, card, chip, fa, faDate, faDateTime, pageHead } from '../common.js';
 import { adminEmpty, adminTabs } from './common.js';
 
 let inboxTimer = null;
@@ -267,11 +267,60 @@ export async function renderAdminSupport() {
 
   body.textContent = '';
   body.appendChild(layout);
+  const guestSection = el('div', { style: { marginTop: '16px' } });
+  body.appendChild(guestSection);
+
+  async function markGuestRead(id) {
+    try {
+      await api.post(`/admin/support/guest-messages/${id}/read`, {});
+      notify.ok('پیام مهمان خوانده‌شده علامت زد');
+      await loadGuestMessages();
+    } catch (error) {
+      notify.error(errorMessage(error));
+    }
+  }
+
+  async function loadGuestMessages() {
+    try {
+      const payload = await api.get('/admin/support/guest-messages');
+      const items = payload?.items ?? [];
+      const rows = items.map((message) => el('div.payment-row', {}, [
+        el('div.payment-row__main', {}, [
+          el('strong', { text: message.subject ? `${message.name} — ${message.subject}` : message.name }),
+          el('span.chip', {
+            class: `chip chip--${message.status === 'new' ? 'amber' : 'muted'}`,
+            text: message.status === 'new' ? 'جدید' : 'خوانده‌شده',
+          }),
+          el('p.small.muted', { text: `راه ارتباط: ${message.contact} · ${faDateTime(message.createdAt)}` }),
+          el('p.small', { text: message.body }),
+        ]),
+        message.status === 'new'
+          ? button('خوانده شد', { kind: 'soft', icon: '✅', onClick: () => markGuestRead(message.id) })
+          : null,
+      ]));
+      guestSection.replaceChildren(card({
+        title: 'پیام‌های مهمانان (بدون حساب)',
+        icon: '👤',
+        actions: payload?.unread ? [chip(`${fa(payload.unread)} جدید`, 'amber')] : [],
+      }, [
+        rows.length
+          ? el('div.payment-list', {}, rows)
+          : adminEmpty('هنوز پیامی از مهمانان ثبت نشده است'),
+        el('p.small.muted', {
+          text: 'این پیام‌ها از فرم عمومی صفحهٔ ورود ارسال می‌شوند؛ پاسخ را با همان ایمیل یا شمارهٔ تماس ثبت‌شده بفرستید.',
+        }),
+      ]));
+    } catch {
+      guestSection.replaceChildren();
+    }
+  }
+
   try {
     const payload = await api.get('/admin/support/threads');
     threads = payload?.items ?? [];
     renderList();
     showPlaceholder();
+    await loadGuestMessages();
   } catch (error) {
     body.textContent = '';
     body.appendChild(emptyState({ icon: '⚠️', title: 'دریافت تیکت‌ها ناموفق بود', hint: errorMessage(error) }));

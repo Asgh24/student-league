@@ -42,6 +42,7 @@ const { renderAdminExpiredUsers } = await import('../public/js/views/admin/expir
 const { renderAdminTeachers } = await import('../public/js/views/admin/teachers.js');
 const { renderFiles } = await import('../public/js/views/files.js');
 const { renderTeacherMessages } = await import('../public/js/views/messages.js');
+const { renderTeacherDashboard } = await import('../public/js/views/dashboard.js');
 const { renderSupport } = await import('../public/js/views/support.js');
 const { renderAdminSupport } = await import('../public/js/views/admin/support.js');
 const { renderSettings } = await import('../public/js/views/settings.js');
@@ -56,6 +57,7 @@ function installShellSkeleton() {
       <button class="icon-btn" id="menu-btn" type="button"></button>
       <span class="topbar__title" id="topbar-title"></span>
       <span class="spacer"></span>
+      <button class="pill" id="support-btn" type="button">🛎️ پشتیبانی</button>
       <button class="pill" id="league-pill" hidden></button>
       <span class="pill pill--user" id="user-pill" hidden></span>
     </header>
@@ -67,6 +69,7 @@ function installShellSkeleton() {
     </aside>
     <main class="view" id="view" tabindex="-1"></main>
     <footer class="site-footer">
+      <button class="btn btn--ghost btn--sm" id="footer-support" type="button">🛎️ ارتباط با پشتیبانی سایت</button>
       <p class="site-footer__credit">تهیه‌کنندگان: محمدجواد ابراهیمی - علی طاهری</p>
       <p class="site-footer__copy">© ۱۴۰۵ لیگ جامع دانش‌آموزی — تمامی حقوق محفوظ است.</p>
     </footer>
@@ -97,6 +100,8 @@ describe('credits footer', () => {
     expect(shellHtml).toContain('تهیه‌کنندگان: محمدجواد ابراهیمی - علی طاهری');
     expect(shellHtml).toContain('تمامی حقوق محفوظ است');
     expect(shellHtml).toContain('class="site-footer"');
+    expect(shellHtml).toContain('id="support-btn"');
+    expect(shellHtml).toContain('id="footer-support"');
   });
 });
 
@@ -149,6 +154,85 @@ describe('teacher signup', () => {
 
     await vi.waitFor(() => expect(register).toHaveBeenCalledWith('خانم جدید', 'new-teacher', 'new-password-1'));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('teacher'));
+  });
+});
+
+describe('landing page plans', () => {
+  it('shows active plans and the "not for profit" note to visitors', () => {
+    setMeta({
+      appName: 'لیگ جامع دانش‌آموزی',
+      trialDays: 14,
+      plans: [
+        { id: 1, name: 'اشتراک یک‌ماهه', days: 30, price: 149000, description: 'مناسب شروع', active: true },
+        { id: 2, name: 'اشتراک سه‌ماهه', days: 90, price: 399000, description: 'محبوب', active: true },
+      ],
+    });
+    renderLogin({ navigate: vi.fn() });
+
+    const text = document.body.textContent;
+    expect(text).toContain('طرح‌های اشتراک سایت');
+    expect(text).toContain('اشتراک یک‌ماهه');
+    expect(text).toContain('اشتراک سه‌ماهه');
+    expect(text).toContain('هدف آن درآمدزایی یا کسب سود نیست');
+    expect([...document.querySelectorAll('.login-plans .plan-card')]).toHaveLength(2);
+    expect(document.querySelector('.login-plans').textContent).toContain('تومان');
+  });
+
+  it('lets a visitor without an account send a support message from the login page', async () => {
+    api.post.mockResolvedValueOnce({ message: { id: 1 } });
+    renderLogin({ navigate: vi.fn() });
+
+    document.querySelector('form.login-card .row button').click();
+    expect(document.querySelector('.modal').textContent).toContain('ارتباط با پشتیبانی سایت');
+
+    document.getElementById('guest-name').value = 'مهمان نمونه';
+    document.getElementById('guest-contact').value = 'guest@example.com';
+    document.getElementById('guest-subject').value = 'سؤال دربارهٔ اشتراک';
+    document.getElementById('guest-body').value = 'سلام، برای خرید اشتراک باید چه کار کنم؟';
+    [...document.querySelectorAll('.modal button')].find((button) => button.textContent.includes('ارسال پیام')).click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/support/guest', {
+      name: 'مهمان نمونه',
+      contact: 'guest@example.com',
+      subject: 'سؤال دربارهٔ اشتراک',
+      body: 'سلام، برای خرید اشتراک باید چه کار کنم؟',
+    }));
+  });
+});
+
+describe('teacher dashboard subscription summary', () => {
+  it('shows remaining days and a renewal link in the card at the bottom', async () => {
+    setUser({ id: 1, role: 'teacher', username: 'teacher', displayName: 'معلم نمونه', persianDigits: true });
+    api.get.mockImplementation(async (url) => {
+      if (url === '/leagues') {
+        return { items: [{ id: 7, name: 'لیگ الف', status: 'active', createdAt: daysFromNow(-3) }] };
+      }
+      if (url === '/subscription/status') {
+        return {
+          subscription: { status: 'active', daysLeft: 23, endsAt: daysFromNow(23) },
+          plans: [],
+        };
+      }
+      if (url === '/leagues/7') {
+        return {
+          league: { id: 7, name: 'لیگ الف', status: 'active', createdAt: daysFromNow(-3) },
+          summary: {
+            studentCount: 20, presentToday: 0, absentToday: 0, lateToday: 0,
+            averageScore: 10, teamCount: 2, columnCount: 8,
+          },
+        };
+      }
+      throw new Error(`unexpected ${url}`);
+    });
+
+    await renderTeacherDashboard();
+
+    const text = document.body.textContent;
+    expect(text).toContain('اشتراک من');
+    expect(text).toContain('روزهای باقی‌ماندهٔ اشتراک: ۲۳ روز');
+    expect(document.querySelector('a[href="#/teacher/subscription"]')).not.toBeNull();
+    const cards = [...document.querySelectorAll('.card')];
+    expect(cards.at(-1).textContent).toContain('اشتراک من');
   });
 });
 

@@ -102,7 +102,7 @@ export function shuffleSeating(db, leagueId) {
   let students = shuffle(plan.students);
   let chairs = shuffle(positions).slice(0, count);
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const unchanged = students.some((student, index) => {
+    const unchanged = students.slice(0, count).some((student, index) => {
       const chair = chairs[index];
       return previous.get(student.id) === `${chair.row}:${chair.col}`;
     });

@@ -29,6 +29,41 @@ const TOOLS = [
   { href: 'fun', icon: '🎮', label: 'سرگرمی', perm: '' },
 ];
 
+const SUBSCRIPTION_STATUS = {
+  unlimited: { label: 'دسترسی نامحدود', icon: '♾️', kind: 'unlimited' },
+  active: { label: 'اشتراک فعال', icon: '✅', kind: 'active' },
+  trial: { label: 'دورهٔ آزمایشی', icon: '🎁', kind: 'trial' },
+  expired: { label: 'پایان‌یافته', icon: '⛔', kind: 'expired' },
+};
+
+/** Bottom-of-dashboard summary so the teacher always sees how much is left. */
+function subscriptionSummaryCard(payload) {
+  const subscription = payload?.subscription ?? { status: 'expired', daysLeft: 0 };
+  const meta = SUBSCRIPTION_STATUS[subscription.status] ?? SUBSCRIPTION_STATUS.expired;
+  const daysLeft = subscription.status === 'unlimited' ? '∞' : fa(subscription.daysLeft ?? 0);
+  const hint = subscription.status === 'unlimited'
+    ? 'این حساب دسترسی دائمی دارد و نیازی به خرید یا تمدید اشتراک نیست.'
+    : subscription.status === 'expired'
+      ? 'اشتراک شما به پایان رسیده است؛ برای ادامهٔ استفاده یکی از طرح‌ها را انتخاب کنید.'
+      : `روزهای باقی‌ماندهٔ اشتراک: ${daysLeft} روز`;
+  return card({ title: 'اشتراک من', icon: '💳' }, [
+    el(`div.sub-banner.sub-banner--${meta.kind}`, {}, [
+      el('div.sub-banner__icon', { text: meta.icon, 'aria-hidden': 'true' }),
+      el('div', {}, [
+        el('strong', { text: meta.label }),
+        el('p.small', { text: hint }),
+        subscription.endsAt ? el('p.small.muted', { text: `اعتبار تا: ${faDate(subscription.endsAt)}` }) : null,
+      ]),
+    ]),
+    el('div.row', { style: { marginTop: '10px' } }, [
+      el('a.btn', {
+        href: '#/teacher/subscription',
+        text: subscription.status === 'expired' ? '💳 خرید یا تمدید اشتراک' : '💳 مشاهده و تمدید اشتراک',
+      }),
+    ]),
+  ]);
+}
+
 async function createLeague() {
   const values = await formDialog({
     title: 'ساخت لیگ جدید',
@@ -177,6 +212,10 @@ export async function renderTeacherDashboard() {
   renderView([head, body]);
   body.appendChild(loadingNode());
 
+  // The assistant inherits the owner's window but cannot manage billing, so
+  // the card is only for the main teacher account.
+  const subscriptionRequest = assistant ? Promise.resolve(null) : api.get('/subscription/status').catch(() => null);
+
   let leagues = [];
   try {
     const payload = await api.get('/leagues');
@@ -193,16 +232,20 @@ export async function renderTeacherDashboard() {
 
   if (leagues.length === 0) {
     setLeaguePill(null);
+    const subscription = await subscriptionRequest;
     body.textContent = '';
-    body.appendChild(card({ title: assistant ? 'لیگ در دسترس نیست' : 'شروع کار', icon: '🚀' }, [
-      emptyState({
-        icon: '🏁',
-        title: assistant ? 'لیگی برای این حساب همیار ثبت نشده است' : 'هنوز لیگی نساخته‌اید',
-        hint: assistant
-          ? 'از معلم اصلی بخواهید دسترسی لیگ را برای شما تنظیم کند.'
-          : 'با ساخت نخستین لیگ، ستون‌های امتیاز پیش‌فرض و ابزارهای کلاس فعال می‌شوند.',
-      }),
-      assistant ? null : el('div.row', { style: { justifyContent: 'center' } }, [button('ساخت اولین لیگ', { icon: '➕', onClick: createLeague })]),
+    body.appendChild(el('div.grid', { style: { gap: '14px' } }, [
+      card({ title: assistant ? 'لیگ در دسترس نیست' : 'شروع کار', icon: '🚀' }, [
+        emptyState({
+          icon: '🏁',
+          title: assistant ? 'لیگی برای این حساب همیار ثبت نشده است' : 'هنوز لیگی نساخته‌اید',
+          hint: assistant
+            ? 'از معلم اصلی بخواهید دسترسی لیگ را برای شما تنظیم کند.'
+            : 'با ساخت نخستین لیگ، ستون‌های امتیاز پیش‌فرض و ابزارهای کلاس فعال می‌شوند.',
+        }),
+        assistant ? null : el('div.row', { style: { justifyContent: 'center' } }, [button('ساخت اولین لیگ', { icon: '➕', onClick: createLeague })]),
+      ]),
+      subscription ? subscriptionSummaryCard(subscription) : null,
     ]));
     return undefined;
   }
@@ -248,6 +291,7 @@ export async function renderTeacherDashboard() {
     : leagueSwitcher(leagues, active.id);
 
   const management = assistant ? null : managementCard({ ...active, ...detail.league });
+  const subscription = await subscriptionRequest;
 
   body.textContent = '';
   body.appendChild(el('div.grid', { style: { gap: '14px' } }, [
@@ -257,6 +301,7 @@ export async function renderTeacherDashboard() {
     card({ title: assistant ? 'ابزارهای فعال شما' : 'ابزارهای کلاس', icon: '🧰' }, [
       tiles.length ? grid('grid--tiles', tiles) : emptyState({ icon: '🔒', title: 'هنوز بخشی برای شما فعال نشده است', hint: 'از معلم اصلی بخواهید دسترسی لازم را بدهد.' }),
     ]),
+    subscription ? subscriptionSummaryCard(subscription) : null,
   ]));
   return undefined;
 }

@@ -115,6 +115,8 @@ export function createAdminRouter({ db }) {
     const messages = db.prepare('SELECT COUNT(*) AS n FROM messages').get().n;
     const supportThreads = db.prepare('SELECT COUNT(*) AS n FROM support_threads').get().n;
     const supportUnread = db.prepare("SELECT COUNT(*) AS n FROM support_messages WHERE read_at IS NULL AND sender_role = 'user'").get().n;
+    const guestSupport = db.prepare('SELECT COUNT(*) AS n FROM support_guest_messages').get().n;
+    const guestSupportUnread = db.prepare("SELECT COUNT(*) AS n FROM support_guest_messages WHERE status = 'new'").get().n;
     const recentPayments = db.prepare(`
       SELECT p.*, u.display_name AS teacher_name
       FROM payments p JOIN users u ON u.id = p.teacher_id
@@ -134,6 +136,7 @@ export function createAdminRouter({ db }) {
       students,
       messages: { threads, messages },
       support: { threads: supportThreads, unread: supportUnread },
+      guestSupport: { total: guestSupport, unread: guestSupportUnread },
       sms: { ...smsCounts(db), config: smsConfig() },
       plans: { total: listPlans(db).length, active: listPlans(db, { activeOnly: true }).length },
       recentPayments,

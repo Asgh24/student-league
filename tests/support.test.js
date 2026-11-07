@@ -275,3 +275,48 @@ describe('support tickets (user <-> admin)', () => {
     expect(dashboard.body.support).toEqual({ threads: 1, unread: 1 });
   });
 });
+
+describe('guest contact messages (public)', () => {
+  it('accepts a message from a visitor without an account and shows it to the admin', async () => {
+    const guest = createSupportClient(ctx.db);
+    await guest.csrf();
+    const created = await guest.post('/api/v1/support/guest', {
+      name: 'مهمان نمونه',
+      contact: 'guest@example.com',
+      subject: 'سؤال دربارهٔ اشتراک',
+      body: 'سلام، برای خرید اشتراک باید چه کار کنم؟',
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.message).toMatchObject({
+      name: 'مهمان نمونه',
+      contact: 'guest@example.com',
+      subject: 'سؤال دربارهٔ اشتراک',
+      status: 'new',
+    });
+    // A guest message never becomes a signed-in support thread.
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM support_threads').get().n).toBe(0);
+
+    const list = await admin.get('/api/v1/admin/support/guest-messages');
+    expect(list.status).toBe(200);
+    expect(list.body.items).toHaveLength(1);
+    expect(list.body.unread).toBe(1);
+
+    const id = list.body.items[0].id;
+    const read = await admin.post(`/api/v1/admin/support/guest-messages/${id}/read`, {});
+    expect(read.status).toBe(200);
+    expect(read.body.message.status).toBe('read');
+    expect(read.body.unread).toBe(0);
+
+    const dashboard = await admin.get('/api/v1/admin/dashboard');
+    expect(dashboard.body.guestSupport).toEqual({ total: 1, unread: 0 });
+  });
+
+  it('validates the form and keeps guest endpoints admin-only', async () => {
+    const guest = createSupportClient(ctx.db);
+    await guest.csrf();
+    expect((await guest.post('/api/v1/support/guest', { name: '', contact: '', body: '' })).status).toBe(400);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM support_guest_messages').get().n).toBe(0);
+    expect((await guest.get('/api/v1/admin/support/guest-messages')).status).toBe(401);
+    expect((await guest.post('/api/v1/admin/support/guest-messages/1/read', {})).status).toBe(401);
+  });
+});

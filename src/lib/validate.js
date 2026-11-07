@@ -184,6 +184,14 @@ export const schemas = {
     status: z.enum(['open', 'answered', 'closed']),
   }),
 
+  /** Public contact form for visitors who are not logged in. */
+  guestSupport: z.object({
+    name: z.string().trim().min(2, 'نام را وارد کنید').max(80),
+    contact: z.string().trim().min(3, 'راه ارتباطی (ایمیل یا شماره) را وارد کنید').max(120),
+    subject: z.string().trim().max(120).default(''),
+    body: z.string().trim().min(1, 'متن پیام خالی است').max(4000),
+  }),
+
   /**
    * Per-teacher sms.ir settings. Empty API key means "keep the saved key";
    * `clearApiKey` is the explicit way to remove it. The line number can be

@@ -121,6 +121,23 @@ describe('classroom seating', () => {
     expect(kept).toEqual([]);
   });
 
+  it('shuffles when there are more students than seats and leaves the rest unassigned', async () => {
+    const insertStudent = ctx.db.prepare('INSERT INTO students (league_id, user_id, name, created_at) VALUES (?, NULL, ?, ?)');
+    const now = new Date().toISOString();
+    for (let index = 0; index < 31; index += 1) {
+      insertStudent.run(fixture.leagueA.id, `دانش‌آموز ${index + 4}`, now);
+    }
+    await client.put(`/api/v1/leagues/${fixture.leagueA.id}/seating`, { rows: 6, cols: 3, seats: [] });
+
+    const res = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/seating/shuffle`, {});
+    expect(res.status).toBe(200);
+    expect(res.body.layout).toEqual({ rows: 6, cols: 3 });
+    expect(res.body.seats).toHaveLength(18);
+    expect(res.body.unassigned).toHaveLength(16);
+    expect(new Set(res.body.seats.map((seat) => seat.studentId)).size).toBe(18);
+    expect(new Set(res.body.seats.map((seat) => `${seat.row}:${seat.col}`)).size).toBe(18);
+  });
+
   it('clears every seat but keeps the grid size', async () => {
     await client.put(`/api/v1/leagues/${fixture.leagueA.id}/seating`, {
       rows: 5,

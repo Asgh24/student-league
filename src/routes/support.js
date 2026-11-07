@@ -3,7 +3,10 @@ import { forbidden } from '../lib/errors.js';
 import { schemas, validate } from '../lib/validate.js';
 import { requireAdmin, requireAuth } from '../middleware/auth.js';
 import {
+  createGuestSupportMessage,
+  listGuestSupportMessages,
   listSupportThreads,
+  markGuestSupportMessageRead,
   markSupportRead,
   readSupportThread,
   sendSupportMessage,
@@ -34,6 +37,13 @@ function adminViewer(req) {
 /** `/api/v1/support` — the site-user side of support tickets. */
 export function createSupportRouter({ db }) {
   const router = Router();
+
+  // Public contact form for visitors who have not signed in yet (the login
+  // page). It is a one-way message to the admin, so no session is needed.
+  router.post('/guest', validate({ body: schemas.guestSupport }), (req, res) => {
+    res.status(201).json(createGuestSupportMessage(db, req.body));
+  });
+
   router.use(requireAuth, supportAccess);
 
   router.get('/threads', (req, res) => {
@@ -107,6 +117,15 @@ export function createAdminSupportRouter({ db }) {
 
   router.get('/unread', (req, res) => {
     res.json({ count: supportUnreadTotal(db, adminViewer(req)) });
+  });
+
+  // Guest messages left from the public (logged-out) contact form.
+  router.get('/guest-messages', (_req, res) => {
+    res.json(listGuestSupportMessages(db));
+  });
+
+  router.post('/guest-messages/:id/read', validate({ params: schemas.idParam }), (req, res) => {
+    res.json(markGuestSupportMessageRead(db, Number.parseInt(req.params.id, 10)));
   });
 
   return router;

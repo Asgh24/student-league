@@ -225,3 +225,64 @@ export function setSupportStatus(db, threadId, viewer, status) {
   db.prepare('UPDATE support_threads SET status = ? WHERE id = ?').run(status, threadId);
   return { thread: getSupportThread(db, threadId, viewer) };
 }
+
+const GUEST_PREVIEW_LENGTH = 160;
+
+function guestMessageJson(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    contact: row.contact,
+    subject: row.subject,
+    body: row.body,
+    preview: String(row.body ?? '').slice(0, GUEST_PREVIEW_LENGTH),
+    status: row.status,
+    createdAt: row.created_at,
+    readAt: row.read_at,
+  };
+}
+
+/**
+ * Stores a public "ask the site" message from a visitor without an account.
+ * This is deliberately one-way: the admin reads the message and replies using
+ * the contact details the guest left, because there is no guest session to
+ * show a reply in.
+ */
+export function createGuestSupportMessage(db, { name, contact, subject = '', body }) {
+  const now = isoNow();
+  const info = db.prepare(`
+    INSERT INTO support_guest_messages (name, contact, subject, body, status, created_at)
+    VALUES (?, ?, ?, ?, 'new', ?)
+  `).run(
+    String(name).trim(),
+    String(contact).trim(),
+    String(subject ?? '').trim(),
+    String(body).trim(),
+    now,
+  );
+  return {
+    message: guestMessageJson(db.prepare('SELECT * FROM support_guest_messages WHERE id = ?').get(info.lastInsertRowid)),
+  };
+}
+
+export function listGuestSupportMessages(db) {
+  const rows = db.prepare(`
+    SELECT * FROM support_guest_messages ORDER BY id DESC
+  `).all();
+  return {
+    items: rows.map(guestMessageJson),
+    unread: db.prepare("SELECT COUNT(*) AS n FROM support_guest_messages WHERE status = 'new'").get().n,
+  };
+}
+
+export function markGuestSupportMessageRead(db, id) {
+  const row = db.prepare('SELECT * FROM support_guest_messages WHERE id = ?').get(id);
+  if (!row) throw notFound('پیام مهمان یافت نشد');
+  db.prepare("UPDATE support_guest_messages SET status = 'read', read_at = COALESCE(read_at, ?) WHERE id = ?")
+    .run(isoNow(), id);
+  return {
+    message: guestMessageJson(db.prepare('SELECT * FROM support_guest_messages WHERE id = ?').get(id)),
+    unread: db.prepare("SELECT COUNT(*) AS n FROM support_guest_messages WHERE status = 'new'").get().n,
+  };
+}
+

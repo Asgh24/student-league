@@ -6,6 +6,58 @@ import { errorMessage, number } from '../format.js';
 import { renderView, setTopbarTitle } from '../shell.js';
 import { homePath, setUser, state } from '../store.js';
 import { notify } from '../ui.js';
+import { openGuestSupportDialog } from './guestSupport.js';
+
+function money(value) {
+  try {
+    return new Intl.NumberFormat(state.persianDigits ? 'fa-IR' : 'en-US').format(Number(value) || 0);
+  } catch {
+    return number(value, state.persianDigits);
+  }
+}
+
+function planPreview(plan) {
+  const badge = plan.days >= 365 ? 'بیشترین صرفه‌جویی' : plan.days >= 90 ? 'محبوب' : '';
+  return el(`div.plan-card${plan.days >= 90 ? '.plan-card--featured' : ''}`, {}, [
+    badge ? el('span.plan-card__badge', { text: badge }) : null,
+    el('h3', { text: plan.name }),
+    el('div.plan-card__price', {}, [
+      el('strong', { text: money(plan.price) }),
+      el('span', { text: 'تومان' }),
+    ]),
+    el('p.small.muted', { text: `${number(plan.days, state.persianDigits)} روز دسترسی کامل` }),
+    plan.description ? el('p.small', { text: plan.description }) : null,
+  ]);
+}
+
+/** Public storefront under the login form, so visitors see the plans first. */
+function plansSection() {
+  const plans = Array.isArray(state.meta?.plans) ? state.meta.plans : [];
+  return el('section.login-plans', {}, [
+    el('div.login-plans__head', {}, [
+      el('h2', { text: '🛍️ طرح‌های اشتراک سایت' }),
+      el('p.muted.small', {
+        text: 'هزینهٔ اشتراک تنها برای تأمین هزینه‌های زیرساخت و نگهداری سامانه است و هدف آن درآمدزایی یا کسب سود نیست؛ با انتخاب یک طرح به ادامهٔ مسیر آموزش کمک می‌کنید.',
+      }),
+    ]),
+    plans.length
+      ? el('div.plans', {}, plans.map(planPreview))
+      : el('p.muted.small', { text: 'در حال حاضر طرح فعالی برای فروش وجود ندارد. برای اطلاع از شرایط با پشتیبانی در ارتباط باشید.' }),
+    el('p.small.muted', {
+      text: 'برای خرید طرح، از همین صفحه وارد حساب معلم خود شوید یا حساب معلم جدید بسازید و دورهٔ آزمایشی رایگان را شروع کنید.',
+    }),
+  ]);
+}
+
+function supportButton() {
+  return el('button.btn.btn--ghost.btn--sm', {
+    type: 'button',
+    onclick: () => openGuestSupportDialog(),
+  }, [
+    el('span', { text: '🛎️', 'aria-hidden': 'true' }),
+    el('span', { text: 'ارتباط با پشتیبانی سایت' }),
+  ]);
+}
 
 export function renderLogin({ navigate }) {
   setTopbarTitle(state.meta.appName);
@@ -120,6 +172,7 @@ export function renderLogin({ navigate }) {
     errorBox,
     submit,
     el('p.muted.small', { style: { textAlign: 'center' }, text: 'دانش‌آموزان از حساب ساخته‌شده توسط معلم وارد می‌شوند. مدیر سامانه هم از همین صفحه وارد می‌شود.' }),
+    el('div.row', { style: { justifyContent: 'center', marginTop: '10px' } }, [supportButton()]),
   ]);
 
   form.addEventListener('submit', (event) => {
@@ -168,7 +221,9 @@ export function renderLogin({ navigate }) {
       });
   });
 
-  renderView(el('div.login-shell', {}, [form]));
+  renderView(el('div.login-shell', {}, [
+    el('div.login-page', {}, [form, plansSection()]),
+  ]));
   loginUsername.focus();
 
   // Warm up a token bound to the current session (it may have been rotated by a

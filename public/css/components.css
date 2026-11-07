@@ -996,6 +996,32 @@ td.delta-cell.is-negative {
   margin-bottom: 4px;
 }
 
+.login-page {
+  width: min(1060px, 100%);
+  display: grid;
+  gap: 22px;
+  justify-items: center;
+}
+.login-plans {
+  width: 100%;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.login-plans__head {
+  margin-bottom: 8px;
+  text-align: center;
+}
+.login-plans__head h2 {
+  margin: 0 0 4px;
+}
+.login-plans > p.small {
+  margin: 10px 0 0;
+  text-align: center;
+}
+
 .demo-banner {
   margin: 0 0 12px;
   padding: 12px 14px;

@@ -41,6 +41,7 @@ import { renderSchedule } from './views/schedule.js';
 import { renderSeating } from './views/seating.js';
 import { renderSettings } from './views/settings.js';
 import { renderSubscription } from './views/subscription.js';
+import { openGuestSupportDialog } from './views/guestSupport.js';
 import { renderTeams } from './views/teams.js';
 import { renderTimerTools } from './views/timer.js';
 import { renderWheel } from './views/wheel.js';
@@ -297,6 +298,21 @@ const router = createRouter({
 });
 
 subscribe(renderShell);
+
+/** Top bar + footer "support" buttons: route members, guests get the contact form. */
+function openSupport() {
+  if (isAdmin()) void router.navigate('admin/support');
+  else if (isTeacher() && !isAssistant()) void router.navigate('teacher/support');
+  else if (isStudent()) void router.navigate('student/support');
+  else openGuestSupportDialog();
+}
+
+document.getElementById('support-btn')?.addEventListener('click', () => {
+  closeDrawer();
+  openSupport();
+});
+document.getElementById('footer-support')?.addEventListener('click', openSupport);
+
 bindShellHandlers({
   onLeaguePill: () => {
     void router.navigate('teacher');
