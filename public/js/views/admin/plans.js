@@ -16,7 +16,13 @@ function planCard(plan, { edit, toggle, remove }) {
         el(`span.chip.chip--${plan.active ? 'ok' : 'muted'}`, { text: plan.active ? 'فعال' : 'غیرفعال' }),
       ]),
       el('p', {}, [
+        plan.discountPercent
+          ? el('span.price-old', { text: `${money(plan.originalPrice)} تومان` })
+          : null,
         el('strong', { text: `${money(plan.price)} تومان` }),
+        plan.discountPercent
+          ? el('span.chip.chip--amber', { text: `${fa(plan.discountPercent)}٪ تخفیف` })
+          : null,
         el('span.small.muted', { text: ` · ${fa(plan.days)} روز` }),
       ]),
       plan.description ? el('p.small.muted', { text: plan.description }) : null,
@@ -64,7 +70,15 @@ export async function renderAdminPlans() {
     return [
       { name: 'name', label: 'نام طرح', required: true, value: plan.name ?? '' },
       { name: 'days', label: 'مدت (روز)', type: 'number', min: '1', max: '3650', required: true, value: String(plan.days ?? 30) },
-      { name: 'price', label: 'قیمت (تومان)', type: 'number', min: '0', required: true, value: String(plan.price ?? 0) },
+      { name: 'price', label: 'قیمت فروش با تخفیف (تومان)', type: 'number', min: '0', required: true, value: String(plan.price ?? 0) },
+      {
+        name: 'originalPrice',
+        label: 'قیمت اولیه بدون تخفیف (تومان)',
+        type: 'number',
+        min: '0',
+        value: plan.originalPrice ? String(plan.originalPrice) : '',
+        hint: 'اختیاری؛ اگر خالی بماند تخفیفی نمایش داده نمی‌شود. باید بیشتر از قیمت فروش باشد.',
+      },
       { name: 'description', label: 'توضیح', type: 'textarea', value: plan.description ?? '' },
       {
         name: 'active',
@@ -85,6 +99,7 @@ export async function renderAdminPlans() {
         name: values.name.trim(),
         days: Number(values.days),
         price: Number(values.price),
+        originalPrice: values.originalPrice ? Number(values.originalPrice) : null,
         description: values.description.trim(),
         active: values.active === '1',
         sortOrder: Number(values.sortOrder),
@@ -104,6 +119,7 @@ export async function renderAdminPlans() {
         name: values.name.trim(),
         days: Number(values.days),
         price: Number(values.price),
+        originalPrice: values.originalPrice ? Number(values.originalPrice) : null,
         description: values.description.trim(),
         active: values.active === '1',
         sortOrder: Number(values.sortOrder),

@@ -89,6 +89,18 @@ function countsOf(rows) {
   return counts;
 }
 
+/**
+ * `originalPrice` is optional and only meaningful when it is higher than the
+ * charged price. Zero/empty clears the discount, anything else must be a real
+ * saving so the storefront never shows a fake crossed-out price.
+ */
+function normalizeOriginalPrice(value, price) {
+  const original = Number(value);
+  if (!Number.isFinite(original) || original <= 0) return null;
+  if (original <= Number(price)) throw badRequest('قیمت بدون تخفیف باید بیشتر از قیمت فروش باشد');
+  return original;
+}
+
 /** `/api/v1/admin` — owner dashboard, teacher subscriptions, plans and payments. */
 export function createAdminRouter({ db }) {
   const router = Router();
@@ -298,13 +310,15 @@ export function createAdminRouter({ db }) {
 
   router.post('/plans', validate({ body: schemas.planCreate }), (req, res) => {
     const now = isoNow();
+    const originalPrice = normalizeOriginalPrice(req.body.originalPrice, req.body.price);
     const info = db.prepare(`
-      INSERT INTO subscription_plans (name, days, price, description, active, sort_order, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO subscription_plans (name, days, price, original_price, description, active, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       req.body.name,
       req.body.days,
       req.body.price,
+      originalPrice,
       req.body.description,
       req.body.active ? 1 : 0,
       req.body.sortOrder,
@@ -322,16 +336,30 @@ export function createAdminRouter({ db }) {
       name: 'name',
       days: 'days',
       price: 'price',
+      originalPrice: 'original_price',
       description: 'description',
       active: 'active',
       sortOrder: 'sort_order',
     };
+    // A discount must stay below the new price. When only the price changes we
+    // re-check the saved original price instead of silently keeping a broken pair.
+    const nextPrice = req.body.price ?? existing.price;
+    const nextOriginal = req.body.originalPrice === undefined
+      ? (existing.original_price && existing.original_price > nextPrice ? existing.original_price : null)
+      : normalizeOriginalPrice(req.body.originalPrice, nextPrice);
+    if (req.body.price !== undefined && req.body.originalPrice === undefined
+      && existing.original_price && existing.original_price <= nextPrice) {
+      throw badRequest('قیمت فروش باید کمتر از قیمت بدون تخفیف باشد؛ ابتدا قیمت بدون تخفیف را اصلاح کنید');
+    }
+
     const sets = [];
     const values = [];
     for (const [key, column] of Object.entries(fields)) {
       if (req.body[key] === undefined) continue;
       sets.push(`${column} = ?`);
-      values.push(key === 'active' ? (req.body[key] ? 1 : 0) : req.body[key]);
+      if (key === 'active') values.push(req.body[key] ? 1 : 0);
+      else if (key === 'originalPrice') values.push(nextOriginal);
+      else values.push(req.body[key]);
     }
     sets.push('updated_at = ?');
     values.push(isoNow(), id);

@@ -6,6 +6,7 @@ import { errorMessage, number } from '../format.js';
 import { renderView, setTopbarTitle } from '../shell.js';
 import { homePath, setUser, state } from '../store.js';
 import { notify } from '../ui.js';
+import { planPrice } from './common.js';
 import { openGuestSupportDialog } from './guestSupport.js';
 
 function money(value) {
@@ -21,10 +22,7 @@ function planPreview(plan) {
   return el(`div.plan-card${plan.days >= 90 ? '.plan-card--featured' : ''}`, {}, [
     badge ? el('span.plan-card__badge', { text: badge }) : null,
     el('h3', { text: plan.name }),
-    el('div.plan-card__price', {}, [
-      el('strong', { text: money(plan.price) }),
-      el('span', { text: 'تومان' }),
-    ]),
+    planPrice(plan, money),
     el('p.small.muted', { text: `${number(plan.days, state.persianDigits)} روز دسترسی کامل` }),
     plan.description ? el('p.small', { text: plan.description }) : null,
   ]);

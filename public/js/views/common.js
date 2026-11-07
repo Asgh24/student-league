@@ -17,6 +17,30 @@ export function faDateTime(value) {
   return dateTime(value, state.persianDigits);
 }
 
+/**
+ * Price block for a subscription plan. When the admin set a pre-discount
+ * price, the old amount is struck through and a saving badge is shown above
+ * the real (charged) price.
+ */
+export function planPrice(plan, formatMoney) {
+  const price = Number(plan.price) || 0;
+  const original = Number(plan.originalPrice) || 0;
+  const percent = plan.discountPercent
+    ?? (original > price ? Math.round(((original - price) / original) * 100) : 0);
+  const current = el('div.plan-card__price', {}, [
+    el('strong', { text: formatMoney(price) }),
+    el('span', { text: 'تومان' }),
+  ]);
+  if (!percent || original <= price) return current;
+  return el('div.plan-card__pricing', {}, [
+    el('div.plan-card__old', {}, [
+      el('del', { text: `${formatMoney(original)} تومان` }),
+      el('span.plan-card__discount', { text: `${number(percent, state.persianDigits)}٪ تخفیف` }),
+    ]),
+    current,
+  ]);
+}
+
 /** Page header with an optional action row. */
 export function pageHead({ icon = '', title, subtitle = '', actions = [] }) {
   const head = el('div.page-head');

@@ -20,6 +20,7 @@ import * as reportChannelsShad from './019_report_channels_shad.js';
 import * as homeworkPoints from './020_homework_points.js';
 import * as supportMessages from './021_support_messages.js';
 import * as supportGuestMessages from './022_support_guest_messages.js';
+import * as planOriginalPrice from './023_plan_original_price.js';
 
 /** Ordered list of migrations applied automatically on boot. */
 export const migrations = [
@@ -45,4 +46,5 @@ export const migrations = [
   homeworkPoints,
   supportMessages,
   supportGuestMessages,
+  planOriginalPrice,
 ];

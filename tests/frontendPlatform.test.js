@@ -163,8 +163,8 @@ describe('landing page plans', () => {
       appName: 'لیگ جامع دانش‌آموزی',
       trialDays: 14,
       plans: [
-        { id: 1, name: 'اشتراک یک‌ماهه', days: 30, price: 149000, description: 'مناسب شروع', active: true },
-        { id: 2, name: 'اشتراک سه‌ماهه', days: 90, price: 399000, description: 'محبوب', active: true },
+        { id: 1, name: 'اشتراک یک‌ماهه', days: 30, price: 149000, originalPrice: 200000, discountPercent: 26, description: 'مناسب شروع', active: true },
+        { id: 2, name: 'اشتراک سه‌ماهه', days: 90, price: 399000, originalPrice: 399000, discountPercent: 0, description: 'محبوب', active: true },
       ],
     });
     renderLogin({ navigate: vi.fn() });
@@ -176,6 +176,12 @@ describe('landing page plans', () => {
     expect(text).toContain('هدف آن درآمدزایی یا کسب سود نیست');
     expect([...document.querySelectorAll('.login-plans .plan-card')]).toHaveLength(2);
     expect(document.querySelector('.login-plans').textContent).toContain('تومان');
+
+    // The discounted plan shows the old price struck through plus the saving.
+    const cards = [...document.querySelectorAll('.login-plans .plan-card')];
+    expect(cards[0].querySelector('.plan-card__old del').textContent).toContain('تومان');
+    expect(cards[0].textContent).toContain('۲۶٪ تخفیف');
+    expect(cards[1].querySelector('.plan-card__old')).toBeNull();
   });
 
   it('lets a visitor without an account send a support message from the login page', async () => {
@@ -242,7 +248,7 @@ describe('subscription storefront', () => {
       subscription: { status: 'trial', daysLeft: 7, endsAt: daysFromNow(7) },
       plans: [
         { id: 1, name: 'اشتراک یک‌ماهه', days: 30, price: 149000, description: 'مناسب شروع', active: true, sortOrder: 1 },
-        { id: 2, name: 'اشتراک سه‌ماهه', days: 90, price: 399000, description: 'محبوب', active: true, sortOrder: 2 },
+        { id: 2, name: 'اشتراک سه‌ماهه', days: 90, price: 399000, originalPrice: 499000, discountPercent: 20, description: 'محبوب', active: true, sortOrder: 2 },
       ],
       paymentProvider: { provider: 'mock', configured: true, label: 'پرداخت آزمایشی', sandbox: true },
       payments: [{
@@ -266,6 +272,9 @@ describe('subscription storefront', () => {
     expect(text).toContain('حالت پرداخت آزمایشی فعال است');
     expect(text).toContain('MOCK-4');
     expect([...document.querySelectorAll('.plan-card')]).toHaveLength(2);
+    const cards = [...document.querySelectorAll('.plan-card')];
+    expect(cards[1].querySelector('.plan-card__old del')).not.toBeNull();
+    expect(cards[1].textContent).toContain('۲۰٪ تخفیف');
   });
 });
 

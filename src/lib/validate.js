@@ -145,6 +145,8 @@ export const schemas = {
     name: z.string().trim().min(2, 'نام طرح الزامی است').max(80),
     days: z.coerce.number().int().min(1).max(3650),
     price: z.coerce.number().int().min(0).max(1000000000),
+    // Optional "before discount" price; null means the plan has no discount.
+    originalPrice: z.coerce.number().int().min(0).max(1000000000).nullable().optional(),
     description: z.string().trim().max(300).default(''),
     active: z.boolean().default(true),
     sortOrder: z.coerce.number().int().min(0).max(999).default(0),
@@ -154,6 +156,7 @@ export const schemas = {
     name: z.string().trim().min(2).max(80).optional(),
     days: z.coerce.number().int().min(1).max(3650).optional(),
     price: z.coerce.number().int().min(0).max(1000000000).optional(),
+    originalPrice: z.coerce.number().int().min(0).max(1000000000).nullable().optional(),
     description: z.string().trim().max(300).optional(),
     active: z.boolean().optional(),
     sortOrder: z.coerce.number().int().min(0).max(999).optional(),

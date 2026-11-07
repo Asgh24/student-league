@@ -51,12 +51,25 @@ export function accessForTeacher(db, teacherId) {
   return teacherAccess(findById(db, teacherId));
 }
 
+/** Whole-percent saving shown next to a discounted plan (0 = no discount). */
+export function discountPercent(originalPrice, price) {
+  const original = Number(originalPrice);
+  const current = Number(price);
+  if (!Number.isFinite(original) || !Number.isFinite(current)) return 0;
+  if (original <= 0 || current < 0 || original <= current) return 0;
+  return Math.round(((original - current) / original) * 100);
+}
+
 export function planJson(row) {
+  const originalPrice = row.original_price ?? null;
   return {
     id: row.id,
     name: row.name,
     days: row.days,
     price: row.price,
+    // Pre-discount price. `price` is always the amount actually charged.
+    originalPrice,
+    discountPercent: discountPercent(originalPrice, row.price),
     description: row.description,
     active: row.active === 1,
     sortOrder: row.sort_order,

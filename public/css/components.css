@@ -1236,6 +1236,38 @@ td.delta-cell.is-negative {
   font-size: 0.8rem;
   color: var(--muted);
 }
+.plan-card__pricing {
+  display: grid;
+  gap: 2px;
+}
+.plan-card__old {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.plan-card__old del {
+  color: #b91c1c;
+  opacity: 0.85;
+  text-decoration-thickness: 2px;
+}
+.plan-card__discount {
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.1);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.price-old {
+  margin-inline-end: 6px;
+  color: #b91c1c;
+  opacity: 0.8;
+  font-size: 0.85rem;
+  text-decoration: line-through;
+}
 
 .payment-list {
   display: grid;

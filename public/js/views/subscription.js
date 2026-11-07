@@ -6,7 +6,7 @@ import { bytes, errorMessage } from '../format.js';
 import { renderView, setTopbarTitle } from '../shell.js';
 import { state } from '../store.js';
 import { confirmDialog, emptyState, notify, openModal } from '../ui.js';
-import { backToWorkbench, button, card, fa, faDate, faDateTime, field, pageHead, statCard } from './common.js';
+import { backToWorkbench, button, card, fa, faDate, faDateTime, field, pageHead, planPrice, statCard } from './common.js';
 
 const STATUS = {
   unlimited: { label: 'دسترسی نامحدود', icon: '♾️', kind: 'unlimited' },
@@ -116,10 +116,7 @@ function planCard(plan, provider, { hasPendingCard, onBuy }) {
   return el(`div.plan-card${plan.days >= 90 ? '.plan-card--featured' : ''}`, {}, [
     badge ? el('span.plan-card__badge', { text: badge }) : null,
     el('h3', { text: plan.name }),
-    el('div.plan-card__price', {}, [
-      el('strong', { text: money(plan.price) }),
-      el('span', { text: 'تومان' }),
-    ]),
+    planPrice(plan, money),
     el('p.small.muted', { text: `${fa(plan.days)} روز دسترسی کامل` }),
     plan.description ? el('p.small', { text: plan.description }) : null,
     el('span.spacer'),

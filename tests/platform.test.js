@@ -167,14 +167,31 @@ describe('admin authorization and panel data', () => {
       name: 'طرح آزمون',
       days: 45,
       price: 250000,
+      originalPrice: 400000,
       description: 'توضیح',
     });
     expect(plan.status).toBe(201);
     const planId = plan.body.item.id;
+    expect(plan.body.item.price).toBe(250000);
+    expect(plan.body.item.originalPrice).toBe(400000);
+    expect(plan.body.item.discountPercent).toBe(38);
 
-    const patched = await admin.patch(`/api/v1/admin/plans/${planId}`, { price: 300000, active: false });
+    const patched = await admin.patch(`/api/v1/admin/plans/${planId}`, {
+      price: 300000,
+      originalPrice: 500000,
+      active: false,
+    });
     expect(patched.body.item.price).toBe(300000);
+    expect(patched.body.item.originalPrice).toBe(500000);
+    expect(patched.body.item.discountPercent).toBe(40);
     expect(patched.body.item.active).toBe(false);
+
+    // The old price must stay above the charged price.
+    expect((await admin.patch(`/api/v1/admin/plans/${planId}`, { originalPrice: 299000 })).status).toBe(400);
+    // Clearing it removes the discount from the storefront.
+    const cleared = await admin.patch(`/api/v1/admin/plans/${planId}`, { originalPrice: null });
+    expect(cleared.body.item.originalPrice).toBeNull();
+    expect(cleared.body.item.discountPercent).toBe(0);
 
     await admin.del(`/api/v1/admin/plans/${planId}`);
     const plans = await admin.get('/api/v1/admin/plans');
