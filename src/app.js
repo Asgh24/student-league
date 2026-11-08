@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import compression from 'compression';
 import helmet from 'helmet';
 import { config } from './config.js';
 import { createApiRouter } from './routes/index.js';
@@ -68,9 +69,12 @@ export function createApp({ db, version = '1.0.0', sessionStore = createSessionS
     }),
   );
 
+  // Compress text responses (HTML, JS, CSS, JSON). This runs before the static
+  // handler and the API so both the SPA bundle and JSON payloads are smaller.
+  app.use(compression());
+
   app.use(express.json({ limit: config.limits.bodyLimit }));
   app.use(express.urlencoded({ extended: false, limit: config.limits.bodyLimit }));
-
   // Static assets are served before the session middleware so that asset
   // requests never create a session row.
   app.use(

@@ -165,6 +165,17 @@ describe('static asset caching', () => {
   it('disables long-lived caching outside production', () => {
     expect(staticCacheControl('/srv/app/public/vendor/chart.umd.js', false)).toBe('no-cache');
   });
+
+  it('compresses text assets when the client accepts gzip', async () => {
+    const client = createClient(ctx.db);
+    const res = await request(client.app)
+      .get('/css/components.css')
+      .set('Accept-Encoding', 'gzip');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-encoding']).toBe('gzip');
+    // Supertest decompresses the body, so this proves the CSS really arrived.
+    expect(res.text.length).toBeGreaterThan(1000);
+  });
 });
 
 describe('proxy trust', () => {
