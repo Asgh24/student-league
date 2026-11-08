@@ -354,7 +354,14 @@ export const schemas = {
   studentCredentials: z.object({
     username: z.preprocess(blankToUndefined, z.string().trim().min(3, 'نام کاربری حداقل ۳ نویسه').max(64).optional()),
     password: z.preprocess(blankToUndefined, z.string().min(6, 'گذرواژه حداقل ۶ نویسه').max(200).optional()),
-  }).refine((value) => value.username || value.password, { message: 'نام کاربری یا گذرواژه را وارد کنید' }),
+    useParentPhone: z.boolean().optional(),
+  })
+    .refine((value) => value.username || value.password || value.useParentPhone !== undefined, {
+      message: 'نام کاربری، گذرواژه یا تنظیم شماره والد را وارد کنید',
+    })
+    .refine((value) => !(value.useParentPhone === true && (value.username || value.password)), {
+      message: 'حالت خودکار شماره والد را نمی‌توان هم‌زمان با نام کاربری یا گذرواژه دستی ذخیره کرد',
+    }),
 
   columnCreate: z.object({
     name: z.string().trim().min(1, 'نام ستون الزامی است').max(40),

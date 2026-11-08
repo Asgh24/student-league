@@ -19,6 +19,7 @@ import {
 import { getColumns, requireLeague } from '../repositories/leagues.js';
 import { studentAttendance } from '../services/attendance.js';
 import { studentTeam } from '../services/teams.js';
+import { disableParentCredentials, syncCredentialsFromParent } from '../services/studentCredentials.js';
 
 export function createLeagueStudentsRouter({ db }) {
   const router = Router({ mergeParams: true });
@@ -85,6 +86,8 @@ export function createStudentsRouter({ db }) {
         leagueId: league.id,
         hasLogin: student.user_id !== null,
         username: req.user.assistant ? '' : (account?.username ?? ''),
+        parentPhone: student.parent_phone ?? '',
+        credentialsFromParent: Boolean(student.credentials_from_parent),
         total,
         rank,
         totalStudents,
@@ -119,7 +122,11 @@ export function createStudentsRouter({ db }) {
 
   router.post('/:id/password', ...owned, requireOwnerTeacher, validate({ body: schemas.studentPassword }), (req, res) => {
     if (!req.student.user_id) throw conflict('NO_LOGIN', 'برای این دانش‌آموز حساب کاربری ساخته نشده است');
-    updatePassword(db, req.student.user_id, req.body.password);
+    const run = db.transaction(() => {
+      updatePassword(db, req.student.user_id, req.body.password);
+      disableParentCredentials(db, req.student.id);
+    });
+    run();
     res.json({ ok: true });
   });
 
@@ -128,7 +135,23 @@ export function createStudentsRouter({ db }) {
    * A field left out keeps its current value; creating a login needs both.
    */
   router.put('/:id/credentials', ...owned, requireOwnerTeacher, validate({ body: schemas.studentCredentials }), (req, res) => {
-    const { username, password } = req.body;
+    const { username, password, useParentPhone } = req.body;
+    if (useParentPhone === true) {
+      return res.json({ ok: true, student: syncCredentialsFromParent(db, req.student.id) });
+    }
+    if (useParentPhone === false && !username && !password) {
+      disableParentCredentials(db, req.student.id);
+      const account = req.student.user_id ? findById(db, req.student.user_id) : null;
+      return res.json({
+        ok: true,
+        student: {
+          id: req.student.id,
+          hasLogin: Boolean(account),
+          username: account?.username ?? '',
+          credentialsFromParent: false,
+        },
+      });
+    }
     const account = req.student.user_id ? findById(db, req.student.user_id) : null;
 
     if (!account) {
@@ -138,7 +161,7 @@ export function createStudentsRouter({ db }) {
       if (findByUsername(db, username)) throw conflict('USERNAME_TAKEN', 'این نام کاربری قبلاً استفاده شده است');
       const create = db.transaction(() => {
         const user = createUser(db, { username, password, role: 'student', displayName: req.student.name });
-        db.prepare('UPDATE students SET user_id = ? WHERE id = ?').run(user.id, req.student.id);
+        db.prepare('UPDATE students SET user_id = ?, credentials_from_parent = 0 WHERE id = ?').run(user.id, req.student.id);
         return user;
       });
       const user = create();
@@ -153,11 +176,17 @@ export function createStudentsRouter({ db }) {
     const run = db.transaction(() => {
       if (username && username !== account.username) updateUsername(db, account.id, username);
       if (password) updatePassword(db, account.id, password);
+      disableParentCredentials(db, req.student.id);
     });
     run();
     res.json({
       ok: true,
-      student: { id: req.student.id, hasLogin: true, username: username || account.username },
+      student: {
+        id: req.student.id,
+        hasLogin: true,
+        username: username || account.username,
+        credentialsFromParent: false,
+      },
     });
   });
 

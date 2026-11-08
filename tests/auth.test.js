@@ -121,19 +121,27 @@ describe('authentication', () => {
 });
 
 describe('password policy and session lifetime', () => {
-  it('does not let a student change their own password', async () => {
+  it('lets a student change their password and disables parent-phone synchronization', async () => {
+    await client.login('teacher-a', 'password-a1');
+    const studentId = fixture.studentsA[0].id;
+    await client.patch(`/api/v1/leagues/${fixture.leagueA.id}/contacts/${studentId}`, {
+      parentPhone: '09124445566',
+      studentPhone: '',
+    });
+    expect((await client.put(`/api/v1/students/${studentId}/credentials`, { useParentPhone: true })).status).toBe(200);
+
     const student = createClient(ctx.db);
-    await student.login('student-a', 'student-a1');
+    await student.login('09124445566', '09124445566');
     const res = await student.post('/api/v1/auth/password', {
-      currentPassword: 'student-a1',
+      currentPassword: '09124445566',
       newPassword: 'another-password',
     });
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe('FORBIDDEN');
-    expect(res.body.error.message).toContain('معلم');
+    expect(res.status).toBe(200);
+    expect(ctx.db.prepare('SELECT credentials_from_parent AS enabled FROM students WHERE id = ?').get(studentId).enabled).toBe(0);
 
     const fresh = createClient(ctx.db);
-    const login = await fresh.login('student-a', 'student-a1');
+    expect((await fresh.login('09124445566', '09124445566')).status).toBe(401);
+    const login = await fresh.login('09124445566', 'another-password');
     expect(login.status).toBe(200);
   });
 

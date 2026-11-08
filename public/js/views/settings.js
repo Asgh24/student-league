@@ -1,4 +1,4 @@
-/** Teacher password change and the Persian digit preference (students). */
+/** Password change and the Persian digit preference (students). */
 
 import { api } from '../api.js';
 import { el } from '../dom.js';
@@ -38,13 +38,6 @@ function passwordCard() {
   ]);
 }
 
-/** Students cannot change their own password; the teacher does it for them. */
-function studentPasswordNote() {
-  return card({ title: 'گذرواژه', icon: '🔒' }, [
-    el('p.small', { text: 'تغییر گذرواژه فقط توسط معلم انجام می‌شود. اگر گذرواژهٔ خود را فراموش کرده‌اید، از معلم بخواهید آن را تغییر دهد.' }),
-  ]);
-}
-
 function digitsCard() {
   const toggle = el('input', { id: 'digits-toggle', type: 'checkbox' });
   toggle.checked = state.persianDigits;
@@ -69,7 +62,7 @@ function digitsCard() {
 
 export function renderSettings() {
   setTopbarTitle('تنظیمات');
-  const cards = [isStudent() ? studentPasswordNote() : passwordCard()];
+  const cards = [passwordCard()];
   if (isStudent()) cards.push(digitsCard());
   if (state.user) {
     cards.push(card({ title: 'حساب کاربری', icon: '🪪' }, [

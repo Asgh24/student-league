@@ -359,4 +359,99 @@ describe('teacher-managed student credentials', () => {
     });
     expect(res.status).toBe(403);
   });
+
+  it('sets both credentials from the parent phone without a polling loop', async () => {
+    const id = fixture.studentsA[0].id;
+    await teacher.patch(`/api/v1/leagues/${fixture.leagueA.id}/contacts/${id}`, {
+      parentPhone: '۰۹۱۲۳۴۵۶۷۸۹',
+      studentPhone: '',
+    });
+
+    const enabled = await teacher.put(`/api/v1/students/${id}/credentials`, { useParentPhone: true });
+    expect(enabled.status).toBe(200);
+    expect(enabled.body.student).toMatchObject({
+      username: '09123456789',
+      credentialsFromParent: true,
+    });
+    expect(ctx.db.prepare('SELECT credentials_from_parent AS enabled FROM students WHERE id = ?').get(id).enabled).toBe(1);
+
+    expect((await createClient(ctx.db).login('student-a', 'student-a1')).status).toBe(401);
+    expect((await createClient(ctx.db).login('09123456789', '09123456789')).status).toBe(200);
+  });
+
+  it('rejects parent credentials when no parent phone is stored', async () => {
+    const id = fixture.studentsA[1].id;
+    const res = await teacher.put(`/api/v1/students/${id}/credentials`, { useParentPhone: true });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('PARENT_PHONE_REQUIRED');
+    expect(ctx.db.prepare('SELECT user_id FROM students WHERE id = ?').get(id).user_id).toBeNull();
+  });
+
+  it('creates a missing student account directly from the parent phone', async () => {
+    const id = fixture.studentsA[1].id;
+    await teacher.patch(`/api/v1/leagues/${fixture.leagueA.id}/contacts/${id}`, {
+      parentPhone: '09123334455',
+      studentPhone: '',
+    });
+
+    const created = await teacher.put(`/api/v1/students/${id}/credentials`, { useParentPhone: true });
+    expect(created.status).toBe(200);
+    expect(created.body.student).toMatchObject({
+      hasLogin: true,
+      username: '09123334455',
+      credentialsFromParent: true,
+    });
+    expect((await createClient(ctx.db).login('09123334455', '09123334455')).status).toBe(200);
+  });
+
+  it('resynchronizes only when the saved parent phone changes', async () => {
+    const id = fixture.studentsA[0].id;
+    await teacher.patch(`/api/v1/leagues/${fixture.leagueA.id}/contacts/${id}`, {
+      parentPhone: '09120000001',
+      studentPhone: '',
+    });
+    await teacher.put(`/api/v1/students/${id}/credentials`, { useParentPhone: true });
+
+    const changed = await teacher.patch(`/api/v1/leagues/${fixture.leagueA.id}/contacts/${id}`, {
+      parentPhone: '09120000002',
+      studentPhone: '',
+    });
+    expect(changed.status).toBe(200);
+    expect(changed.body.student.credentialsFromParent).toBe(true);
+    expect((await createClient(ctx.db).login('09120000001', '09120000001')).status).toBe(401);
+    expect((await createClient(ctx.db).login('09120000002', '09120000002')).status).toBe(200);
+  });
+
+  it('does not allow removing the parent phone while automatic mode is active', async () => {
+    const id = fixture.studentsA[0].id;
+    await teacher.patch(`/api/v1/leagues/${fixture.leagueA.id}/contacts/${id}`, {
+      parentPhone: '09120000004',
+      studentPhone: '',
+    });
+    await teacher.put(`/api/v1/students/${id}/credentials`, { useParentPhone: true });
+
+    const cleared = await teacher.patch(`/api/v1/leagues/${fixture.leagueA.id}/contacts/${id}`, {
+      parentPhone: '',
+      studentPhone: '',
+    });
+    expect(cleared.status).toBe(400);
+    expect(cleared.body.error.code).toBe('PARENT_PHONE_REQUIRED');
+    const stored = ctx.db.prepare('SELECT parent_phone AS parentPhone, credentials_from_parent AS enabled FROM students WHERE id = ?').get(id);
+    expect(stored).toEqual({ parentPhone: '09120000004', enabled: 1 });
+  });
+
+  it('turns automatic mode off after a manual credential change', async () => {
+    const id = fixture.studentsA[0].id;
+    await teacher.patch(`/api/v1/leagues/${fixture.leagueA.id}/contacts/${id}`, {
+      parentPhone: '09120000003',
+      studentPhone: '',
+    });
+    await teacher.put(`/api/v1/students/${id}/credentials`, { useParentPhone: true });
+
+    const changed = await teacher.put(`/api/v1/students/${id}/credentials`, { password: 'manual-pass-1' });
+    expect(changed.status).toBe(200);
+    expect(changed.body.student.credentialsFromParent).toBe(false);
+    expect(ctx.db.prepare('SELECT credentials_from_parent AS enabled FROM students WHERE id = ?').get(id).enabled).toBe(0);
+    expect((await createClient(ctx.db).login('09120000003', 'manual-pass-1')).status).toBe(200);
+  });
 });

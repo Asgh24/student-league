@@ -171,11 +171,6 @@ export function createAuthRouter({ db }) {
     requireAuth,
     validate({ body: schemas.changePassword }),
     asyncHandler(async (req, res) => {
-      // Students never manage their own password. Teachers and the site admin do.
-      if (req.user.role === 'student') {
-        throw forbidden('تغییر گذرواژه فقط توسط معلم انجام می‌شود');
-      }
-
       if (req.user.role === 'admin') {
         const admin = findAdminById(db, req.user.id);
         if (!admin || !adminPasswordMatches(admin, req.body.currentPassword)) {
@@ -189,7 +184,15 @@ export function createAuthRouter({ db }) {
       if (!row || !verifyPassword(req.body.currentPassword, row.password_hash)) {
         throw new AppError(400, 'WRONG_PASSWORD', 'گذرواژه فعلی نادرست است');
       }
-      updatePassword(db, req.user.id, req.body.newPassword);
+      const change = db.transaction(() => {
+        updatePassword(db, req.user.id, req.body.newPassword);
+        // A student's explicit choice always wins. Turning auto mode off here
+        // prevents later requests from resetting the password in a loop.
+        if (req.user.role === 'student') {
+          db.prepare('UPDATE students SET credentials_from_parent = 0 WHERE user_id = ?').run(req.user.id);
+        }
+      });
+      change();
       return res.json({ ok: true });
     }),
   );

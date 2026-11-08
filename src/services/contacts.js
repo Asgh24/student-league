@@ -3,6 +3,7 @@
 import { badRequest, notFound } from '../lib/errors.js';
 import { normalizeMobile } from '../lib/phone.js';
 import { normalizeHttpUrl } from '../lib/url.js';
+import { syncCredentialsFromParent } from './studentCredentials.js';
 
 export const PHONE_FIELDS = ['parentPhone', 'studentPhone'];
 
@@ -10,7 +11,8 @@ export const PHONE_FIELDS = ['parentPhone', 'studentPhone'];
 export function contactsList(db, leagueId) {
   const rows = db.prepare(`
     SELECT id, name, parent_phone AS parentPhone, student_phone AS studentPhone,
-           shad_pv_url AS shadPvUrl, (user_id IS NOT NULL) AS hasLogin
+           shad_pv_url AS shadPvUrl, (user_id IS NOT NULL) AS hasLogin,
+           credentials_from_parent AS credentialsFromParent
     FROM students
     WHERE league_id = ?
     ORDER BY id ASC
@@ -22,6 +24,7 @@ export function contactsList(db, leagueId) {
     studentPhone: row.studentPhone ?? '',
     shadPvUrl: row.shadPvUrl ?? '',
     hasLogin: Boolean(row.hasLogin),
+    credentialsFromParent: Boolean(row.credentialsFromParent),
     hasParentPhone: normalizeMobile(row.parentPhone) !== '',
     hasShadPvUrl: normalizeHttpUrl(row.shadPvUrl) !== '',
   }));
@@ -33,7 +36,11 @@ export function contactsList(db, leagueId) {
  * a non-empty Shad link must be an absolute http(s) URL.
  */
 export function saveContact(db, leagueId, studentId, input) {
-  const student = db.prepare('SELECT id, name, shad_pv_url AS shadPvUrl FROM students WHERE id = ? AND league_id = ?')
+  const student = db.prepare(`
+    SELECT id, name, shad_pv_url AS shadPvUrl,
+           credentials_from_parent AS credentialsFromParent
+    FROM students WHERE id = ? AND league_id = ?
+  `)
     .get(studentId, leagueId);
   if (!student) throw notFound('دانش‌آموز در این لیگ یافت نشد');
 
@@ -61,10 +68,18 @@ export function saveContact(db, leagueId, studentId, input) {
     }
   }
 
-  db.prepare(`
-    UPDATE students SET parent_phone = ?, student_phone = ?, shad_pv_url = ?
-    WHERE id = ? AND league_id = ?
-  `).run(next.parentPhone, next.studentPhone, next.shadPvUrl, studentId, leagueId);
+  const save = db.transaction(() => {
+    db.prepare(`
+      UPDATE students SET parent_phone = ?, student_phone = ?, shad_pv_url = ?
+      WHERE id = ? AND league_id = ?
+    `).run(next.parentPhone, next.studentPhone, next.shadPvUrl, studentId, leagueId);
+    // This is the only automatic re-sync point. There is no timer or password
+    // comparison loop: credentials follow the phone only when the contact is saved.
+    if (student.credentialsFromParent) {
+      syncCredentialsFromParent(db, student.id, next.parentPhone);
+    }
+  });
+  save();
 
   return contactsList(db, leagueId).find((row) => row.id === student.id);
 }

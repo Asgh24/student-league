@@ -190,21 +190,56 @@ export async function recordWithReason(row, columns, leagueId, reload) {
  * no login yet, both are required by the API to create one.
  */
 export async function manageStudentCredentials(row, reload = () => {}) {
+  const parentPhone = String(row.parentPhone ?? '').trim();
   const values = await formDialog({
     title: `حساب کاربری — ${row.name}`,
     description: row.hasLogin
-      ? 'نام کاربری و گذرواژه را می‌توانید عوض کنید. هر فیلد را خالی بگذارید، همان مقدار قبلی می‌ماند.'
-      : 'این دانش‌آموز هنوز حساب کاربری ندارد. برای ساختن حساب، نام کاربری و گذرواژه را وارد کنید؛ این کار اختیاری است.',
+      ? 'می‌توانید حساب را دستی تغییر دهید یا آن را به شماره والد متصل کنید. تغییر دستی، حالت خودکار را خاموش می‌کند.'
+      : 'حساب را دستی بسازید یا اگر شماره والد ثبت شده است، ساخت خودکار را فعال کنید.',
     submitLabel: row.hasLogin ? 'ذخیره تغییرات' : 'ساخت حساب کاربری',
     fields: [
       { name: 'username', label: 'نام کاربری', type: 'text', value: row.username ?? '', placeholder: 'مثلاً ali.rezaei' },
       { name: 'password', label: 'گذرواژه', type: 'text', placeholder: row.hasLogin ? 'برای تغییر، گذرواژهٔ جدید' : 'حداقل ۶ نویسه' },
+      {
+        name: 'useParentPhone',
+        label: 'نام کاربری و گذرواژه از شماره والد تنظیم شود',
+        type: 'checkbox',
+        checked: Boolean(row.credentialsFromParent),
+        hint: parentPhone
+          ? `شماره والد: ${parentPhone} — در حالت فعال، هر دو مقدار برابر همین شماره هستند.`
+          : 'شماره والد ثبت نشده است؛ فعال‌سازی این گزینه خطا می‌دهد.',
+      },
     ],
   });
   if (!values) return;
+  const useParentPhone = values.useParentPhone === true;
+  if (useParentPhone) {
+    if (!parentPhone) {
+      notify.error('ابتدا شماره والد را در بخش «شماره‌ها» ثبت کنید');
+      return;
+    }
+    try {
+      await api.put(`/students/${row.id}/credentials`, { useParentPhone: true });
+      notify.ok('نام کاربری و گذرواژه از شماره والد تنظیم شد');
+      reload();
+    } catch (error) {
+      notify.error(errorMessage(error));
+    }
+    return;
+  }
   const username = values.username.trim();
   const password = values.password.trim();
   if (!username && !password) {
+    if (row.credentialsFromParent) {
+      try {
+        await api.put(`/students/${row.id}/credentials`, { useParentPhone: false });
+        notify.ok('اتصال حساب به شماره والد خاموش شد');
+        reload();
+      } catch (error) {
+        notify.error(errorMessage(error));
+      }
+      return;
+    }
     notify.error('نام کاربری یا گذرواژه را وارد کنید');
     return;
   }
@@ -242,6 +277,7 @@ export async function showProfile(row, { columns = [], leagueId = null, reload =
       ['حضور', student.recorded ? `${fa(student.attended)} از ${fa(student.recorded)} روز` : 'بدون ثبت'],
       ['تیم', student.team ? student.team.name : 'بدون تیم'],
       ['حساب کاربری', student.hasLogin ? 'دارد' : 'ندارد'],
+      ['ورود از شماره والد', student.credentialsFromParent ? 'فعال' : 'غیرفعال'],
     ];
     for (const [label, value] of rows) {
       info.appendChild(el('p', {}, [el('strong', { text: `${label}: ` }), el('span', { text: value })]));

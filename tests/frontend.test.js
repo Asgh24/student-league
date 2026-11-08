@@ -564,6 +564,8 @@ describe('student credentials in the profile drawer', () => {
       leagueId: 3,
       hasLogin: true,
       username: 'zahra',
+      parentPhone: '09123456789',
+      credentialsFromParent: false,
       total: 35,
       rank: 2,
       totalStudents: 20,
@@ -610,6 +612,35 @@ describe('student credentials in the profile drawer', () => {
       username: 'zahra.new',
       password: 'new-password-1',
     }));
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets the teacher enable credentials from the saved parent phone', async () => {
+    api.get.mockResolvedValue(profile);
+    api.put.mockResolvedValue({ ok: true, student: { id: 5, hasLogin: true, username: '09123456789', credentialsFromParent: true } });
+    const reload = vi.fn();
+    const node = createScoresTable({
+      leagueId: 3,
+      columns: [],
+      students: [{ id: 5, name: 'زهرا محمدی', rank: 2, total: 35, scores: {}, attended: 0, recorded: 0, championships: 0, title: { title: 'جنگجو' } }],
+      reload,
+    });
+    const host = el('div');
+    mount(host, [node]);
+
+    host.querySelector('[aria-label="پرونده دانش‌آموز"]').click();
+    await vi.waitFor(() => expect(document.querySelector('#modal-root').textContent).toContain('پرونده زهرا محمدی'));
+    [...document.querySelectorAll('#modal-root button')]
+      .find((button) => button.textContent.includes('نام کاربری و گذرواژه'))
+      .click();
+    await vi.waitFor(() => expect(document.querySelector('#modal-root #f-useParentPhone')).not.toBeNull());
+
+    document.querySelector('#modal-root #f-useParentPhone').checked = true;
+    [...document.querySelectorAll('#modal-root button')]
+      .find((button) => button.textContent.trim() === 'ذخیره تغییرات')
+      .click();
+
+    await vi.waitFor(() => expect(api.put).toHaveBeenCalledWith('/students/5/credentials', { useParentPhone: true }));
     expect(reload).toHaveBeenCalledTimes(1);
   });
 });
@@ -1939,11 +1970,11 @@ describe('password settings', () => {
     expect(document.querySelector('#view').textContent).toContain('گذرواژهٔ فارسی هم پذیرفته می‌شود');
   });
 
-  it('hides the password form from students and explains the teacher rule', () => {
+  it('lets students change their own password', () => {
     setUser({ id: 4, role: 'student', username: 'student-a', displayName: 'آرش آزمون', persianDigits: true });
     renderSettings();
-    expect(document.querySelector('#pw-current')).toBeNull();
-    expect(document.querySelector('#view').textContent).toContain('تغییر گذرواژه فقط توسط معلم انجام می‌شود');
+    expect(document.querySelector('#pw-current')).not.toBeNull();
+    expect(document.querySelector('#pw-new')).not.toBeNull();
   });
 });
 

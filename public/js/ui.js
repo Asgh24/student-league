@@ -188,6 +188,13 @@ export function formDialog({ title, fields = [], submitLabel = 'ذخیره', can
           allowEmpty: field.allowEmpty === true,
           persianDigits: field.persianDigits !== false,
         });
+      } else if (field.type === 'checkbox') {
+        input = el('input', {
+          id,
+          name: field.name,
+          type: 'checkbox',
+          checked: Boolean(field.checked ?? field.value),
+        });
       } else {
         input = el('input', {
           id,
@@ -228,7 +235,7 @@ export function formDialog({ title, fields = [], submitLabel = 'ذخیره', can
             const values = {};
             let valid = true;
             for (const [name, input] of inputs) {
-              values[name] = input.value;
+              values[name] = input.type === 'checkbox' ? input.checked : input.value;
               if (input.required && !String(input.value).trim()) {
                 valid = false;
                 input.style.borderColor = '#dc2626';
