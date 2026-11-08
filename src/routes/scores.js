@@ -3,7 +3,7 @@ import { asyncHandler } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
 import { getColumns, readSettings } from '../repositories/leagues.js';
 import { requireTeacher, loadOwnedLeague, requirePermission } from '../middleware/auth.js';
-import { commitScoreChanges, recordScoreChange, scoresMatrix, studentTotal } from '../services/scoring.js';
+import { commitManyScoreChanges, commitScoreChanges, recordScoreChange, scoresMatrix, studentTotal } from '../services/scoring.js';
 
 export function createScoresRouter({ db }) {
   const router = Router({ mergeParams: true });
@@ -31,6 +31,16 @@ export function createScoresRouter({ db }) {
     });
     const row = scoresMatrix(db, req.league.id).find((item) => item.id === result.studentId);
     res.json({ ...result, student: row ?? null });
+  }));
+
+  /** Saves every staged row of the league table in one atomic request. */
+  router.post('/commit-bulk', validate({ body: schemas.scoreCommitBulk }), asyncHandler(async (req, res) => {
+    res.json(commitManyScoreChanges(db, {
+      leagueId: req.league.id,
+      entries: req.body.entries,
+      reason: req.body.reason ?? '',
+      actor: req.user,
+    }));
   }));
 
   /** Records a single change with a free-text reason (teacher note). */

@@ -122,6 +122,27 @@ export function commitScoreChanges(db, { leagueId, studentId, changes, reason = 
   return run();
 }
 
+/**
+ * Commits several students in one transaction. The whole batch is all-or-
+ * nothing, so a failed row never leaves the league half-saved.
+ */
+export function commitManyScoreChanges(db, { leagueId, entries, reason = '', actor = null }) {
+  const run = db.transaction(() => {
+    const results = entries.map((entry) => commitScoreChanges(db, {
+      leagueId,
+      studentId: entry.studentId,
+      changes: entry.changes,
+      reason,
+      actor,
+    }));
+    return {
+      results,
+      applied: results.reduce((sum, result) => sum + result.applied, 0),
+    };
+  });
+  return run();
+}
+
 export function recordScoreChange(db, { leagueId, studentId, columnId, delta, reason = '', actor = null }) {
   const run = db.transaction(() => {
     const student = requireStudent(db, leagueId, studentId);

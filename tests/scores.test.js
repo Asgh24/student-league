@@ -37,8 +37,37 @@ describe('score commit transaction', () => {
     expect(scores.map((s) => s.value).sort((a, b) => a - b)).toEqual([-10, 25, 50]);
   });
 
-  it('writes one history row per applied delta with the resulting total', async () => {
-    const columnId = fixture.columnsA[0].id;
+  it('commits several students in one bulk request', async () => {
+    const [maths] = fixture.columnsA;
+    const res = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/scores/commit-bulk`, {
+      entries: [
+        { studentId: fixture.studentsA[0].id, changes: [{ columnId: maths.id, delta: 10 }] },
+        { studentId: fixture.studentsA[1].id, changes: [{ columnId: maths.id, delta: 25 }] },
+      ],
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.applied).toBe(2);
+    expect(res.body.results).toHaveLength(2);
+    expect(res.body.results.map((row) => row.total).sort((a, b) => a - b)).toEqual([10, 25]);
+
+    const totals = ctx.db.prepare('SELECT student_id AS studentId, value FROM scores ORDER BY student_id').all();
+    expect(totals).toHaveLength(2);
+  });
+
+  it('rolls back every student when one bulk row is invalid', async () => {
+    const [maths] = fixture.columnsA;
+    const res = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/scores/commit-bulk`, {
+      entries: [
+        { studentId: fixture.studentsA[0].id, changes: [{ columnId: maths.id, delta: 10 }] },
+        { studentId: fixture.studentsB[0].id, changes: [{ columnId: maths.id, delta: 25 }] },
+      ],
+    });
+    expect(res.status).toBe(404);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM scores').get().n).toBe(0);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM score_history').get().n).toBe(0);
+  });
+
+  it('writes one history row per applied delta with the resulting total', async () => {    const columnId = fixture.columnsA[0].id;
     await client.post(`/api/v1/leagues/${fixture.leagueA.id}/scores/commit`, {
       studentId: fixture.studentsA[0].id,
       changes: [{ columnId, delta: 25 }, { columnId, delta: 25 }],

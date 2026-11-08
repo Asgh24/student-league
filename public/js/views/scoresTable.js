@@ -31,10 +31,18 @@ export function createScoresTable({ leagueId, columns, students, reload }) {
   const footer = el('div.row', { style: { marginTop: '10px' } });
   const pendingInfo = el('span.small.muted');
   const clearButton = button('لغو تغییرات', { kind: 'ghost', icon: '↩️', onClick: () => { staged.clear(); paint(); } });
+  const commitAllButton = button('ثبت همه تغییرات', { kind: 'primary', icon: '✅', onClick: () => commitAll() });
 
   const stagedFor = (studentId) => staged.get(studentId) ?? new Map();
   const stagedSum = (studentId) => [...stagedFor(studentId).values()].reduce((acc, value) => acc + value, 0);
   const hasPending = () => [...staged.values()].some((entry) => entry.size > 0);
+  const stagedEntries = () => [...staged.entries()]
+    .map(([studentId, changes]) => ({
+      studentId,
+      changes: [...changes.entries()].map(([columnId, delta]) => ({ columnId, delta })),
+    }))
+    .filter((entry) => entry.changes.length > 0);
+  let saving = false;
 
   function stage(studentId, columnId, delta) {
     const map = new Map(stagedFor(studentId));
@@ -46,16 +54,57 @@ export function createScoresTable({ leagueId, columns, students, reload }) {
     paint();
   }
 
+  /**
+   * Updates the local row from the server response so a single-row save does
+   * not wipe the changes staged in other rows (the old code reloaded the whole
+   * table immediately and lost them).
+   */
+  function applyCommittedRow(studentId, fresh, changes) {
+    const target = students.find((student) => student.id === studentId);
+    if (!target) return;
+    if (fresh) {
+      Object.assign(target, fresh);
+      return;
+    }
+    target.scores = { ...(target.scores ?? {}) };
+    for (const change of changes) {
+      target.scores[change.columnId] = Number(target.scores[change.columnId] ?? 0) + change.delta;
+    }
+    target.total = Number(target.total ?? 0) + changes.reduce((sum, change) => sum + change.delta, 0);
+  }
+
   async function commitRow(row) {
     const changes = [...stagedFor(row.id).entries()].map(([columnId, delta]) => ({ columnId, delta }));
-    if (changes.length === 0) return;
+    if (changes.length === 0 || saving) return;
     try {
       const result = await api.post(`/leagues/${leagueId}/scores/commit`, { studentId: row.id, changes, reason: '' });
       staged.delete(row.id);
+      applyCommittedRow(row.id, result.student, changes);
       notify.ok(`${fa(result.applied)} تغییر برای «${row.name}» ثبت شد`);
-      reload();
+      // Keep unsaved rows on screen; reload only when this was the last one.
+      if (hasPending()) paint();
+      else reload();
     } catch (error) {
       notify.error(errorMessage(error));
+    }
+  }
+
+  /** Saves every staged row in one atomic request. */
+  async function commitAll() {
+    const entries = stagedEntries();
+    if (entries.length === 0 || saving) return;
+    saving = true;
+    paint();
+    try {
+      const result = await api.post(`/leagues/${leagueId}/scores/commit-bulk`, { entries });
+      staged.clear();
+      saving = false;
+      notify.ok(`${fa(result.applied)} تغییر برای ${fa(entries.length)} دانش‌آموز ثبت شد`);
+      reload();
+    } catch (error) {
+      saving = false;
+      notify.error(errorMessage(error));
+      paint();
     }
   }
 
@@ -166,12 +215,16 @@ export function createScoresTable({ leagueId, columns, students, reload }) {
       ]));
     }
     for (const row of rows) tbody.appendChild(rowNode(row));
-    pendingInfo.textContent = hasPending() ? 'تغییرات ثبت‌نشده دارید؛ هر ردیف را با ✓ ثبت کنید.' : '';
-    clearButton.disabled = !hasPending();
+    pendingInfo.textContent = saving
+      ? 'در حال ثبت تغییرات…'
+      : hasPending() ? 'تغییرات ثبت‌نشده دارید؛ با «ثبت همه» یک‌جا ذخیره کنید.' : '';
+    clearButton.disabled = saving || !hasPending();
+    commitAllButton.disabled = saving || !hasPending();
     footer.replaceChildren(
       el('span.small.muted', { text: `نمایش ${fa(rows.length)} از ${fa(students.length)} دانش‌آموز` }),
       el('span.spacer'),
       pendingInfo,
+      commitAllButton,
       clearButton,
     );
   }

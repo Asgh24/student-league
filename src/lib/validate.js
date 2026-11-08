@@ -380,6 +380,18 @@ export const schemas = {
     reason: z.string().trim().max(200).optional(),
   }),
 
+  /** Several students saved with one submit from the league table. */
+  scoreCommitBulk: z.object({
+    entries: z.array(z.object({
+      studentId: z.coerce.number().int().positive(),
+      changes: z.array(z.object({
+        columnId: z.coerce.number().int().positive(),
+        delta: z.coerce.number().int().min(-100000).max(100000),
+      })).min(1, 'حداقل یک تغییر لازم است').max(64),
+    })).min(1, 'حداقل یک ردیف لازم است').max(200),
+    reason: z.string().trim().max(200).optional(),
+  }),
+
   scoreRecord: z.object({
     studentId: z.coerce.number().int().positive(),
     columnId: z.coerce.number().int().positive(),

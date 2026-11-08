@@ -402,6 +402,64 @@ describe('staged score editing', () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
+  it('saves several staged rows with one bulk request', async () => {
+    api.post.mockResolvedValue({ applied: 2, results: [] });
+    const columns = [{ id: 1, name: 'ریاضی', step: 25 }];
+    const students = [
+      { id: 5, name: 'زهرا محمدی', rank: 1, total: 0, scores: {}, attended: 0, recorded: 0, championships: 0, title: null },
+      { id: 6, name: 'علی رضایی', rank: 2, total: 0, scores: {}, attended: 0, recorded: 0, championships: 0, title: null },
+    ];
+    const reload = vi.fn();
+
+    const node = createScoresTable({ leagueId: 3, columns, students, reload });
+    const host = el('div');
+    mount(host, [node]);
+
+    host.querySelectorAll('[aria-label="افزایش ریاضی"]')[0].click();
+    host.querySelectorAll('[aria-label="افزایش ریاضی"]')[1].click();
+
+    const bulk = [...host.querySelectorAll('button')].find((button) => button.textContent.includes('ثبت همه تغییرات'));
+    expect(bulk.disabled).toBe(false);
+    bulk.click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    const [url, body] = api.post.mock.calls[0];
+    expect(url).toBe('/leagues/3/scores/commit-bulk');
+    expect(body.entries).toEqual(expect.arrayContaining([
+      { studentId: 5, changes: [{ columnId: 1, delta: 25 }] },
+      { studentId: 6, changes: [{ columnId: 1, delta: 25 }] },
+    ]));
+    expect(body.entries).toHaveLength(2);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps other rows staged when only one row is committed', async () => {
+    api.post.mockResolvedValue({
+      studentId: 5,
+      total: 25,
+      applied: 1,
+      student: { id: 5, name: 'زهرا محمدی', rank: 1, total: 25, scores: { 1: 25 }, attended: 0, recorded: 0, championships: 0, title: null },
+    });
+    const columns = [{ id: 1, name: 'ریاضی', step: 25 }];
+    const students = [
+      { id: 5, name: 'زهرا محمدی', rank: 1, total: 0, scores: {}, attended: 0, recorded: 0, championships: 0, title: null },
+      { id: 6, name: 'علی رضایی', rank: 2, total: 0, scores: {}, attended: 0, recorded: 0, championships: 0, title: null },
+    ];
+    const reload = vi.fn();
+
+    const node = createScoresTable({ leagueId: 3, columns, students, reload });
+    const host = el('div');
+    mount(host, [node]);
+
+    host.querySelectorAll('[aria-label="افزایش ریاضی"]')[0].click();
+    host.querySelectorAll('[aria-label="افزایش ریاضی"]')[1].click();
+    host.querySelectorAll('[aria-label="ثبت تغییرات این ردیف"]')[0].click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(host.querySelectorAll('.score-value.is-staged')).toHaveLength(1));
+    expect(reload).not.toHaveBeenCalled();
+  });
+
   it('keeps rows narrow: two actions and the pinned column classes', () => {
     const columns = [
       { id: 1, name: 'ریاضی', step: 25 },
