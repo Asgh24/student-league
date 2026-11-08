@@ -135,7 +135,7 @@ function countdownCard(leagueId, timer, reload) {
   ]);
 }
 
-function stopwatchCard() {
+export function stopwatchCard() {
   const display = el('div', {
     style: { fontSize: '2rem', fontWeight: '800', textAlign: 'center', fontVariantNumeric: 'tabular-nums' },
     text: formatDuration(0),
@@ -151,11 +151,25 @@ function stopwatchCard() {
     display.textContent = formatDuration(elapsed + (running ? Date.now() - startedAt : 0));
   }
 
+  /**
+   * The page is replaced on navigation, so the interval must stop as soon as
+   * the display leaves the document; otherwise it keeps waking every 100 ms
+   * forever and writes into a detached node.
+   */
+  function tick() {
+    if (!display.isConnected) {
+      if (handle) clearInterval(handle);
+      handle = null;
+      return;
+    }
+    paint();
+  }
+
   function start() {
     if (running) return;
     running = true;
     startedAt = Date.now();
-    handle = setInterval(paint, 47);
+    handle = setInterval(tick, 100);
     paint();
   }
 

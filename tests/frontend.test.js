@@ -63,6 +63,7 @@ const { renderReports } = await import('../public/js/views/reports.js');
 const { renderReportCards } = await import('../public/js/views/reportCards.js');
 const { renderFun } = await import('../public/js/views/fun.js');
 const { renderSettings } = await import('../public/js/views/settings.js');
+const { stopwatchCard } = await import('../public/js/views/timer.js');
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const shellHtml = fs.readFileSync(path.join(rootDir, 'public', 'index.html'), 'utf8');
@@ -2093,5 +2094,31 @@ describe('modal dialogs', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(document.querySelector('#modal-root .modal')).toBeNull();
     expect(document.activeElement?.textContent).toBe('باز کن');
+  });
+});
+
+describe('stopwatch timer', () => {
+  it('stops its interval once the display leaves the document', () => {
+    vi.useFakeTimers();
+    try {
+      const node = stopwatchCard();
+      const host = el('div');
+      mount(host, [node]);
+      document.body.appendChild(host);
+
+      const display = node.querySelector('[aria-live="off"]');
+      const start = [...node.querySelectorAll('button')].find((button) => button.textContent.includes('شروع'));
+      start.click();
+
+      expect(vi.getTimerCount()).toBe(1);
+      vi.advanceTimersByTime(300);
+      expect(display.textContent).not.toBe('');
+
+      host.remove();
+      vi.advanceTimersByTime(300);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
