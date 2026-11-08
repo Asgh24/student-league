@@ -3,6 +3,7 @@
 import { api } from '../api.js';
 import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
+import { startVisiblePolling } from '../polling.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { emptyState } from '../ui.js';
@@ -19,7 +20,7 @@ export async function renderLiveBoard({ params }) {
 
   let mode = 'students';
   let source = null;
-  let poller = null;
+  let stopPoller = null;
 
   async function fetchOnce() {
     const payload = await api.get(`/leagues/${leagueId}/live`);
@@ -28,9 +29,9 @@ export async function renderLiveBoard({ params }) {
   }
 
   function stopPolling() {
-    if (poller) {
-      clearInterval(poller);
-      poller = null;
+    if (stopPoller) {
+      stopPoller();
+      stopPoller = null;
     }
   }
 
@@ -119,18 +120,14 @@ export async function renderLiveBoard({ params }) {
 
   function startPolling() {
     stopPolling();
-    poller = setInterval(async () => {
-      if (!body.isConnected) {
-        stopPolling();
-        return;
-      }
-      try {
+    stopPoller = startVisiblePolling({
+      intervalMs: POLL_MS,
+      isActive: () => body.isConnected,
+      poll: async () => {
         await fetchOnce();
         if (source) paint(source);
-      } catch {
-        /* transient network errors keep the last good board */
-      }
-    }, POLL_MS);
+      },
+    });
   }
 
   try {

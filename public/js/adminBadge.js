@@ -2,6 +2,7 @@
 
 import { api } from './api.js';
 import { number } from './format.js';
+import { startVisiblePolling } from './polling.js';
 import { isAdmin, setAdminPendingPayments, state } from './store.js';
 
 let inFlight = null;
@@ -44,7 +45,8 @@ export function refreshAdminPendingBadge() {
 /** Poll while an admin session is open so new receipts appear without a refresh. */
 export function startAdminBadgePolling(intervalMs = 30_000) {
   if (timer || typeof window === 'undefined') return;
-  timer = window.setInterval(() => {
-    if (isAdmin()) void refreshAdminPendingBadge();
-  }, intervalMs);
+  timer = startVisiblePolling({
+    intervalMs,
+    poll: () => isAdmin() ? refreshAdminPendingBadge() : undefined,
+  });
 }

@@ -3,6 +3,7 @@
 import { api } from '../api.js';
 import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
+import { startVisiblePolling } from '../polling.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { emptyState } from '../ui.js';
@@ -22,14 +23,6 @@ export async function renderRepresentativeBoard({ params }) {
   let state = null;
   let leagueName = '';
   let lastShownId = null;
-  let timer = null;
-
-  function stopPolling() {
-    if (timer) {
-      clearInterval(timer);
-      timer = null;
-    }
-  }
 
   function cyclePicks() {
     return (state.history ?? [])
@@ -131,18 +124,14 @@ export async function renderRepresentativeBoard({ params }) {
 
   await load();
   if (state) {
-    timer = setInterval(async () => {
-      if (!body.isConnected) {
-        stopPolling();
-        return;
-      }
-      try {
+    startVisiblePolling({
+      intervalMs: POLL_MS,
+      isActive: () => body.isConnected,
+      poll: async () => {
         state = await api.get(BASE(leagueId));
         paint();
-      } catch {
-        /* keep the last good board during a transient network error */
-      }
-    }, POLL_MS);
+      },
+    });
   }
   return undefined;
 }

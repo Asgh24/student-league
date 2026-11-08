@@ -3,12 +3,13 @@
 import { api } from '../../api.js';
 import { el } from '../../dom.js';
 import { errorMessage } from '../../format.js';
+import { startVisiblePolling } from '../../polling.js';
 import { renderView, setTopbarTitle } from '../../shell.js';
 import { emptyState, notify } from '../../ui.js';
 import { button, card, chip, fa, faDate, faDateTime, pageHead } from '../common.js';
 import { adminEmpty, adminTabs } from './common.js';
 
-let inboxTimer = null;
+let stopInboxPolling = null;
 
 const STATUS_LABELS = { open: 'باز', answered: 'پاسخ داده شد', closed: 'بسته' };
 const STATUS_KINDS = { open: 'amber', answered: 'ok', closed: 'muted' };
@@ -53,9 +54,9 @@ function threadItem(thread, active, onOpen) {
 }
 
 export async function renderAdminSupport() {
-  if (inboxTimer) {
-    clearInterval(inboxTimer);
-    inboxTimer = null;
+  if (stopInboxPolling) {
+    stopInboxPolling();
+    stopInboxPolling = null;
   }
   setTopbarTitle('پشتیبانی');
 
@@ -329,15 +330,11 @@ export async function renderAdminSupport() {
 
   const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent ?? '');
   if (!isJsdom) {
-    inboxTimer = setInterval(() => {
-      if (!layout.isConnected) {
-        clearInterval(inboxTimer);
-        inboxTimer = null;
-        return;
-      }
-      if (!activeId) void refreshThreads();
-      else void refreshThreads(false);
-    }, 10000);
+    stopInboxPolling = startVisiblePolling({
+      intervalMs: 10000,
+      isActive: () => layout.isConnected,
+      poll: () => activeId ? refreshThreads(false) : refreshThreads(),
+    });
   }
   return undefined;
 }

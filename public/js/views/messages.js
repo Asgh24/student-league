@@ -3,11 +3,12 @@
 import { api } from '../api.js';
 import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
+import { startVisiblePolling } from '../polling.js';
 import { renderView, setTopbarTitle } from '../shell.js';
 import { emptyState, formDialog, notify } from '../ui.js';
 import { button, fa, faDate, faDateTime, pageHead } from './common.js';
 
-let inboxTimer = null;
+let stopInboxPolling = null;
 
 function initials(name) {
   const text = String(name ?? '').trim();
@@ -48,9 +49,9 @@ export async function renderStudentMessages() {
 }
 
 async function renderInbox(role) {
-  if (inboxTimer) {
-    clearInterval(inboxTimer);
-    inboxTimer = null;
+  if (stopInboxPolling) {
+    stopInboxPolling();
+    stopInboxPolling = null;
   }
   setTopbarTitle('پیام‌ها');
 
@@ -304,15 +305,11 @@ async function renderInbox(role) {
 
   const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent ?? '');
   if (!isJsdom) {
-    inboxTimer = setInterval(() => {
-      if (!layout.isConnected) {
-        clearInterval(inboxTimer);
-        inboxTimer = null;
-        return;
-      }
-      if (!activeId) void refreshThreads();
-      else void refreshThreads(false);
-    }, 10000);
+    stopInboxPolling = startVisiblePolling({
+      intervalMs: 10000,
+      isActive: () => layout.isConnected,
+      poll: () => activeId ? refreshThreads(false) : refreshThreads(),
+    });
   }
   return undefined;
 }
