@@ -10,7 +10,6 @@ export function createSessionStore(db) {
   const statements = {
     get: db.prepare('SELECT data, expires FROM sessions WHERE sid = ?'),
     set: db.prepare('INSERT INTO sessions (sid, expires, data) VALUES (?, ?, ?) ON CONFLICT (sid) DO UPDATE SET expires = excluded.expires, data = excluded.data'),
-    touch: db.prepare('UPDATE sessions SET expires = ? WHERE sid = ?'),
     destroy: db.prepare('DELETE FROM sessions WHERE sid = ?'),
     sweep: db.prepare('DELETE FROM sessions WHERE expires < ?'),
     count: db.prepare('SELECT COUNT(*) AS n FROM sessions'),
@@ -48,13 +47,11 @@ export function createSessionStore(db) {
       }
     }
 
-    touch(sid, sess, callback) {
-      try {
-        statements.touch.run(expiryOf(sess), sid);
-        return callback(null);
-      } catch (err) {
-        return callback(err);
-      }
+    touch(_sid, _sess, callback) {
+      // `rolling` is disabled, so the browser cookie is not extended on normal
+      // requests. Keep the SQLite expiry fixed as well and avoid one UPDATE —
+      // and its WAL write lock — for every authenticated API call.
+      return callback(null);
     }
 
     destroy(sid, callback) {

@@ -124,6 +124,18 @@ describe('health endpoints', () => {
 });
 
 describe('session store maintenance', () => {
+  it('does not write to SQLite for an unchanged authenticated session', async () => {
+    const client = createClient(ctx.db);
+    expect((await client.login('teacher-a', 'password-a1')).status).toBe(200);
+    const before = ctx.db.prepare('SELECT total_changes() AS n').get().n;
+
+    const res = await client.get('/api/v1/auth/me');
+
+    expect(res.status).toBe(200);
+    const after = ctx.db.prepare('SELECT total_changes() AS n').get().n;
+    expect(after).toBe(before);
+  });
+
   it('removes expired rows when the sweep runs', () => {
     const store = createSessionStore(ctx.db);
     const insert = ctx.db.prepare('INSERT INTO sessions (sid, expires, data) VALUES (?, ?, ?)');
