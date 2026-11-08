@@ -48,6 +48,7 @@ export async function renderFiles({ params }) {
     setLeaguePill({ name: league.league.name });
     const items = payload.items ?? [];
     const limits = payload.limits ?? {};
+    const retentionDays = Number(limits.retentionDays) || 7;
     const storage = payload.storage ?? {};
     const usedBytes = Number(storage.usedBytes) || 0;
     const limitBytes = Number(storage.limitBytes) || 70 * 1024 * 1024;
@@ -124,7 +125,7 @@ export async function renderFiles({ params }) {
         el('div', { style: { flex: '1' } }, [
           el('div.file-row__name', { text: item.originalName }),
           el('div.small.muted', {
-            text: `${bytes(item.size)} · ${faDateTime(item.createdAt)}${item.description ? ` · ${item.description}` : ''}`,
+            text: `${bytes(item.size)} · ${faDateTime(item.createdAt)}${item.description ? ` · ${item.description}` : ''}${item.expiresAt ? ` · حذف خودکار: ${faDateTime(item.expiresAt)}` : ''}`,
           }),
         ]),
         el('a.btn.btn--sm.btn--soft', { href: `/api/v1/files/${item.id}/download`, text: '⬇️ دریافت' }),
@@ -165,6 +166,10 @@ export async function renderFiles({ params }) {
           : null,
       ]),
       card({ title: 'ارسال فایل جدید', icon: '⬆️' }, [
+        el('div.demo-banner.demo-banner--warn', { role: 'status' }, [
+          el('strong', { text: `نگهداری موقت ${fa(retentionDays)} روزه` }),
+          el('p.small', { text: 'هر فایل هفت روز پس از ارسال، به‌صورت خودکار و دائمی از سایت و حافظهٔ هاست حذف می‌شود.' }),
+        ]),
         fileInput,
         dropZone,
         el('div.field', { style: { marginTop: '10px' } }, [el('label', { for: 'file-description', text: 'توضیح' }), description]),

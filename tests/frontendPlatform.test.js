@@ -369,7 +369,7 @@ describe('teacher file storage', () => {
       if (url.endsWith('/files')) {
         return {
           items: [],
-          limits: { maxBytes: 10 * 1024 * 1024, extensions: ['.pdf'] },
+          limits: { maxBytes: 10 * 1024 * 1024, extensions: ['.pdf'], retentionDays: 7 },
           storage: {
             usedBytes: 60 * 1024 * 1024,
             limitBytes: 70 * 1024 * 1024,
@@ -388,6 +388,8 @@ describe('teacher file storage', () => {
     expect(text).toContain('۱۰ مگابایت باقی‌مانده');
     expect(text).toContain('حداکثر حجم هر فایل');
     expect(text).toContain('پسوندهای مجاز: .pdf');
+    expect(text).toContain('نگهداری موقت ۷ روزه');
+    expect(text).toContain('از سایت و حافظهٔ هاست حذف می‌شود');
   });
 });
 

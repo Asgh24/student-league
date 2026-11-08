@@ -10,6 +10,7 @@ import { runAdminBootstrap, runBootstrap } from './src/bootstrap.js';
 import { APP_VERSION } from './src/version.js';
 import { createClientFor, isConfigured, pushBackup, applyStagedRestore, restoreOnBoot } from './src/services/githubBackup.js';
 import { createBackupScheduler } from './src/services/backupScheduler.js';
+import { startUploadSweep } from './src/services/storage.js';
 
 const logBackup = (message, fields) => logger.info(message, fields);
 
@@ -59,6 +60,9 @@ async function boot() {
   const sweepTimer = startSessionSweep(sessionStore, {
     onSweep: (removed) => logger.info('expired sessions removed', { removed }),
   });
+  const uploadSweepTimer = startUploadSweep(db, {
+    onSweep: ({ removed, bytes }) => logger.info('expired uploads removed', { removed, bytes }),
+  });
 
   const backupCfg = config.githubBackup;
   const scheduler = createBackupScheduler({
@@ -103,6 +107,7 @@ async function boot() {
     force.unref();
     server.close(() => {
       clearInterval(sweepTimer);
+      clearInterval(uploadSweepTimer);
       scheduler.stop();
       closeDatabase(db);
       logger.info('shutdown complete');

@@ -5,6 +5,18 @@ import { AppError } from '../lib/errors.js';
 import { toPersianDigits } from '../lib/normalize.js';
 
 const MEBIBYTE = 1024 * 1024;
+export const UPLOAD_RETENTION_DAYS = 7;
+export const UPLOAD_RETENTION_MS = UPLOAD_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+/** Oldest ISO timestamp that is still allowed to remain in file listings. */
+export function activeUploadCutoff(now = Date.now()) {
+  return new Date(Number(now) - UPLOAD_RETENTION_MS).toISOString();
+}
+
+export function uploadExpiresAt(createdAt) {
+  const created = new Date(createdAt).getTime();
+  return Number.isFinite(created) ? new Date(created + UPLOAD_RETENTION_MS).toISOString() : null;
+}
 
 /** Formats a byte count for user-facing Persian quota messages. */
 export function formatStorageSize(value) {
@@ -36,8 +48,8 @@ export function teacherStorageUsage(db, teacherId) {
   const row = db.prepare(`
     SELECT COUNT(f.id) AS file_count, COALESCE(SUM(f.size), 0) AS used_bytes
     FROM files f JOIN leagues l ON l.id = f.league_id
-    WHERE l.teacher_id = ?
-  `).get(teacherId);
+    WHERE l.teacher_id = ? AND f.created_at > ?
+  `).get(teacherId, activeUploadCutoff());
   return storageUsageFromBytes(row?.used_bytes, { fileCount: row?.file_count });
 }
 
@@ -80,4 +92,43 @@ export function removeUploadedFile(storedName) {
   } catch {
     /* the database row is the source of truth; an orphaned blob is harmless */
   }
+}
+
+/** Deletes files older than one week from both SQLite and the uploads folder. */
+export function sweepExpiredUploads(db, { now = Date.now() } = {}) {
+  const expired = db.prepare(`
+    SELECT id, stored_name AS storedName, size
+    FROM files
+    WHERE created_at <= ?
+    ORDER BY id
+  `).all(activeUploadCutoff(now));
+  if (expired.length === 0) return { removed: 0, bytes: 0 };
+
+  const removeRows = db.transaction((rows) => {
+    const statement = db.prepare('DELETE FROM files WHERE id = ?');
+    for (const row of rows) statement.run(row.id);
+  });
+  removeRows(expired);
+  for (const file of expired) removeUploadedFile(file.storedName);
+
+  return {
+    removed: expired.length,
+    bytes: expired.reduce((total, file) => total + Math.max(0, Number(file.size) || 0), 0),
+  };
+}
+
+/** Runs the upload retention cleanup now and then hourly by default. */
+export function startUploadSweep(db, { intervalMs = 60 * 60 * 1000, onSweep = null } = {}) {
+  const run = () => {
+    try {
+      const result = sweepExpiredUploads(db);
+      if (result.removed > 0 && onSweep) onSweep(result);
+    } catch {
+      /* cleanup is best effort; one filesystem failure must not crash the app */
+    }
+  };
+  run();
+  const timer = setInterval(run, intervalMs);
+  if (typeof timer.unref === 'function') timer.unref();
+  return timer;
 }

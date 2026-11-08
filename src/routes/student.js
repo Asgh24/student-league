@@ -10,6 +10,7 @@ import { readSettings } from '../repositories/leagues.js';
 import { listForStudent } from '../services/evaluations.js';
 import { getPublishedReportCard, listPublishedReportCards } from '../services/reports.js';
 import { parseStoredOptions, serializeQuestion } from '../services/questions.js';
+import { activeUploadCutoff, uploadExpiresAt } from '../services/storage.js';
 import { readSchedule } from './schedule.js';
 import {
   dashboard,
@@ -234,8 +235,9 @@ export function createStudentPortalRouter({ db }) {
 
   router.get('/files', (req, res) => {
     const student = contextOf(db, req);
-    const items = db.prepare('SELECT id, original_name AS originalName, mime, size, description, created_at AS createdAt FROM files WHERE league_id = ? ORDER BY id DESC')
-      .all(student.leagueId);
+    const items = db.prepare('SELECT id, original_name AS originalName, mime, size, description, created_at AS createdAt FROM files WHERE league_id = ? AND created_at > ? ORDER BY id DESC')
+      .all(student.leagueId, activeUploadCutoff())
+      .map((file) => ({ ...file, expiresAt: uploadExpiresAt(file.createdAt) }));
     res.json({ items });
   });
 

@@ -1,8 +1,11 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createLeague } from '../src/repositories/leagues.js';
 import { buildFixture } from './fixtures.js';
 import { createClient, createTestDatabase } from './helpers.js';
 import { sanitizeFilename, validateUpload } from '../src/routes/files.js';
+import { startUploadSweep, sweepExpiredUploads, UPLOAD_RETENTION_DAYS } from '../src/services/storage.js';
 
 let ctx;
 let fixture;
@@ -38,6 +41,43 @@ describe('file sharing', () => {
     const list = await client.get(`/api/v1/leagues/${fixture.leagueA.id}/files`);
     expect(list.body.items).toHaveLength(1);
     expect(list.body.items[0].description).toBe('تکلیف هفته اول');
+    expect(list.body.items[0].expiresAt).toBeTruthy();
+    expect(list.body.limits.retentionDays).toBe(UPLOAD_RETENTION_DAYS);
+  });
+
+  it('automatically removes uploads older than one week from SQLite and disk', async () => {
+    const upload = await client.upload(`/api/v1/leagues/${fixture.leagueA.id}/files`, {
+      filename: 'expired.pdf',
+      buffer: PDF,
+      contentType: 'application/pdf',
+    });
+    expect(upload.status).toBe(201);
+    const row = ctx.db.prepare('SELECT id, stored_name AS storedName FROM files WHERE id = ?').get(upload.body.file.id);
+    const target = path.join(ctx.uploadsDir, row.storedName);
+    expect(fs.existsSync(target)).toBe(true);
+    ctx.db.prepare('UPDATE files SET created_at = ? WHERE id = ?')
+      .run(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(), row.id);
+
+    const timer = startUploadSweep(ctx.db, { intervalMs: 60_000 });
+    clearInterval(timer);
+
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM files').get().n).toBe(0);
+    expect(fs.existsSync(target)).toBe(false);
+  });
+
+  it('keeps uploads until the full seven-day retention period has elapsed', async () => {
+    const upload = await client.upload(`/api/v1/leagues/${fixture.leagueA.id}/files`, {
+      filename: 'recent.pdf',
+      buffer: PDF,
+      contentType: 'application/pdf',
+    });
+    const row = ctx.db.prepare('SELECT id, stored_name AS storedName FROM files WHERE id = ?').get(upload.body.file.id);
+    ctx.db.prepare('UPDATE files SET created_at = ? WHERE id = ?')
+      .run(new Date(Date.now() - (7 * 24 * 60 * 60 * 1000) + 60_000).toISOString(), row.id);
+
+    expect(sweepExpiredUploads(ctx.db).removed).toBe(0);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM files').get().n).toBe(1);
+    expect(fs.existsSync(path.join(ctx.uploadsDir, row.storedName))).toBe(true);
   });
 
   it('rejects an executable extension', async () => {

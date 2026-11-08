@@ -9,9 +9,12 @@ import { isoNow } from '../lib/http.js';
 import { schemas, validate } from '../lib/validate.js';
 import { requireAuth, requireTeacher, loadOwnedLeague, requirePermission, teacherId, canAccessLeague, hasAssistantPermission } from '../middleware/auth.js';
 import {
+  activeUploadCutoff,
   assertTeacherStorageAvailable,
   removeUploadedFile,
   teacherStorageUsage,
+  UPLOAD_RETENTION_DAYS,
+  uploadExpiresAt,
 } from '../services/storage.js';
 
 const BLOCKED_EXTENSIONS = new Set(['.exe', '.dll', '.bat', '.cmd', '.com', '.scr', '.js', '.mjs', '.cjs', '.php', '.sh', '.ps1', '.jar', '.msi', '.vbs', '.hta']);
@@ -79,8 +82,11 @@ function leagueFiles(db, leagueId) {
     SELECT f.id, f.original_name AS originalName, f.mime, f.size, f.description, f.created_at AS createdAt,
            u.display_name AS teacherName
     FROM files f LEFT JOIN users u ON u.id = f.teacher_id
-    WHERE f.league_id = ? ORDER BY f.id DESC
-  `).all(leagueId);
+    WHERE f.league_id = ? AND f.created_at > ? ORDER BY f.id DESC
+  `).all(leagueId, activeUploadCutoff()).map((file) => ({
+    ...file,
+    expiresAt: uploadExpiresAt(file.createdAt),
+  }));
 }
 
 export function createLeagueFilesRouter({ db }) {
@@ -98,7 +104,11 @@ export function createLeagueFilesRouter({ db }) {
     res.json({
       items,
       total: items.length,
-      limits: { maxBytes: config.limits.maxUploadBytes, extensions: ALLOWED_UPLOAD_EXTENSIONS },
+      limits: {
+        maxBytes: config.limits.maxUploadBytes,
+        extensions: ALLOWED_UPLOAD_EXTENSIONS,
+        retentionDays: UPLOAD_RETENTION_DAYS,
+      },
       storage: teacherStorageUsage(db, teacherId(req)),
     });
   });
@@ -152,7 +162,9 @@ export function createFilesRouter({ db }) {
 
   router.get('/:id/download', requireAuth, (req, res, next) => {
     const id = Number.parseInt(req.params.id, 10);
-    const file = Number.isFinite(id) ? db.prepare('SELECT * FROM files WHERE id = ?').get(id) : null;
+    const file = Number.isFinite(id)
+      ? db.prepare('SELECT * FROM files WHERE id = ? AND created_at > ?').get(id, activeUploadCutoff())
+      : null;
     if (!file) throw notFound('فایل یافت نشد');
 
     const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(file.league_id);
@@ -180,7 +192,9 @@ export function createFilesRouter({ db }) {
 
   router.delete('/:id', requireTeacher, (req, res) => {
     const id = Number.parseInt(req.params.id, 10);
-    const file = Number.isFinite(id) ? db.prepare('SELECT * FROM files WHERE id = ?').get(id) : null;
+    const file = Number.isFinite(id)
+      ? db.prepare('SELECT * FROM files WHERE id = ? AND created_at > ?').get(id, activeUploadCutoff())
+      : null;
     if (!file) throw notFound('فایل یافت نشد');
     const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(file.league_id);
     if (!canAccessLeague(req.user, league) || !hasAssistantPermission(req.user, 'files')) {
