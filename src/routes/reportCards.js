@@ -19,6 +19,7 @@ import {
   getReportCardDetail,
   listReportCardSubjects,
   listReportCardsForLeague,
+  listReportCardsForStudent,
   saveReportCard,
   updateReportCardSubject,
 } from '../services/reports.js';
@@ -55,6 +56,27 @@ export function createLeagueReportCardsRouter({ db }) {
     res.json({ items: listReportCardsForLeague(db, req.league.id) });
   });
 
+  /** History of all saved cards for a student (drafts included). */
+  router.get('/students/:studentId/history', (req, res) => {
+    const studentId = idParam(req.params.studentId);
+    const student = db.prepare('SELECT id, name FROM students WHERE id = ? AND league_id = ?')
+      .get(studentId, req.league.id);
+    if (!student) throw notFound('دانش‌آموز در این لیگ یافت نشد');
+
+    const history = listReportCardsForStudent(db, req.league.id, studentId)
+      .map((item) => ({
+        id: item.id,
+        semester: item.semester,
+        totalPercent: item.totalPercent,
+        level: item.level,
+        isPublished: item.isPublished,
+        gradedCount: item.gradedCount,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      }));
+    res.json({ history });
+  });
+
   /** Existing card for the selected student/semester, or `null`. */
   router.get('/students/:studentId', (req, res) => {
     const studentId = idParam(req.params.studentId);
@@ -70,6 +92,22 @@ export function createLeagueReportCardsRouter({ db }) {
     });
   });
 
+  /** Explicitly create a fresh draft for a given semester (no auto-creation). */
+  router.post('/students/:studentId/new', validate({ body: schemas.reportCardCreate }), (req, res) => {
+    const studentId = idParam(req.params.studentId);
+    if (Number(req.body.studentId) !== studentId) {
+      throw notFound('شناسه دانش‌آموز با آدرس هم‌خوانی ندارد');
+    }
+    const payload = createReportCard(db, req.league.id, {
+      studentId,
+      semester: req.body.semester,
+    });
+    res.status(201).json({ card: payload.card, student: payload.student });
+  });
+
+  /** Legacy auto-create endpoint for backward compatibility: creates a card only if none
+   * exists for the given semester. Removed from the UI in favor of the explicit "کارنامه جدید"
+   * button, but kept so older clients continue to work. */
   router.post('/students/:studentId', validate({ body: schemas.reportCardCreate }), (req, res) => {
     const studentId = idParam(req.params.studentId);
     if (Number(req.body.studentId) !== studentId) {

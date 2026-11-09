@@ -3317,3 +3317,196 @@ body.quiz-open {
 .report-card-column:last-child {
   border-bottom: 0;
 }
+
+/* History panel */
+.report-card-history {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  background: var(--surface-2);
+}
+
+.report-card-history h3 {
+  margin: 0 0 4px 0;
+  font-size: 15px;
+}
+
+.report-card-history-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.report-card-history-item {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.report-card-history-item:hover {
+  border-color: var(--brand);
+  background: #f5f0ff;
+}
+
+.report-card-history-item.active {
+  border-color: var(--brand);
+  background: #f5f0ff;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.12);
+}
+
+.report-card-history-item__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.report-card-history-item__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.report-card-history-item__meta .chip {
+  font-size: 11px;
+}
+
+/* Bulk fill panel */
+.report-card-bulk {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  background: var(--surface);
+  margin: 14px 0;
+}
+
+.report-card-bulk p {
+  margin: 0 0 10px 0;
+  font-size: 12.5px;
+}
+
+.report-card-bulk-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-card-bulk-buttons .btn {
+  flex: 1 1 150px;
+}
+
+/* Student manual report card: never let the desktop table widen the phone page. */
+.student-manual-report-card-page,
+.student-manual-report-card-page .report-card-list,
+.student-manual-report-card,
+.student-manual-report-card .card__body,
+.student-manual-grades-wrap {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  .student-manual-report-card-page .report-card-list {
+    gap: 10px;
+  }
+
+  .student-manual-report-card {
+    padding: 12px;
+    border-radius: var(--radius);
+  }
+
+  .student-manual-report-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .student-manual-report-stats .stat:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .student-manual-report-card .report-card-editor__head {
+    align-items: flex-start;
+  }
+
+  .student-manual-report-card .report-card-editor__head > div:first-child {
+    min-width: 0;
+  }
+
+  .student-manual-grades-wrap {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  table.grid-table.student-manual-grades {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .student-manual-grades thead {
+    display: none;
+  }
+
+  .student-manual-grades tbody {
+    display: grid;
+    gap: 8px;
+  }
+
+  .student-manual-grades tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+  }
+
+  table.grid-table.student-manual-grades td {
+    position: static;
+    display: block;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: start;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  table.grid-table.student-manual-grades td:first-child,
+  table.grid-table.student-manual-grades td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  table.grid-table.student-manual-grades td:first-child {
+    padding-bottom: 7px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  table.grid-table.student-manual-grades td:not(:first-child)::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+
+  .student-manual-report-card .report-card-editor__actions .btn {
+    width: 100%;
+  }
+}

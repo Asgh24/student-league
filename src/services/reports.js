@@ -188,12 +188,16 @@ function listCardRows(db, leagueId, { publishedOnly = false } = {}) {
   `).all(leagueId).map((row) => ({
     ...row,
     isPublished: row.isPublished === 1,
-    level: overallLevel(row.totalPercent),
+    level: row.gradedCount > 0 ? overallLevel(row.totalPercent) : null,
   }));
 }
 
 export function listReportCardsForLeague(db, leagueId) {
   return listCardRows(db, leagueId);
+}
+
+export function listReportCardsForStudent(db, leagueId, studentId) {
+  return listCardRows(db, leagueId).filter((card) => card.studentId === studentId);
 }
 
 export function listPublishedReportCards(db, leagueId, studentId) {
@@ -318,6 +322,7 @@ export function saveReportCard(db, leagueId, cardId, payload = {}) {
 export function getReportCardDetail(db, leagueId, cardId) {
   const card = requireLeagueCard(db, leagueId, cardId);
   const grades = gradesForCard(db, cardId);
+  const hasGrade = grades.some((grade) => grade.numeric !== null || grade.descriptive !== null);
   return {
     id: card.id,
     studentId: card.student_id,
@@ -326,7 +331,7 @@ export function getReportCardDetail(db, leagueId, cardId) {
     leagueName: card.leagueName,
     semester: card.semester,
     totalPercent: card.total_percent,
-    level: overallLevel(card.total_percent),
+    level: hasGrade ? overallLevel(card.total_percent) : null,
     isPublished: card.is_published === 1,
     notes: card.notes ?? '',
     createdAt: card.created_at,

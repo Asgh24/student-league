@@ -221,6 +221,43 @@ describe('report cards', () => {
     expect(performance.evaluations[0].subject).toBe('ریاضی');
     expect(performance.columns.length).toBeGreaterThan(0);
   });
+
+  it('does not auto-create a draft when fetching an existing card for a semester', async () => {
+    await addSubject('ریاضی');
+    const res = await teacher.get(`${base()}/students/${fixture.studentsA[0].id}?semester=نوبت%20دوم`);
+    expect(res.status).toBe(200);
+    expect(res.body.card).toBeNull();
+    const cards = await teacher.get(base());
+    expect(cards.body.items).toHaveLength(0);
+  });
+
+  it('creates a new card explicitly via the /new endpoint', async () => {
+    await addSubject('ریاضی');
+    const res = await teacher.post(`${base()}/students/${fixture.studentsA[0].id}/new`, {
+      studentId: fixture.studentsA[0].id,
+      semester: 'نوبت اول',
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.card.studentName).toBe('آرش آزمون');
+    expect(res.body.card.semester).toBe('نوبت اول');
+    expect(res.body.card.level).toBeNull();
+  });
+
+  it('lists every saved card of one student as history', async () => {
+    await addSubject('ریاضی');
+    const first = (await createCard(fixture.studentsA[0].id, 'نوبت اول')).body.card;
+    await createCard(fixture.studentsA[0].id, 'نوبت دوم');
+
+    const res = await teacher.get(`${base()}/students/${fixture.studentsA[0].id}/history`);
+    expect(res.status).toBe(200);
+    expect(res.body.history.map((item) => item.semester).sort()).toEqual(['نوبت اول', 'نوبت دوم']);
+    expect(res.body.history.find((item) => item.id === first.id)).toMatchObject({
+      gradedCount: 0,
+      totalPercent: 0,
+      level: null,
+    });
+  });
+
 });
 
 describe('report card assistant permissions', () => {

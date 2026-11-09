@@ -50,6 +50,7 @@ const { createScoresTable } = await import('../public/js/views/scoresTable.js');
 const { renderTeams } = await import('../public/js/views/teams.js');
 const { renderStudentDashboard } = await import('../public/js/views/student/dashboard.js');
 const { renderReportCard } = await import('../public/js/views/student/reportcard.js');
+const { renderStudentReportCard: renderManualStudentReportCard } = await import('../public/js/views/student/reportcard-manual.js');
 const { renderStudentSchedule } = await import('../public/js/views/student/schedule.js');
 const { renderEvaluations } = await import('../public/js/views/evaluations.js');
 const { renderQa } = await import('../public/js/views/qa.js');
@@ -831,6 +832,57 @@ describe('student report card', () => {
     await vi.waitFor(() => expect(document.querySelector('#modal-root').textContent).toContain('به‌زودی فعال می‌شود'));
     // Deliberately no monthly data request yet: the basis is still undecided.
     expect(api.get).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('student manual report card on phones', () => {
+  const publishedCard = {
+    id: 12,
+    studentId: 4,
+    studentName: 'زهرا محمدی',
+    semester: 'نوبت اول',
+    totalPercent: 80,
+    isPublished: true,
+    updatedAt: '2026-10-20T08:00:00.000Z',
+    level: { value: 'good', label: 'خوب', icon: '👍' },
+    grades: [
+      {
+        id: 1,
+        subjectId: 1,
+        subjectName: 'ریاضی',
+        color: '#6366f1',
+        numeric: null,
+        descriptive: 'very_good',
+        level: { value: 'very_good', label: 'خیلی خوب', icon: '🌟' },
+        notes: 'پیشرفت بسیار خوب در حل مسئله',
+      },
+    ],
+  };
+
+  it('uses a phone-safe card layout instead of a page-widening table', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/student/me') return Promise.resolve({ student: { id: 4, name: 'زهرا محمدی' } });
+      if (url === '/student/report-cards') return Promise.resolve({ items: [publishedCard] });
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+
+    await renderManualStudentReportCard();
+
+    const view = document.querySelector('#view');
+    expect(view.querySelector('.student-manual-report-card-page')).not.toBeNull();
+    expect(view.querySelector('.student-manual-report-stats')).not.toBeNull();
+    expect(view.querySelector('.student-manual-report-card')).not.toBeNull();
+    expect(view.querySelector('.student-manual-grades-wrap')).not.toBeNull();
+    expect(view.querySelector('table.student-manual-grades')).not.toBeNull();
+    expect([...view.querySelectorAll('table.student-manual-grades tbody td')].map((cell) => cell.dataset.label))
+      .toEqual(['درس', 'نمره', 'سطح توصیفی', 'توضیح معلم']);
+    expect(view.textContent).toContain('پیشرفت بسیار خوب در حل مسئله');
+    expect(view.querySelector('.tab.is-active').textContent).toContain('کارنامه دستی');
+
+    const css = fs.readFileSync(path.join(rootDir, 'public', 'css', 'components.css'), 'utf8');
+    expect(css).toContain('@media (max-width: 640px)');
+    expect(css).toContain('table.grid-table.student-manual-grades');
+    expect(css).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
   });
 });
 
@@ -2006,7 +2058,7 @@ describe('manual report card editor', () => {
     };
   }
 
-  function mockReportCards(card) {
+  function mockReportCards(card, history = [], nullCardOnStudentGet = false) {
     api.get.mockImplementation((url) => {
       if (url === '/leagues/3/report-cards/subjects') {
         return Promise.resolve({ items: [{ id: 1, name: 'ریاضی', color: '#6366f1', orderIndex: 1 }] });
@@ -2020,7 +2072,13 @@ describe('manual report card editor', () => {
       if (url === '/leagues/3') {
         return Promise.resolve({ league: { id: 3, name: 'لیگ تست' } });
       }
+      if (url.startsWith('/leagues/3/report-cards/students/11/history')) {
+        return Promise.resolve({ history });
+      }
       if (url.startsWith('/leagues/3/report-cards/students/11')) {
+        return Promise.resolve(nullCardOnStudentGet ? { card: null } : { card });
+      }
+      if (url.startsWith('/leagues/3/report-cards/cards/')) {
         return Promise.resolve({ card });
       }
       return Promise.reject(new Error(`unexpected url ${url}`));
@@ -2042,11 +2100,11 @@ describe('manual report card editor', () => {
         notes: 'پیشرفت خوب',
       }],
     });
+    api.get.mockClear();
+    api.put.mockClear();
+    api.post.mockClear();
     mockReportCards(emptyCard);
-    api.put.mockImplementation((url, body) => Promise.resolve({
-      card: savedCard,
-      isPublished: Boolean(body.isPublished),
-    }));
+    api.put.mockResolvedValue({ card: savedCard });
 
     await renderReportCards({ params: { id: '3' } });
     const studentSelect = document.querySelector('#report-card-student');
@@ -2075,19 +2133,160 @@ describe('manual report card editor', () => {
     await vi.waitFor(() => expect(document.querySelector('.report-card-grade').value).toBe('90'));
     expect(document.querySelector('#view').textContent).toContain('خوب');
 
-    // Wait for the save round trip and its repaint: the publish button is
-    // disabled while `saving` is true, so clicking too early would be ignored.
     const publishButton = () => [...document.querySelectorAll('#view button')]
       .find((node) => node.textContent.includes('انتشار برای دانش‌آموز'));
     await vi.waitFor(() => expect(publishButton()?.disabled).toBe(false));
 
-    // Publishing uses the visible marks, so a filled card is never lost.
     publishButton().click();
     await vi.waitFor(() => expect(api.put).toHaveBeenCalledTimes(2));
     expect(api.put.mock.calls[1][1]).toMatchObject({
       isPublished: true,
       grades: [{ subjectId: 1, numeric: '90', descriptive: 'good', notes: 'پیشرفت خوب' }],
     });
+  });
+
+  it('does not auto-create a draft on student selection; shows a "new card" button', async () => {
+    const emptyCard = cardPayload();
+    api.get.mockClear();
+    api.post.mockClear();
+    mockReportCards(emptyCard, [], true);
+    api.post.mockResolvedValue({ ok: true });
+
+    await renderReportCards({ params: { id: '3' } });
+    const studentSelect = document.querySelector('#report-card-student');
+    studentSelect.value = '11';
+    studentSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    await vi.waitFor(() => expect(document.querySelector('#view').textContent).toContain('هنوز کارنامه‌ای ثبت نشده'));
+    expect(document.querySelector('#view').textContent).not.toContain('null');
+
+    const newCardButton = () => [...document.querySelectorAll('#view button')].find((b) =>
+      b.textContent.trim() === 'کارنامه جدید'
+    );
+    await vi.waitFor(() => expect(newCardButton()).not.toBeNull());
+
+    api.post.mockClear();
+    studentSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(api.post).not.toHaveBeenCalled());
+  });
+
+  it('creates a new card when the explicit button is clicked', async () => {
+    const created = cardPayload({ semester: 'نوبت دوم' });
+    api.get.mockClear();
+    api.post.mockClear();
+    mockReportCards(cardPayload(), [], true);
+    api.post.mockResolvedValue({ card: created, student: { id: 11, name: 'آرش آزمون' } });
+
+    await renderReportCards({ params: { id: '3' } });
+    const studentSelect = document.querySelector('#report-card-student');
+    studentSelect.value = '11';
+    studentSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    await vi.waitFor(() => expect(document.querySelector('#view').textContent).toContain('هنوز کارنامه‌ای ثبت نشده'));
+    const newCardButton = () => [...document.querySelectorAll('#view button')].find((b) =>
+      b.textContent.trim() === 'کارنامه جدید'
+    );
+    await vi.waitFor(() => expect(newCardButton()).not.toBeNull());
+    newCardButton().click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith(
+      '/leagues/3/report-cards/students/11/new',
+      { studentId: 11, semester: 'نوبت اول' }
+    ));
+  });
+
+  it('shows the history panel with saved cards', async () => {
+    const history = [
+      cardPayload({
+        id: 1,
+        semester: 'نوبت اول',
+        totalPercent: 85,
+        level: { value: 'good', label: 'خوب', icon: '👍' },
+        isPublished: true,
+        gradedCount: 1,
+      }),
+      cardPayload({
+        id: 2,
+        semester: 'نوبت دوم',
+        totalPercent: 0,
+        level: null,
+        isPublished: false,
+        gradedCount: 0,
+      }),
+    ];
+    api.get.mockClear();
+    api.post.mockClear();
+    mockReportCards(cardPayload(), history, true);
+
+    await renderReportCards({ params: { id: '3' } });
+    const studentSelect = document.querySelector('#report-card-student');
+    studentSelect.value = '11';
+    studentSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    await vi.waitFor(() => expect(document.querySelector('.report-card-history')).not.toBeNull());
+    const panel = document.querySelector('.report-card-history');
+    expect(panel.textContent).toContain('نوبت اول');
+    expect(panel.textContent).toContain('نوبت دوم');
+    expect(panel.textContent).toContain('منتشر‌شده');
+  });
+
+  it('restores a history card when clicked', async () => {
+    const history = [cardPayload({ id: 9, semester: 'نوبت بازگشتی', totalPercent: 92, level: { value: 'very_good', label: 'خیلی خوب', icon: '🌟' }, isPublished: false })];
+    const restored = cardPayload({ id: 9, semester: 'نوبت بازگشتی', totalPercent: 92, level: { value: 'very_good', label: 'خیلی خوب', icon: '🌟' }, isPublished: false });
+    api.get.mockClear();
+    api.post.mockClear();
+    mockReportCards(restored, history, true);
+
+    await renderReportCards({ params: { id: '3' } });
+    const studentSelect = document.querySelector('#report-card-student');
+    studentSelect.value = '11';
+    studentSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    await vi.waitFor(() => expect(document.querySelector('.report-card-history')).not.toBeNull());
+    document.querySelector('.report-card-history-item').click();
+
+    await vi.waitFor(() => expect(document.querySelector('#view').textContent).toContain('نوبت بازگشتی'));
+  });
+
+  it('bulk-fills rows locally and keeps teacher notes until save', async () => {
+    api.get.mockClear();
+    api.put.mockClear();
+    api.post.mockClear();
+    mockReportCards(cardPayload(), [], false);
+    api.put.mockResolvedValue({ card: cardPayload() });
+
+    await renderReportCards({ params: { id: '3' } });
+    const studentSelect = document.querySelector('#report-card-student');
+    studentSelect.value = '11';
+    studentSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    await vi.waitFor(() => expect(document.querySelector('.report-card-level')).not.toBeNull());
+
+    const labels = [...document.querySelectorAll('.report-card-bulk-buttons button')].map((node) => node.textContent.trim());
+    expect(labels).toEqual(['🌟 خیلی خوب', '👍 خوب', '🙂 قابل قبول', '🎯 نیاز به تلاش بیشتر']);
+
+    const numeric = document.querySelector('.report-card-grade');
+    const level = document.querySelector('.report-card-level');
+    const notes = document.querySelector('.report-card-notes');
+    numeric.value = '76';
+    notes.value = 'توضیح قبلی معلم';
+    const goodButton = () => [...document.querySelectorAll('.report-card-bulk-buttons button')]
+      .find((node) => node.textContent.trim() === '👍 خوب');
+    await vi.waitFor(() => expect(goodButton()).not.toBeNull());
+    goodButton().click();
+
+    expect(numeric.value).toBe('');
+    expect(level.value).toBe('good');
+    expect(notes.value).toBe('توضیح قبلی معلم');
+    expect(api.post).not.toHaveBeenCalled();
+
+    [...document.querySelectorAll('#view button')]
+      .find((node) => node.textContent.includes('ذخیره نمرات')).click();
+    await vi.waitFor(() => expect(api.put).toHaveBeenCalledWith('/leagues/3/report-cards/cards/5', {
+      semester: 'نوبت اول',
+      notes: '',
+      grades: [{ subjectId: 1, numeric: '', descriptive: 'good', notes: 'توضیح قبلی معلم' }],
+    }));
   });
 });
 

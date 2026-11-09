@@ -22,8 +22,8 @@ function gradesTable(grades) {
   if (!grades?.length) {
     return emptyState({ icon: '📝', title: 'هنوز نمره‌ای ثبت نشده است' });
   }
-  return el('div.table-wrap', {}, [
-    el('table.grid-table.report-card-grades', {}, [
+  return el('div.table-wrap.student-manual-grades-wrap', {}, [
+    el('table.grid-table.report-card-grades.student-manual-grades', {}, [
       el('thead', {}, [
         el('tr', {}, [
           el('th', { text: 'درس' }),
@@ -33,13 +33,16 @@ function gradesTable(grades) {
         ]),
       ]),
       el('tbody', {}, grades.map((grade) => el('tr', {}, [
-        el('td', {}, [
+        el('td', { 'data-label': 'درس' }, [
           el('span.report-card-subject__dot', { style: { background: grade.color || '#6366f1' } }),
           el('strong', { text: grade.subjectName }),
         ]),
-        el('td', { text: gradeCell(grade) }),
-        el('td', { text: grade.descriptive ? `${grade.level?.icon ?? ''} ${grade.level?.label ?? levelLabel(grade.descriptive)}` : '—' }),
-        el('td', { text: grade.notes || '—' }),
+        el('td', { 'data-label': 'نمره', text: gradeCell(grade) }),
+        el('td', {
+          'data-label': 'سطح توصیفی',
+          text: grade.descriptive ? `${grade.level?.icon ?? ''} ${grade.level?.label ?? levelLabel(grade.descriptive)}` : '—',
+        }),
+        el('td', { 'data-label': 'توضیح معلم', text: grade.notes || '—' }),
       ]))),
     ]),
   ]);
@@ -79,7 +82,7 @@ async function openDetails(cardId) {
 }
 
 function summaryCard(cardData) {
-  return card({ title: cardData.semester, icon: '📄' }, [
+  return card({ title: cardData.semester, icon: '📄', className: 'student-manual-report-card' }, [
     cardHeader(cardData),
     gradesTable(cardData.grades),
     el('div.row.report-card-editor__actions', {}, [
@@ -94,7 +97,7 @@ function summaryCard(cardData) {
 
 export async function renderStudentReportCard() {
   setTopbarTitle('کارنامه دستی');
-  const body = el('div.report-card-page', {}, [loadingNode()]);
+  const body = el('div.report-card-page.student-manual-report-card-page', {}, [loadingNode()]);
   renderView([
     pageHead({
       icon: '📊',
@@ -117,7 +120,7 @@ export async function renderStudentReportCard() {
       : 0;
 
     body.replaceChildren(
-      el('div.grid.grid--stats', {}, [
+      el('div.grid.grid--stats.student-manual-report-stats', {}, [
         statCard({ label: 'کارنامه‌های منتشرشده', value: fa(cards.length), icon: '📄' }),
         statCard({ label: 'میانگین کل', value: `${fa(average)}٪`, icon: '📈' }),
         statCard({ label: 'دانش‌آموز', value: student?.name ?? '', icon: '🧑‍🎓' }),
