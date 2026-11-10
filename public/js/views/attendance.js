@@ -3,6 +3,7 @@
 import { api } from '../api.js';
 import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
+import { formatJalaliDate, toPersianDigits } from '../jalali.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { emptyState, formDialog, notify } from '../ui.js';
@@ -16,6 +17,72 @@ function shiftIso(iso, days) {
 
 /** Last manager/vice-principal number, kept for the current page session. */
 let managerPhone = '';
+
+const SHAD_WEB_URL = 'https://web.shad.ir/';
+
+/** Text pasted into the school manager's Shad conversation. */
+export function buildManagerAbsenteesMessage({ leagueName, day, absentees }) {
+  const names = absentees.map((student) => student.name).join('، ');
+  return `${leagueName} | غایبین ${formatJalaliDate(day)}\nتعداد غایب: ${toPersianDigits(absentees.length)}\n${names}`;
+}
+
+/** Clipboard write with a fallback for browsers without the async API. */
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to the hidden textarea fallback */
+  }
+
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.appendChild(area);
+  area.select();
+  let copied = false;
+  try {
+    copied = Boolean(document.execCommand?.('copy'));
+  } catch {
+    copied = false;
+  }
+  area.remove();
+  return copied;
+}
+
+async function openManagerShad({ leagueName, day, items }) {
+  const absentees = items.filter((student) => student.status === 'absent');
+  if (absentees.length === 0) {
+    notify.error('برای این روز دانش‌آموز غایبی ثبت نشده است');
+    return;
+  }
+
+  const message = buildManagerAbsenteesMessage({ leagueName, day, absentees });
+
+  // Open during the click gesture before awaiting clipboard permission, or the
+  // browser may treat the new tab as an unwanted popup.
+  const tab = window.open(SHAD_WEB_URL, '_blank');
+  if (tab) {
+    try {
+      tab.opener = null;
+    } catch {
+      /* cross-origin windows may reject the assignment */
+    }
+  } else {
+    notify.warn('مرورگر صفحهٔ شاد را مسدود کرد؛ اجازهٔ باز شدن پنجره را بدهید و دوباره تلاش کنید');
+  }
+
+  const copied = await copyToClipboard(message);
+  if (copied) {
+    notify.ok(`اسامی ${fa(absentees.length)} غایب و تاریخ شمسی کپی شد؛ پیام را در شاد برای مدیر مدرسه جای‌گذاری کنید`);
+  } else {
+    notify.error('کپی خودکار ممکن نشد؛ اجازهٔ دسترسی به کلیپ‌بورد را فعال کنید و دوباره تلاش کنید');
+  }
+}
 
 async function sendAbsenteesSms(leagueId, day, items) {
   const absentees = items.filter((student) => student.status === 'absent');
@@ -213,7 +280,12 @@ export async function renderAttendance({ params }) {
           button('همه حاضر', { icon: '✅', onClick: () => bulk('present') }),
           button('همه غایب', { kind: 'danger', icon: '❌', onClick: () => bulk('absent') }),
           button('همه با تأخیر', { kind: 'amber', icon: '⏰', onClick: () => bulk('late') }),
-          button('ارسال غایبین', { kind: 'soft', icon: '📨', onClick: () => sendAbsenteesSms(leagueId, day, sheet.items) }),
+          button('ارسال پیامکی غایبین', { kind: 'soft', icon: '📨', onClick: () => sendAbsenteesSms(leagueId, day, sheet.items) }),
+          button('ارسال به شاد مدیر مدرسه', {
+            kind: 'soft',
+            icon: '🟢',
+            onClick: () => openManagerShad({ leagueName: league.league.name, day, items: sheet.items }),
+          }),
         ]),
         sheet.items.length === 0
           ? emptyState({ icon: '🧑‍🎓', title: 'دانش‌آموزی در این لیگ نیست', hint: 'ابتدا از صفحه لیگ دانش‌آموز اضافه کنید.' })

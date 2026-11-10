@@ -43,17 +43,6 @@ function levelSelect(value, onInput) {
   return select;
 }
 
-function levelChip(level, onClick) {
-  if (!level) {
-    return el('span.muted.small', { text: '—' });
-  }
-  return el('span.chip', {
-    style: { cursor: 'pointer' },
-    onclick: onClick,
-    text: `${level.icon} ${level.label}`,
-  });
-}
-
 export async function renderReportCards({ params }) {
   const leagueId = Number(params?.id);
   if (!Number.isFinite(leagueId)) return;
@@ -427,10 +416,6 @@ export async function renderReportCards({ params }) {
           }, [
             el('div.report-card-history-item__main', {}, [
               el('strong', { text: item.semester }),
-              levelChip(item.level, (e) => {
-                e.stopPropagation();
-                restoreCard(item);
-              }),
             ]),
             el('div.report-card-history-item__meta', {}, [
               el('span.small.muted', {
@@ -554,7 +539,6 @@ export async function renderReportCards({ params }) {
             ]),
             chip(card.isPublished ? 'منتشر شده' : 'پیش‌نویس', card.isPublished ? 'ok' : 'muted'),
             el('span.spacer'),
-            card.level ? chip(`${card.level.icon} ${card.level.label} · ${fa(card.totalPercent)}٪`, 'muted') : null,
           ]),
           bulkFillPanel(),
           gradesTable(),

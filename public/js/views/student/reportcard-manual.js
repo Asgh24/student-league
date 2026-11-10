@@ -54,7 +54,6 @@ function cardHeader(cardData) {
       el('strong', { text: cardData.semester }),
       el('span.small.muted', { text: ` · ${cardData.studentName}` }),
     ]),
-    cardData.level ? chip(`${cardData.level.icon} ${cardData.level.label}`, 'ok') : null,
     el('span.spacer'),
     cardData.totalPercent !== null && cardData.totalPercent !== undefined
       ? chip(`میانگین ${fa(cardData.totalPercent)}٪`, 'muted')

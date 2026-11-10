@@ -62,6 +62,7 @@ const { renderHomework } = await import('../public/js/views/homework.js');
 const { renderContacts } = await import('../public/js/views/contacts.js');
 const { renderReports } = await import('../public/js/views/reports.js');
 const { renderReportCards } = await import('../public/js/views/reportCards.js');
+const { buildManagerAbsenteesMessage, renderAttendance } = await import('../public/js/views/attendance.js');
 const { renderFun } = await import('../public/js/views/fun.js');
 const { renderSettings } = await import('../public/js/views/settings.js');
 const { stopwatchCard } = await import('../public/js/views/timer.js');
@@ -872,6 +873,7 @@ describe('student manual report card on phones', () => {
     expect(view.querySelector('.student-manual-report-card-page')).not.toBeNull();
     expect(view.querySelector('.student-manual-report-stats')).not.toBeNull();
     expect(view.querySelector('.student-manual-report-card')).not.toBeNull();
+    expect(view.querySelector('.student-manual-report-card .report-card-editor__head').textContent).not.toContain('خوب');
     expect(view.querySelector('.student-manual-grades-wrap')).not.toBeNull();
     expect(view.querySelector('table.student-manual-grades')).not.toBeNull();
     expect([...view.querySelectorAll('table.student-manual-grades tbody td')].map((cell) => cell.dataset.label))
@@ -883,6 +885,92 @@ describe('student manual report card on phones', () => {
     expect(css).toContain('@media (max-width: 640px)');
     expect(css).toContain('table.grid-table.student-manual-grades');
     expect(css).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
+  });
+});
+
+describe('attendance manager Shad message', () => {
+  const day = '2026-11-09';
+
+  function mockAttendance(items) {
+    api.get.mockImplementation((url) => {
+      if (url === '/leagues/3') {
+        return Promise.resolve({ league: { id: 3, name: 'کلاس ششم' } });
+      }
+      if (url === '/leagues/3/attendance') {
+        return Promise.resolve({
+          date: day,
+          today: day,
+          counters: {
+            present: items.filter((item) => item.status === 'present').length,
+            absent: items.filter((item) => item.status === 'absent').length,
+            late: items.filter((item) => item.status === 'late').length,
+            unmarked: items.filter((item) => !item.status).length,
+          },
+          items,
+        });
+      }
+      if (url === '/leagues/3/attendance/history?limit=30') {
+        return Promise.resolve({ items: [] });
+      }
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+  }
+
+  it('builds a Persian-date message from only the absent students', () => {
+    expect(buildManagerAbsenteesMessage({
+      leagueName: 'کلاس ششم',
+      day,
+      absentees: [{ name: 'آرش' }, { name: 'سارا' }],
+    })).toBe(`کلاس ششم | غایبین ${browserJalali.formatJalaliDate(day)}\nتعداد غایب: ۲\nآرش، سارا`);
+  });
+
+  it('copies the absent list and opens Shad in a new browser tab', async () => {
+    mockAttendance([
+      { studentId: 1, name: 'آرش', status: 'absent', attended: 2, recorded: 3 },
+      { studentId: 2, name: 'رضا', status: 'present', attended: 3, recorded: 3 },
+      { studentId: 3, name: 'سارا', status: 'absent', attended: 1, recorded: 3 },
+    ]);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const openedTab = { opener: window };
+    const open = vi.spyOn(window, 'open').mockReturnValue(openedTab);
+
+    try {
+      await renderAttendance({ params: { id: '3' } });
+      const shadButton = [...document.querySelectorAll('#view button')]
+        .find((node) => node.textContent.includes('ارسال به شاد مدیر مدرسه'));
+      expect(shadButton).not.toBeUndefined();
+      shadButton.click();
+
+      const expected = `کلاس ششم | غایبین ${browserJalali.formatJalaliDate(day)}\nتعداد غایب: ۲\nآرش، سارا`;
+      await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(expected));
+      expect(open).toHaveBeenCalledWith('https://web.shad.ir/', '_blank');
+      expect(openedTab.opener).toBeNull();
+      await vi.waitFor(() => expect(document.getElementById('toasts').textContent).toContain('تاریخ شمسی کپی شد'));
+    } finally {
+      open.mockRestore();
+      if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard);
+      else delete navigator.clipboard;
+    }
+  });
+
+  it('does not open Shad when no student is absent', async () => {
+    mockAttendance([
+      { studentId: 1, name: 'آرش', status: 'present', attended: 3, recorded: 3 },
+    ]);
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+
+    try {
+      await renderAttendance({ params: { id: '3' } });
+      [...document.querySelectorAll('#view button')]
+        .find((node) => node.textContent.includes('ارسال به شاد مدیر مدرسه')).click();
+
+      expect(open).not.toHaveBeenCalled();
+      expect(document.getElementById('toasts').textContent).toContain('دانش‌آموز غایبی ثبت نشده');
+    } finally {
+      open.mockRestore();
+    }
   });
 });
 
@@ -2143,6 +2231,33 @@ describe('manual report card editor', () => {
       isPublished: true,
       grades: [{ subjectId: 1, numeric: '90', descriptive: 'good', notes: 'پیشرفت خوب' }],
     });
+  });
+
+  it('does not show an aggregate performance label beside the student name or history title', async () => {
+    const gradedCard = cardPayload({
+      totalPercent: 40,
+      level: { value: 'needs_improvement', label: 'نیاز به تلاش بیشتر', icon: '🎯' },
+      grades: [{
+        id: 1,
+        subjectId: 1,
+        subjectName: 'ریاضی',
+        color: '#6366f1',
+        numeric: 40,
+        descriptive: null,
+        notes: '',
+      }],
+    });
+    const history = [{ ...gradedCard, gradedCount: 1 }];
+    mockReportCards(gradedCard, history);
+
+    await renderReportCards({ params: { id: '3' } });
+    const studentSelect = document.querySelector('#report-card-student');
+    studentSelect.value = '11';
+    studentSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    await vi.waitFor(() => expect(document.querySelector('.report-card-editor__head')).not.toBeNull());
+    expect(document.querySelector('.report-card-editor__head').textContent).not.toContain('نیاز به تلاش بیشتر');
+    expect(document.querySelector('.report-card-history-item__main').textContent).not.toContain('نیاز به تلاش بیشتر');
   });
 
   it('does not auto-create a draft on student selection; shows a "new card" button', async () => {
