@@ -22,6 +22,7 @@ import * as supportMessages from './021_support_messages.js';
 import * as supportGuestMessages from './022_support_guest_messages.js';
 import * as planOriginalPrice from './023_plan_original_price.js';
 import * as studentParentCredentials from './024_student_parent_credentials.js';
+import * as homeworkPenaltiesAndColumn from './025_homework_penalties_and_column.js';
 
 /** Ordered list of migrations applied automatically on boot. */
 export const migrations = [
@@ -49,4 +50,5 @@ export const migrations = [
   supportGuestMessages,
   planOriginalPrice,
   studentParentCredentials,
+  homeworkPenaltiesAndColumn,
 ];

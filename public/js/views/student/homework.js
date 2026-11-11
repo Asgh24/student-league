@@ -11,6 +11,7 @@ import { studentTabs } from './tabs.js';
 function statusChip(status) {
   if (status === 'done') return chip('✅ انجام‌شده', 'ok');
   if (status === 'absent') return chip('🚫 غایب', 'bad');
+  if (status === 'not_brought') return chip('🎒 نیاورده', 'bad');
   if (status === 'incomplete') return chip('📝 ناقص', 'amber');
   return chip('⏳ انجام‌نشده', 'muted');
 }

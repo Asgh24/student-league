@@ -52,7 +52,7 @@ export function buildDailyMessage({ leagueName, studentName, date, lines = [], t
   // parent sees whether the assignment was done (and what it was worth).
   const homeworkLine = homework.length
     ? `\nتکالیف: ${homework.map((item) => {
-      const effect = pointsForStatus(item.status, item.points);
+      const effect = pointsForStatus(item.status, item.points, item.penaltyPoints);
       return `${item.title} (${HOMEWORK_STATUS_LABELS[item.status] ?? item.status}${effect ? `، ${signedFa(effect)}` : ''})`;
     }).join('، ')}`
     : '';
@@ -106,6 +106,7 @@ export function dailyReport(db, leagueId, date) {
   // appears as انجام‌نشده.
   const homeworkRows = db.prepare(`
     SELECT s.id AS studentId, h.title AS title, h.points AS points,
+           h.penalty_points AS penaltyPoints,
            COALESCE(hs.status, 'not_done') AS status
     FROM students s
     JOIN homework h ON h.league_id = s.league_id
@@ -116,7 +117,12 @@ export function dailyReport(db, leagueId, date) {
   const homeworkByStudent = new Map();
   for (const row of homeworkRows) {
     if (!homeworkByStudent.has(row.studentId)) homeworkByStudent.set(row.studentId, []);
-    homeworkByStudent.get(row.studentId).push({ title: row.title, points: row.points, status: row.status });
+    homeworkByStudent.get(row.studentId).push({
+      title: row.title,
+      points: row.points,
+      penaltyPoints: row.penaltyPoints,
+      status: row.status,
+    });
   }
 
   const contacts = new Map(contactsList(db, leagueId).map((row) => [row.id, row]));

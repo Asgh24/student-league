@@ -211,6 +211,75 @@ describe('homework points', () => {
     expect(list.body.items[0].points).toBe(10);
     expect(list.body.items[0].doneCount).toBe(1);
   });
+
+  it('supports the not_brought status and deducts the penalty amount', async () => {
+    const homework = await createWithPoints(10, { penaltyPoints: 3 });
+    const student = fixture.studentsA[0];
+
+    expect((await mark(homework.id, student.id, 'not_brought')).status).toBe(200);
+    expect(totalOf(student.id)).toBe(-3);
+    const row = ctx.db.prepare('SELECT status, awarded FROM homework_status WHERE homework_id = ? AND student_id = ?')
+      .get(homework.id, student.id);
+    expect(row).toEqual({ status: 'not_brought', awarded: -3 });
+
+    // not_brought -> done: revoke the penalty and award the points (+13).
+    await mark(homework.id, student.id, 'done');
+    expect(totalOf(student.id)).toBe(10);
+    expect(historyOf(student.id, 'تمرین ریاضی').map((r) => r.delta)).toEqual([-3, 13]);
+  });
+
+  it('keeps zero penalty for legacy assignments', async () => {
+    const homework = await createWithPoints(10);
+    const student = fixture.studentsA[0];
+    await mark(homework.id, student.id, 'incomplete');
+    expect(totalOf(student.id)).toBe(0);
+    expect(historyOf(student.id, 'تمرین ریاضی')).toHaveLength(0);
+  });
+
+  it('sends homework points to the chosen league column', async () => {
+    const math = fixture.columnsA.find((column) => column.name === 'ریاضی');
+    const discipline = fixture.columnsA.find((column) => column.name === 'انضباطی');
+    const homework = await createWithPoints(10, { columnId: math.id });
+    const student = fixture.studentsA[0];
+
+    await mark(homework.id, student.id, 'done');
+    const row = ctx.db.prepare('SELECT column_id, value FROM scores WHERE student_id = ?').get(student.id);
+    expect(row).toEqual({ column_id: math.id, value: 10 });
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM scores WHERE student_id = ? AND column_id = ?')
+      .get(student.id, discipline.id).n).toBe(0);
+
+    // Switching the homework to another column moves the applied award.
+    const updated = await client.patch(`/api/v1/homework/${homework.id}`, { columnId: discipline.id });
+    expect(updated.status).toBe(200);
+    expect(updated.body.homework.columnId).toBe(discipline.id);
+    expect(updated.body.homework.columnName).toBe('انضباطی');
+
+    expect(ctx.db.prepare('SELECT value FROM scores WHERE student_id = ? AND column_id = ?')
+      .get(student.id, math.id).value).toBe(0);
+    expect(ctx.db.prepare('SELECT value FROM scores WHERE student_id = ? AND column_id = ?')
+      .get(student.id, discipline.id).value).toBe(10);
+    const stored = ctx.db.prepare('SELECT column_id, awarded FROM homework_status WHERE homework_id = ? AND student_id = ?')
+      .get(homework.id, student.id);
+    expect(stored).toEqual({ column_id: discipline.id, awarded: 10 });
+  });
+
+  it('falls back to the discipline column when no column is chosen', async () => {
+    const discipline = fixture.columnsA.find((column) => column.name === 'انضباطی');
+    const homework = await createWithPoints(10);
+    const student = fixture.studentsA[0];
+    await mark(homework.id, student.id, 'done');
+    const row = ctx.db.prepare('SELECT column_id FROM scores WHERE student_id = ?').get(student.id);
+    expect(row.column_id).toBe(discipline.id);
+  });
+
+  it('rejects a column that belongs to another league', async () => {
+    const foreignColumn = fixture.columnsB[0];
+    const res = await client.post(`/api/v1/leagues/${fixture.leagueA.id}/homework`, {
+      title: 'تکلیف', points: 5, columnId: foreignColumn.id,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('COLUMN_NOT_FOUND');
+  });
 });
 
 describe('questions and answers', () => {

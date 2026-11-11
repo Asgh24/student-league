@@ -1663,6 +1663,7 @@ describe('student homework', () => {
         { id: 2, title: 'خواندن درس', description: '', dueDate: null, points: 5, createdAt: '2026-11-04T11:00:00.000Z', status: 'not_done' },
         { id: 3, title: 'انشا', description: '', dueDate: null, points: 5, createdAt: '2026-11-04T12:00:00.000Z', status: 'incomplete' },
         { id: 4, title: 'املا', description: '', dueDate: null, points: 5, createdAt: '2026-11-04T13:00:00.000Z', status: 'absent' },
+        { id: 5, title: 'دفتر مشق', description: '', dueDate: null, points: 5, createdAt: '2026-11-04T14:00:00.000Z', status: 'not_brought' },
       ],
     });
 
@@ -1675,11 +1676,13 @@ describe('student homework', () => {
     expect(view.textContent).toContain('خواندن درس');
     expect(view.textContent).toContain('انشا');
     expect(view.textContent).toContain('املا');
-    expect(view.querySelectorAll('.timeline-item')).toHaveLength(4);
+    expect(view.textContent).toContain('دفتر مشق');
+    expect(view.querySelectorAll('.timeline-item')).toHaveLength(5);
     expect(view.textContent).toContain('انجام‌شده');
     expect(view.textContent).toContain('انجام‌نشده');
     expect(view.textContent).toContain('ناقص');
     expect(view.textContent).toContain('غایب');
+    expect(view.textContent).toContain('نیاورده');
     expect(view.textContent).toContain('۱۰ امتیاز');
     // Read-only: no teacher edit/delete controls.
     expect(view.textContent).not.toContain('تکلیف جدید');
@@ -1695,19 +1698,36 @@ describe('student homework', () => {
 });
 
 describe('teacher homework points and statuses', () => {
-  it('shows points and lets the teacher set any of the four statuses', async () => {
+  it('shows points, column and penalty, and offers the not-brought status', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/leagues/1') return Promise.resolve({ league: { id: 1, name: 'لیگ تست' } });
+      if (url === '/leagues/1/columns') {
+        return Promise.resolve({ items: [{ id: 5, name: 'ریاضی' }, { id: 9, name: 'انضباطی' }] });
+      }
       if (url === '/leagues/1/homework') {
         return Promise.resolve({
-          items: [{ id: 1, title: 'تمرین ریاضی', description: '', dueDate: null, points: 10, doneCount: 1, pendingCount: 2, absentCount: 1, incompleteCount: 0 }],
+          items: [{
+            id: 1,
+            title: 'تمرین ریاضی',
+            description: '',
+            dueDate: null,
+            points: 10,
+            penaltyPoints: 2,
+            columnId: 5,
+            columnName: 'ریاضی',
+            doneCount: 1,
+            pendingCount: 2,
+            absentCount: 1,
+            incompleteCount: 0,
+            notBroughtCount: 1,
+          }],
         });
       }
       if (url === '/homework/1/status') {
         return Promise.resolve({
-          homework: { id: 1, title: 'تمرین ریاضی', points: 10 },
+          homework: { id: 1, title: 'تمرین ریاضی', points: 10, penaltyPoints: 2, columnName: 'ریاضی' },
           items: [
-            { studentId: 11, name: 'آرش آزمون', status: 'done', awarded: 10 },
+            { studentId: 11, name: 'آرش آزمون', status: 'not_brought', awarded: -2 },
             { studentId: 12, name: 'بهار بنفش', status: 'absent', awarded: -10 },
           ],
         });
@@ -1722,19 +1742,59 @@ describe('teacher homework points and statuses', () => {
     expect(view.textContent).toContain('۱۰ امتیاز');
     expect(view.textContent).toContain('۱ انجام‌شده');
     expect(view.textContent).toContain('۱ غایب');
+    expect(view.textContent).toContain('ریاضی');
+    expect(view.textContent).toContain('جریمه');
+    expect(view.textContent).toContain('۱ نیاورده');
 
     view.querySelector('button[aria-label="وضعیت دانش‌آموزان"]').click();
     await vi.waitFor(() => expect(document.querySelectorAll('.modal select')).toHaveLength(2));
     const selects = document.querySelectorAll('.modal select');
-    expect(selects[0].value).toBe('done');
+    expect(selects[0].value).toBe('not_brought');
+    expect(selects[0].textContent).toContain('نیاورده');
     expect(selects[1].value).toBe('absent');
+    expect(document.querySelector('.modal').textContent).toContain('نیاورده');
     expect(document.querySelector('.modal').textContent).toContain('ناقص');
     expect(document.querySelector('.modal').textContent).toContain('غایب');
-    expect(document.querySelector('.modal').textContent).toContain('۱۰ امتیاز');
+    expect(document.querySelector('.modal').textContent).toContain('در ستون «ریاضی»');
+    expect(document.querySelector('.modal').textContent).toContain('−۲ امتیاز');
 
     selects[0].value = 'incomplete';
     selects[0].dispatchEvent(new window.Event('change', { bubbles: true }));
     await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/homework/1/status', { studentId: 11, status: 'incomplete' }));
+  });
+
+  it('sends the chosen column and penalty when creating an assignment', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/leagues/1') return Promise.resolve({ league: { id: 1, name: 'لیگ تست' } });
+      if (url === '/leagues/1/columns') {
+        return Promise.resolve({ items: [{ id: 5, name: 'ریاضی' }, { id: 9, name: 'انضباطی' }] });
+      }
+      if (url === '/leagues/1/homework') return Promise.resolve({ items: [] });
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+    api.post.mockResolvedValue({ homework: { id: 2 } });
+
+    await renderHomework({ params: { id: '1' } });
+    [...document.querySelectorAll('#view button')].find((node) => node.textContent.includes('تکلیف جدید')).click();
+
+    await vi.waitFor(() => expect(document.querySelector('#f-columnId')).not.toBeNull());
+    expect(document.querySelector('#f-columnId').value).toBe('9');
+    document.querySelector('#f-title').value = 'آزمایش علوم';
+    document.querySelector('#f-points').value = '12';
+    document.querySelector('#f-columnId').value = '5';
+    document.querySelector('#f-penaltyEnabled').checked = true;
+    document.querySelector('#f-penaltyPoints').value = '4';
+
+    [...document.querySelectorAll('#modal-root button')].find((node) => node.textContent.includes('ثبت تکلیف')).click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/leagues/1/homework', {
+      title: 'آزمایش علوم',
+      description: '',
+      dueDate: null,
+      points: 12,
+      penaltyPoints: 4,
+      columnId: 5,
+    }));
   });
 });
 

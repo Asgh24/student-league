@@ -13,31 +13,92 @@ const STATUS_OPTIONS = [
   { value: 'not_done', label: '⏳ انجام نشده', chipKind: 'muted' },
   { value: 'incomplete', label: '📝 ناقص', chipKind: 'amber' },
   { value: 'absent', label: '🚫 غایب', chipKind: 'bad' },
+  { value: 'not_brought', label: '🎒 نیاورده', chipKind: 'bad' },
 ];
 
 function statusLabel(status) {
   return STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status;
 }
 
-async function createHomework(leagueId, reload) {
+/** Score columns of the class, used by the per-homework column picker. */
+function columnOptions(columns, selectedId) {
+  return columns.map((column) => ({
+    value: column.id,
+    label: column.name,
+    selected: String(column.id) === String(selectedId),
+  }));
+}
+
+/** Default column shown in the create dialog: انضباطی, else the first column. */
+function defaultColumnId(columns) {
+  return columns.find((column) => column.name === 'انضباطی')?.id ?? columns[0]?.id ?? null;
+}
+
+function scoringHint(penalty) {
+  const fine = Number(penalty) || 0;
+  return fine > 0
+    ? `انجام‌شده: +امتیاز، غایب: −امتیاز، انجام‌نشده/ناقص/نیاورده: −${fa(fine)} امتیاز`
+    : 'انجام‌شده: +امتیاز، غایب: −امتیاز، انجام‌نشده/ناقص/نیاورده: بدون تغییر';
+}
+
+function homeworkFields(columns, { item = null, points = 10 } = {}) {
+  const selectedColumn = item?.columnId ?? defaultColumnId(columns);
+  const penalty = Number(item?.penaltyPoints) || 0;
+  return [
+    { name: 'title', label: 'عنوان', type: 'text', required: true, placeholder: 'مثلاً تمرین فصل سوم', value: item?.title ?? '' },
+    { name: 'description', label: 'توضیح', type: 'textarea', placeholder: 'شرح تکلیف برای دانش‌آموزان', value: item?.description ?? '' },
+    { name: 'dueDate', label: 'مهلت (شمسی، اختیاری)', type: 'jalali-date', allowEmpty: true, value: item?.dueDate ?? '' },
+    { name: 'points', label: 'امتیاز انجام تکلیف', type: 'number', min: 0, max: 10000, step: 1, value: item?.points ?? points, hint: 'انجام‌شده: +امتیاز، غایب: −امتیاز' },
+    {
+      name: 'columnId',
+      label: 'ستون امتیازی لیگ',
+      type: 'select',
+      value: selectedColumn ?? '',
+      options: columns.length
+        ? columnOptions(columns, selectedColumn)
+        : [{ value: '', label: 'ستون پیش‌فرض (انضباطی)' }],
+      hint: 'امتیاز این تکلیف در ستون انتخاب‌شده ثبت می‌شود؛ تغییر ستون، امتیازهای قبلی را هم منتقل می‌کند.',
+    },
+    {
+      name: 'penaltyEnabled',
+      label: 'جریمه برای ناقص / نیاورده / انجام‌نشده',
+      type: 'checkbox',
+      checked: penalty > 0,
+    },
+    {
+      name: 'penaltyPoints',
+      label: 'میزان جریمه (امتیاز)',
+      type: 'number',
+      min: 0,
+      max: 10000,
+      step: 1,
+      value: penalty,
+      hint: 'اگر تیک جریمه خورده باشد، این مقدار از امتیاز دانش‌آموز کم می‌شود.',
+    },
+  ];
+}
+
+function valuesToPayload(values) {
+  const penaltyEnabled = Boolean(values.penaltyEnabled);
+  return {
+    title: values.title.trim(),
+    description: values.description.trim(),
+    dueDate: values.dueDate || null,
+    points: Number(values.points) || 0,
+    penaltyPoints: penaltyEnabled ? (Number(values.penaltyPoints) || 0) : 0,
+    columnId: values.columnId ? Number(values.columnId) : null,
+  };
+}
+
+async function createHomework(leagueId, reload, columns) {
   const values = await formDialog({
     title: 'تکلیف جدید',
     submitLabel: 'ثبت تکلیف',
-    fields: [
-      { name: 'title', label: 'عنوان', type: 'text', required: true, placeholder: 'مثلاً تمرین فصل سوم' },
-      { name: 'description', label: 'توضیح', type: 'textarea', placeholder: 'شرح تکلیف برای دانش‌آموزان' },
-      { name: 'dueDate', label: 'مهلت (شمسی، اختیاری)', type: 'jalali-date', allowEmpty: true },
-      { name: 'points', label: 'امتیاز تکلیف', type: 'number', min: 0, max: 10000, step: 1, value: 10, hint: 'انجام‌شده: +امتیاز، غایب: −امتیاز، انجام‌نشده/ناقص: بدون تغییر' },
-    ],
+    fields: homeworkFields(columns),
   });
   if (!values) return;
   try {
-    await api.post(`/leagues/${leagueId}/homework`, {
-      title: values.title.trim(),
-      description: values.description.trim(),
-      dueDate: values.dueDate || null,
-      points: Number(values.points) || 0,
-    });
+    await api.post(`/leagues/${leagueId}/homework`, valuesToPayload(values));
     notify.ok('تکلیف ثبت شد');
     reload();
   } catch (error) {
@@ -45,25 +106,15 @@ async function createHomework(leagueId, reload) {
   }
 }
 
-async function editHomework(item, reload) {
+async function editHomework(item, reload, columns) {
   const values = await formDialog({
     title: 'ویرایش تکلیف',
     submitLabel: 'ذخیره',
-    fields: [
-      { name: 'title', label: 'عنوان', type: 'text', value: item.title, required: true },
-      { name: 'description', label: 'توضیح', type: 'textarea', value: item.description ?? '' },
-      { name: 'dueDate', label: 'مهلت (شمسی)', type: 'jalali-date', allowEmpty: true, value: item.dueDate ?? '' },
-      { name: 'points', label: 'امتیاز تکلیف', type: 'number', min: 0, max: 10000, step: 1, value: item.points ?? 0, hint: 'تغییر امتیاز، امتیاز ثبت‌شده دانش‌آموزان را هم اصلاح می‌کند.' },
-    ],
+    fields: homeworkFields(columns, { item }),
   });
   if (!values) return;
   try {
-    await api.patch(`/homework/${item.id}`, {
-      title: values.title.trim(),
-      description: values.description.trim(),
-      dueDate: values.dueDate || null,
-      points: Number(values.points) || 0,
-    });
+    await api.patch(`/homework/${item.id}`, valuesToPayload(values));
     notify.ok('تکلیف ذخیره شد');
     reload();
   } catch (error) {
@@ -96,6 +147,8 @@ async function openStatus(item, reload) {
     try {
       const payload = await api.get(`/homework/${item.id}/status`);
       const points = payload.homework?.points ?? item.points ?? 0;
+      const penalty = payload.homework?.penaltyPoints ?? item.penaltyPoints ?? 0;
+      const columnName = payload.homework?.columnName ?? item.columnName ?? '';
       const list = el('div');
       for (const student of payload.items) {
         const select = el('select', { 'aria-label': `وضعیت ${student.name}` });
@@ -122,7 +175,9 @@ async function openStatus(item, reload) {
       }
       modal.setContent([
         el('h2.modal__title', { text: `وضعیت تکلیف: ${item.title}` }),
-        el('p.small.muted', { text: `⭐ ${fa(points)} امتیاز — انجام‌شده +امتیاز، غایب −امتیاز، انجام‌نشده/ناقص بدون تغییر` }),
+        el('p.small.muted', {
+          text: `⭐ ${fa(points)} امتیاز${columnName ? ` در ستون «${columnName}»` : ''} — ${scoringHint(penalty)}`,
+        }),
         el('div.row', { style: { flexWrap: 'wrap' } }, STATUS_OPTIONS.map((option) => (
           button(`همه: ${option.label}`, { kind: 'soft', onClick: () => bulk(option.value, refresh, reload) })
         ))),
@@ -158,10 +213,14 @@ export async function renderHomework({ params }) {
     body.replaceChildren(loadingNode());
     let league;
     let payload;
+    let columns = [];
     try {
-      [league, payload] = await Promise.all([
+      [league, payload, columns] = await Promise.all([
         api.get(`/leagues/${leagueId}`),
         api.get(`/leagues/${leagueId}/homework`),
+        // The column picker is optional: keep the page usable when the
+        // teacher has no score permission.
+        api.get(`/leagues/${leagueId}/columns`).then((res) => res.items ?? []).catch(() => []),
       ]);
     } catch (error) {
       body.replaceChildren(emptyState({ icon: '⚠️', title: 'دریافت تکالیف ناموفق بود', hint: errorMessage(error) }));
@@ -184,15 +243,18 @@ export async function renderHomework({ params }) {
           item.description ? el('div.small.muted', { text: item.description }) : null,
           el('div.row', { style: { gap: '6px', marginTop: '4px' } }, [
             chip(`⭐ ${fa(item.points ?? 0)} امتیاز`, 'muted'),
+            chip(`📊 ${item.columnName || 'ستون پیش‌فرض'}`, 'muted'),
+            item.penaltyPoints > 0 ? chip(`جریمه ${fa(item.penaltyPoints)} امتیاز`, 'bad') : null,
             chip(`✅ ${fa(item.doneCount)} انجام‌شده`, 'ok'),
             chip(`⏳ ${fa(item.pendingCount)} باقی‌مانده`, 'muted'),
             item.absentCount ? chip(`🚫 ${fa(item.absentCount)} غایب`, 'bad') : null,
             item.incompleteCount ? chip(`📝 ${fa(item.incompleteCount)} ناقص`, 'amber') : null,
+            item.notBroughtCount ? chip(`🎒 ${fa(item.notBroughtCount)} نیاورده`, 'bad') : null,
           ]),
         ]),
         el('span.row', { style: { gap: '3px' } }, [
           iconButton('👥', { label: 'وضعیت دانش‌آموزان', kind: 'soft', onClick: () => openStatus(item, load) }),
-          iconButton('✏️', { label: 'ویرایش تکلیف', onClick: () => editHomework(item, load) }),
+          iconButton('✏️', { label: 'ویرایش تکلیف', onClick: () => editHomework(item, load, columns) }),
           iconButton('✕', { label: 'حذف تکلیف', danger: true, onClick: () => deleteHomework(item, load) }),
         ]),
       ]));
@@ -204,7 +266,7 @@ export async function renderHomework({ params }) {
         title: 'تکالیف',
         subtitle: league.league.name,
         actions: [
-          button('تکلیف جدید', { icon: '➕', onClick: () => createHomework(leagueId, load) }),
+          button('تکلیف جدید', { icon: '➕', onClick: () => createHomework(leagueId, load, columns) }),
           el('a.btn.btn--ghost', { href: `#/teacher/league/${leagueId}`, text: '↩️ لیگ' }),
           backToWorkbench(),
         ],

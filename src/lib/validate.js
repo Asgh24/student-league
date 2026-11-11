@@ -478,6 +478,8 @@ export const schemas = {
     description: z.string().trim().max(2000).default(''),
     dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ نامعتبر است').nullable().optional(),
     points: z.coerce.number().int('امتیاز باید عدد صحیح باشد').min(0).max(10000).default(0),
+    penaltyPoints: z.coerce.number().int('جریمه باید عدد صحیح باشد').min(0).max(10000).default(0),
+    columnId: z.coerce.number().int().positive().nullable().optional(),
   }),
 
   homeworkUpdate: z.object({
@@ -485,11 +487,13 @@ export const schemas = {
     description: z.string().trim().max(2000).optional(),
     dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
     points: z.coerce.number().int('امتیاز باید عدد صحیح باشد').min(0).max(10000).optional(),
+    penaltyPoints: z.coerce.number().int('جریمه باید عدد صحیح باشد').min(0).max(10000).optional(),
+    columnId: z.coerce.number().int().positive().nullable().optional(),
   }).refine((v) => Object.keys(v).length > 0, { message: 'هیچ تغییری ارسال نشده است' }),
 
   homeworkStatus: z.object({
     studentId: z.coerce.number().int().positive(),
-    status: z.enum(['done', 'not_done', 'incomplete', 'absent']),
+    status: z.enum(['done', 'not_done', 'incomplete', 'absent', 'not_brought']),
   }),
 
   questionCreate: questionCreateSchema,

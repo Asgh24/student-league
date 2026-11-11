@@ -135,7 +135,7 @@ describe('daily parent report data', () => {
     expect(res.status).toBe(200);
 
     const row = res.body.items.find((item) => item.studentId === first.id);
-    expect(row.homework).toEqual([{ title: 'تمرین ریاضی', points: 10, status: 'done' }]);
+    expect(row.homework).toEqual([{ title: 'تمرین ریاضی', points: 10, penaltyPoints: 0, status: 'done' }]);
     expect(row.message).toContain('تکالیف: تمرین ریاضی (انجام شد، +۱۰)');
     // The homework points are real score history of the same day also.
     expect(row.lines).toEqual(expect.arrayContaining([
@@ -143,7 +143,7 @@ describe('daily parent report data', () => {
     ]));
 
     const absentRow = res.body.items.find((item) => item.studentId === second.id);
-    expect(absentRow.homework).toEqual([{ title: 'تمرین ریاضی', points: 10, status: 'absent' }]);
+    expect(absentRow.homework).toEqual([{ title: 'تمرین ریاضی', points: 10, penaltyPoints: 0, status: 'absent' }]);
     expect(absentRow.message).toContain('تکالیف: تمرین ریاضی (غایب، -۱۰)');
     expect(absentRow.lines).toEqual(expect.arrayContaining([
       expect.objectContaining({ columnName: 'انضباطی', delta: -10 }),
@@ -152,7 +152,7 @@ describe('daily parent report data', () => {
     // A student with no status recorded defaults to انجام نشد, and homework
     // due on another day never appears.
     const untouched = res.body.items.find((item) => item.studentId === fixture.studentsA[2].id);
-    expect(untouched.homework).toEqual([{ title: 'تمرین ریاضی', points: 10, status: 'not_done' }]);
+    expect(untouched.homework).toEqual([{ title: 'تمرین ریاضی', points: 10, penaltyPoints: 0, status: 'not_done' }]);
     expect(untouched.message).toContain('تکالیف: تمرین ریاضی (انجام نشد)');
     expect(res.body.items.every((item) => !item.message.includes('تکلیف دیروز'))).toBe(true);
   });
@@ -167,9 +167,10 @@ describe('daily parent report data', () => {
       homework: [
         { title: 'تمرین ریاضی', points: 10, status: 'done' },
         { title: 'خواندن', points: 5, status: 'incomplete' },
+        { title: 'آزمایش', points: 5, penaltyPoints: 3, status: 'not_brought' },
       ],
     });
-    expect(message).toContain('تکالیف: تمرین ریاضی (انجام شد، +۱۰)، خواندن (ناقص)');
+    expect(message).toContain('تکالیف: تمرین ریاضی (انجام شد، +۱۰)، خواندن (ناقص)، آزمایش (نیاورده، -۳)');
     const withoutHomework = buildDailyMessage({
       leagueName: 'لیگ نمونه', studentName: 'علی رضایی', date: '2026-10-21',
       lines: [], totalDelta: 0,
