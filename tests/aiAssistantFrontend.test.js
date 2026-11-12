@@ -196,3 +196,53 @@ describe('AI Q&A assistant UI', () => {
     expect(document.querySelectorAll('.ai-question')).toHaveLength(0);
   });
 });
+
+describe('AI Q&A assistant per-question points', () => {
+  it('lets the teacher change each generated question points before bulk saving', async () => {
+    api.get.mockResolvedValueOnce({ config: config() });
+    api.post.mockImplementation((url) => {
+      if (url === '/leagues/1/ai/questions') return Promise.resolve({ questions });
+      if (url === '/leagues/1/questions/bulk') return Promise.resolve({ items: [] });
+      return Promise.reject(new Error(`unexpected post ${url}`));
+    });
+    const reload = vi.fn().mockResolvedValue(undefined);
+
+    await openAiAssistant({ leagueId: 1, reload });
+    document.querySelector('#ai-topic').value = 'جغرافیا';
+    clickButton('ساخت سؤال با هوش مصنوعی');
+    await vi.waitFor(() => expect(document.querySelectorAll('.ai-question')).toHaveLength(2));
+
+    const pointInputs = [...document.querySelectorAll('.ai-question__points')];
+    expect(pointInputs).toHaveLength(2);
+    expect(pointInputs[0].value).toBe('25');
+    pointInputs[0].value = '40';
+    pointInputs[1].value = '5';
+
+    clickButton('ذخیره سؤال‌های انتخاب‌شده');
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/leagues/1/questions/bulk', {
+      questions: [
+        { ...questions[0], points: 40 },
+        { ...questions[1], points: 5 },
+      ],
+    }));
+  });
+
+  it('refuses to save an invalid per-question points value', async () => {
+    api.get.mockResolvedValueOnce({ config: config() });
+    api.post.mockImplementation((url) => {
+      if (url === '/leagues/1/ai/questions') return Promise.resolve({ questions });
+      return Promise.reject(new Error(`unexpected post ${url}`));
+    });
+
+    await openAiAssistant({ leagueId: 1, reload: vi.fn() });
+    document.querySelector('#ai-topic').value = 'جغرافیا';
+    clickButton('ساخت سؤال با هوش مصنوعی');
+    await vi.waitFor(() => expect(document.querySelectorAll('.ai-question')).toHaveLength(2));
+
+    document.querySelectorAll('.ai-question__points')[0].value = '20000';
+    clickButton('ذخیره سؤال‌های انتخاب‌شده');
+
+    expect(document.querySelector('.ai-preview .ai-status').textContent).toContain('بین ۰ تا ۱۰۰۰۰');
+    expect(api.post).not.toHaveBeenCalledWith('/leagues/1/questions/bulk', expect.anything());
+  });
+});

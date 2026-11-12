@@ -189,6 +189,7 @@ export async function openAiAssistant({ leagueId, leagueName = '', reload = asyn
   function renderPreview(questions) {
     previewBox.replaceChildren();
     const checks = [];
+    const pointInputs = [];
     const selectedLabel = el('span.small.muted');
     const saveStatus = el('p.small.ai-status', { role: 'status' });
     const allCheck = el('input', {
@@ -199,7 +200,12 @@ export async function openAiAssistant({ leagueId, leagueName = '', reload = asyn
     const saveButton = button('ذخیره سؤال‌های انتخاب‌شده', { icon: '💾' });
 
     function selectedQuestions() {
-      return questions.filter((_, index) => checks[index].checked);
+      return questions
+        .map((question, index) => ({
+          ...question,
+          points: Number(pointInputs[index]?.value ?? question.points),
+        }))
+        .filter((_, index) => checks[index].checked);
     }
 
     function updateSelection() {
@@ -223,6 +229,15 @@ export async function openAiAssistant({ leagueId, leagueName = '', reload = asyn
       });
       check.addEventListener('change', updateSelection);
       checks.push(check);
+      const pointsInput = el('input.ai-question__points', {
+        type: 'number',
+        min: '0',
+        max: '10000',
+        step: '1',
+        value: String(question.points ?? 0),
+        'aria-label': `امتیاز سؤال ${fa(index + 1)}`,
+      });
+      pointInputs.push(pointsInput);
       return el('section.ai-question', {}, [
         el('label.ai-question__pick', {}, [
           check,
@@ -240,7 +255,10 @@ export async function openAiAssistant({ leagueId, leagueName = '', reload = asyn
             ],
           ))),
           el('div.row.ai-question__meta', {}, [
-            chip(`🎁 ${fa(question.points)} امتیاز`, 'amber'),
+            el('label.ai-question__points-label', {}, [
+              el('span.small', { text: '🎁 امتیاز' }),
+              pointsInput,
+            ]),
             chip(`گزینه صحیح: ${fa(question.correctIndex + 1)}`, 'muted'),
           ]),
         ]),
@@ -248,6 +266,18 @@ export async function openAiAssistant({ leagueId, leagueName = '', reload = asyn
     });
 
     saveButton.addEventListener('click', async () => {
+      const selectedIndexes = questions
+        .map((_, index) => index)
+        .filter((index) => checks[index].checked);
+      const invalidIndex = selectedIndexes.find((index) => {
+        const value = Number(pointInputs[index]?.value);
+        return !Number.isInteger(value) || value < 0 || value > 10000;
+      });
+      if (invalidIndex !== undefined) {
+        saveStatus.textContent = `امتیاز سؤال ${fa(invalidIndex + 1)} باید عددی بین ۰ تا ۱۰۰۰۰ باشد.`;
+        pointInputs[invalidIndex]?.focus();
+        return;
+      }
       const selected = selectedQuestions();
       if (selected.length === 0) return;
       saveStatus.textContent = '';

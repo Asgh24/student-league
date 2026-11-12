@@ -822,6 +822,25 @@ td.delta-cell.is-negative {
   margin-top: 5px;
   flex-wrap: wrap;
 }
+.ai-question__points-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ai-question__points {
+  width: 82px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: center;
+}
+.ai-question__points:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
 .ai-preview__actions {
   display: flex;
   justify-content: flex-start;
