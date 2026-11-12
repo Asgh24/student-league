@@ -18,6 +18,7 @@ export function createLeagueQuestionsRouter({ db }) {
     const rows = db.prepare(`
       SELECT q.id, q.body, q.points, q.is_open AS isOpen, q.created_at AS createdAt,
              q.options_json AS optionsJson, q.correct_index AS correctIndex,
+             q.explanation, q.difficulty, q.subject,
              (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) AS answerCount
       FROM questions q WHERE q.league_id = ? ORDER BY q.id DESC
     `).all(req.league.id);
@@ -28,8 +29,9 @@ export function createLeagueQuestionsRouter({ db }) {
   router.post('/bulk', validate({ body: schemas.questionBulkCreate }), (req, res) => {
     const insert = db.prepare(`
       INSERT INTO questions
-        (league_id, teacher_id, body, points, is_open, options_json, correct_index, created_at)
-      VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+        (league_id, teacher_id, body, points, is_open, options_json, correct_index,
+         explanation, difficulty, subject, created_at)
+      VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
     `);
     const ids = db.transaction(() => req.body.questions.map((question) => {
       const info = insert.run(
@@ -39,6 +41,9 @@ export function createLeagueQuestionsRouter({ db }) {
         question.points,
         JSON.stringify(question.options.map((option) => option.trim())),
         question.correctIndex,
+        question.explanation ?? '',
+        question.difficulty ?? 'medium',
+        question.subject ?? '',
         isoNow(),
       );
       return Number(info.lastInsertRowid);
@@ -46,7 +51,8 @@ export function createLeagueQuestionsRouter({ db }) {
 
     const rows = db.prepare(`
       SELECT id, body, points, is_open AS isOpen, created_at AS createdAt,
-             options_json AS optionsJson, correct_index AS correctIndex
+             options_json AS optionsJson, correct_index AS correctIndex,
+             explanation, difficulty, subject
       FROM questions WHERE id IN (${ids.map(() => '?').join(', ')}) ORDER BY id ASC
     `).all(...ids);
     const items = rows.map((row) => ({
@@ -60,8 +66,9 @@ export function createLeagueQuestionsRouter({ db }) {
     const options = req.body.options.map((option) => option.trim());
     const info = db.prepare(`
       INSERT INTO questions
-        (league_id, teacher_id, body, points, is_open, options_json, correct_index, created_at)
-      VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+        (league_id, teacher_id, body, points, is_open, options_json, correct_index,
+         explanation, difficulty, subject, created_at)
+      VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
     `).run(
       req.league.id,
       teacherId(req),
@@ -69,11 +76,15 @@ export function createLeagueQuestionsRouter({ db }) {
       req.body.points,
       JSON.stringify(options),
       req.body.correctIndex,
+      req.body.explanation ?? '',
+      req.body.difficulty ?? 'medium',
+      req.body.subject ?? '',
       isoNow(),
     );
     const row = db.prepare(`
       SELECT id, body, points, is_open AS isOpen, created_at AS createdAt,
-             options_json AS optionsJson, correct_index AS correctIndex
+             options_json AS optionsJson, correct_index AS correctIndex,
+             explanation, difficulty, subject
       FROM questions WHERE id = ?
     `).get(info.lastInsertRowid);
     res.status(201).json({ question: { ...serializeQuestion(row, { includeCorrectIndex: true }), answerCount: 0 } });

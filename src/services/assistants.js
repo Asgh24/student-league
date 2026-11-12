@@ -16,7 +16,7 @@ export const ASSISTANT_PERMISSIONS = [
   { key: 'wheel', label: 'گردونه شانس', icon: '🎡' },
   { key: 'live', label: 'تابلوی زنده', icon: '📺' },
   { key: 'timer', label: 'تایمر و ابزار', icon: '⏱️' },
-  { key: 'qa', label: 'سوال و پاسخ', icon: '❓' },
+  { key: 'qa', label: 'آزمون‌ها و بانک سؤال', icon: '🧪' },
   { key: 'homework', label: 'تکالیف', icon: '📚' },
   { key: 'schedule', label: 'برنامه هفتگی', icon: '🗂️' },
   { key: 'files', label: 'ارسال فایل', icon: '📎' },

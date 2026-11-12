@@ -8,6 +8,7 @@ import { createAuthRouter } from './auth.js';
 import { createColumnsRouter, createLeagueColumnsRouter } from './columns.js';
 import { createLeagueContactsRouter } from './contacts.js';
 import { createDisciplineRouter } from './discipline.js';
+import { createLeagueExamsRouter } from './exams.js';
 import { createLeagueEvaluationsRouter } from './evaluations.js';
 import { createFilesRouter, createLeagueFilesRouter } from './files.js';
 import { createHomeworkRouter, createLeagueHomeworkRouter } from './homework.js';
@@ -51,6 +52,7 @@ export function createApiRouter(ctx) {
   router.use('/leagues/:id/evaluations', createLeagueEvaluationsRouter(ctx));
   router.use('/leagues/:id/homework', createLeagueHomeworkRouter(ctx));
   router.use('/leagues/:id/questions', createLeagueQuestionsRouter(ctx));
+  router.use('/leagues/:id/exams', createLeagueExamsRouter(ctx));
   router.use('/leagues/:id/ai', createLeagueAiRouter(ctx));
   router.use('/leagues/:id/quiz-sessions', createLeagueQuizRouter(ctx));
   router.use('/leagues/:id/seating', createLeagueSeatingRouter(ctx));

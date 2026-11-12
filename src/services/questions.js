@@ -40,6 +40,9 @@ export function serializeQuestion(row, { includeCorrectIndex = false } = {}) {
     type: options.length >= MIN_OPTIONS ? 'multiple_choice' : 'text',
     isOpen: row.isOpen ?? row.is_open,
     createdAt: row.createdAt ?? row.created_at,
+    explanation: row.explanation ?? '',
+    difficulty: row.difficulty ?? 'medium',
+    subject: row.subject ?? '',
   };
   if (row.answerCount !== undefined && row.answerCount !== null) question.answerCount = row.answerCount;
   if (includeCorrectIndex) question.correctIndex = correctIndex;

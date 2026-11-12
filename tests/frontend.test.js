@@ -57,6 +57,7 @@ const { renderQa } = await import('../public/js/views/qa.js');
 const { renderSeating } = await import('../public/js/views/seating.js');
 const { renderStudentEvaluations } = await import('../public/js/views/student/evaluations.js');
 const { renderStudentQuestions } = await import('../public/js/views/student/questions.js');
+const { renderStudentExams } = await import('../public/js/views/student/exams.js');
 const { renderStudentHomework } = await import('../public/js/views/student/homework.js');
 const { renderHomework } = await import('../public/js/views/homework.js');
 const { renderContacts } = await import('../public/js/views/contacts.js');
@@ -2651,5 +2652,137 @@ describe('stopwatch timer', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('exam centre', () => {
+  const league = { league: { id: 1, name: 'لیگ تست' } };
+  const question = {
+    id: 5, body: 'پایتخت ایران کجاست؟', points: 15, isOpen: true, answerCount: 0,
+    type: 'multiple_choice', options: ['تهران', 'شیراز', 'اصفهان'], correctIndex: 0,
+    difficulty: 'easy', subject: 'جغرافیا', explanation: 'تهران پایتخت است.',
+    createdAt: '2026-11-01T10:00:00.000Z',
+  };
+
+  it('shows exams as the primary tab with results and status controls', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/leagues/1') return Promise.resolve(league);
+      if (url === '/leagues/1/questions') return Promise.resolve({ items: [question], recent: [] });
+      if (url === '/leagues/1/exams') {
+        return Promise.resolve({
+          items: [{
+            id: 9, title: 'آزمون میان‌ترم', description: 'فصل اول', subject: 'ریاضی',
+            status: 'published', durationMinutes: 20, passPercent: 50, maxAttempts: 2,
+            rewardPoints: 100, questionCount: 3, attemptCount: 4, studentCount: 2,
+            avgPercent: 72, passRate: 50, shuffleQuestions: true, shuffleOptions: true,
+            showAnswers: true, opensAt: null, closesAt: null,
+            createdAt: '2026-11-01T10:00:00.000Z',
+          }],
+          stats: { total: 1, published: 1, drafts: 0, attempts: 4 },
+        });
+      }
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+
+    await renderQa({ params: { id: '1' } });
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('مرکز آزمون');
+    expect(view.textContent).toContain('آزمون میان‌ترم');
+    expect(view.textContent).toContain('منتشرشده');
+    expect(view.textContent).toContain('۴ تلاش');
+    expect(view.textContent).toContain('نتایج');
+    expect(view.textContent).toContain('بانک سؤال');
+  });
+
+  it('builds an exam from the bank with a selected question', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/leagues/1') return Promise.resolve(league);
+      if (url === '/leagues/1/questions') return Promise.resolve({ items: [question], recent: [] });
+      if (url === '/leagues/1/exams') return Promise.resolve({ items: [], stats: { total: 0, published: 0, drafts: 0, attempts: 0 } });
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+    api.post.mockResolvedValue({ exam: { id: 1 } });
+
+    await renderQa({ params: { id: '1' } });
+    [...document.querySelectorAll('#view button')]
+      .find((node) => node.textContent.includes('آزمون جدید')).click();
+    await vi.waitFor(() => expect(document.querySelector('#exam-title')).not.toBeNull());
+
+    document.querySelector('#exam-title').value = 'آزمون کلاسی';
+    const picker = document.querySelector('.exam-picker');
+    picker.querySelector('input[type="checkbox"]').click();
+    [...document.querySelectorAll('#modal-root button')]
+      .find((node) => node.textContent.includes('ساخت آزمون')).click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/leagues/1/exams', expect.objectContaining({
+      title: 'آزمون کلاسی',
+      questionIds: [5],
+      durationMinutes: 20,
+    })));
+  });
+
+  it('runs a timed exam, autosaves the chosen option and shows the result', async () => {
+    const exam = {
+      id: 9, title: 'آزمون کوتاه', description: '', subject: 'ریاضی', durationMinutes: 10,
+      passPercent: 50, maxAttempts: 1, rewardPoints: 20, questionCount: 1,
+      attemptsUsed: 0, attemptsRemaining: 1, bestPercent: null, bestPassed: null,
+      lastAttempt: null, inProgressAttemptId: null, available: true, state: 'open',
+      shuffleQuestions: false, shuffleOptions: false, showAnswers: true,
+      opensAt: null, closesAt: null, createdAt: '2026-11-01T10:00:00.000Z',
+    };
+    const attemptPayload = {
+      attempt: { id: 44, examId: 9, attemptNo: 1, status: 'in_progress' },
+      exam: { id: 9, title: exam.title, durationMinutes: 10, passPercent: 50, showAnswers: true, rewardPoints: 20 },
+      questions: [{ id: 71, questionId: 5, position: 0, body: '۲ + ۲ چند است؟', options: ['۳', '۴'], points: 10, selectedIndex: null }],
+      remainingSeconds: 600,
+    };
+    const resultPayload = {
+      ...attemptPayload,
+      attempt: { ...attemptPayload.attempt, status: 'submitted', percent: 100, passed: true, correctCount: 1, totalQuestions: 1, awardedPoints: 20 },
+      questions: [{ ...attemptPayload.questions[0], selectedIndex: 1, correctIndex: 1, isCorrect: true, awarded: 10 }],
+      result: { passed: true, percent: 100, correctCount: 1, totalQuestions: 1, awardedPoints: 20, scorePoints: 10, maxPoints: 10 },
+    };
+
+    api.get.mockResolvedValue({ items: [exam] });
+    api.put.mockResolvedValue({ ok: true });
+    api.post.mockImplementation((url) => {
+      if (url === '/student/exams/9/start') return Promise.resolve(attemptPayload);
+      if (url === '/student/exams/attempts/44/submit') return Promise.resolve(resultPayload);
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+
+    await renderStudentExams();
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('مرکز آزمون');
+    expect(view.textContent).toContain('آزمون کوتاه');
+    expect(view.textContent).toContain('شروع آزمون');
+
+    [...view.querySelectorAll('button')].find((node) => node.textContent.includes('شروع آزمون')).click();
+    await vi.waitFor(() => expect(document.querySelector('#modal-root')).not.toBeNull());
+    [...document.querySelectorAll('#modal-root button')]
+      .find((node) => node.textContent.includes('شروع')).click();
+
+    await vi.waitFor(() => expect(document.querySelector('.exam-stage')).not.toBeNull());
+    const stage = document.querySelector('.exam-stage');
+    expect(stage.textContent).toContain('۲ + ۲ چند است؟');
+    expect(stage.textContent).toContain('10:00');
+
+    const options = stage.querySelectorAll('.exam-option');
+    expect(options).toHaveLength(2);
+    options[1].click();
+    await vi.waitFor(() => expect(api.put).toHaveBeenCalledWith(
+      '/student/exams/attempts/44/answers/71',
+      { optionIndex: 1 },
+    ));
+
+    [...stage.querySelectorAll('button')].find((node) => node.textContent.includes('پایان و ثبت نمره')).click();
+    await vi.waitFor(() => expect(document.querySelector('#modal-root').textContent).toContain('ثبت نهایی آزمون'));
+    [...document.querySelectorAll('#modal-root button')]
+      .find((node) => node.textContent.includes('ثبت نمره')).click();
+
+    await vi.waitFor(() => expect(document.querySelector('.exam-result')).not.toBeNull());
+    expect(document.querySelector('.exam-result').textContent).toContain('قبول شدی');
+    expect(document.querySelector('.exam-result').textContent).toContain('۱۰۰٪');
+    expect(document.querySelector('.exam-result').textContent).toContain('مرور پاسخ‌ها');
   });
 });

@@ -14,7 +14,8 @@ export const STUDENT_TABS = [
   ['student/history', '📜', 'تاریخچه'],
   ['student/ranking', '🏅', 'رده‌بندی'],
   ['student/likes', '💜', 'لایک'],
-  ['student/questions', '❓', 'سوال و پاسخ'],
+  ['student/exams', '🧪', 'آزمون‌ها'],
+  ['student/questions', '❓', 'پرسش و پاسخ'],
   ['student/settings', '⚙️', 'تنظیمات'],
 ];
 

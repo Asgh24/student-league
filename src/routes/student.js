@@ -10,6 +10,7 @@ import { readSettings } from '../repositories/leagues.js';
 import { listForStudent } from '../services/evaluations.js';
 import { getPublishedReportCard, listPublishedReportCards } from '../services/reports.js';
 import { parseStoredOptions, serializeQuestion } from '../services/questions.js';
+import { getStudentAttempt, listStudentExams, saveAttemptAnswer, startAttempt, submitAttempt } from '../services/exams.js';
 import { activeUploadCutoff, uploadExpiresAt } from '../services/storage.js';
 import { readSchedule } from './schedule.js';
 import {
@@ -225,6 +226,41 @@ export function createStudentPortalRouter({ db }) {
         created_at = excluded.created_at
     `).run(question.id, student.id, body, selectedIndex, isoNow());
     res.status(201).json({ ok: true });
+  });
+
+  /** Professional exams: available list, timed attempt, autosave and result. */
+  router.get('/exams', (req, res) => {
+    res.json(listStudentExams(db, contextOf(db, req)));
+  });
+
+  router.post('/exams/:id/start', (req, res) => {
+    const student = contextOf(db, req);
+    const examId = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(examId)) throw notFound('آزمون یافت نشد');
+    res.json(startAttempt(db, student, examId));
+  });
+
+  router.get('/exams/attempts/:attemptId', (req, res) => {
+    const attemptId = Number.parseInt(req.params.attemptId, 10);
+    if (!Number.isFinite(attemptId)) throw notFound('آزمون یافت نشد');
+    res.json(getStudentAttempt(db, contextOf(db, req), attemptId));
+  });
+
+  router.put(
+    '/exams/attempts/:attemptId/answers/:answerId',
+    validate({ body: schemas.examAnswer }),
+    (req, res) => {
+      const attemptId = Number.parseInt(req.params.attemptId, 10);
+      const answerId = Number.parseInt(req.params.answerId, 10);
+      if (!Number.isFinite(attemptId) || !Number.isFinite(answerId)) throw notFound('سؤال آزمون یافت نشد');
+      res.json(saveAttemptAnswer(db, contextOf(db, req), attemptId, answerId, req.body.optionIndex));
+    },
+  );
+
+  router.post('/exams/attempts/:attemptId/submit', (req, res) => {
+    const attemptId = Number.parseInt(req.params.attemptId, 10);
+    if (!Number.isFinite(attemptId)) throw notFound('آزمون یافت نشد');
+    res.json(submitAttempt(db, contextOf(db, req), attemptId));
   });
 
   router.get('/schedule', (req, res) => {

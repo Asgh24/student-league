@@ -10,6 +10,9 @@ const questionCreateSchema = z.object({
     .min(2, 'حداقل دو گزینه لازم است')
     .max(10, 'حداکثر ۱۰ گزینه مجاز است'),
   correctIndex: z.coerce.number().int().min(0, 'گزینه صحیح را انتخاب کنید').max(9),
+  explanation: z.string().trim().max(1000).optional().default(''),
+  difficulty: z.enum(['easy', 'medium', 'hard']).optional().default('medium'),
+  subject: z.string().trim().max(60).optional().default(''),
 }).refine((value) => value.correctIndex < value.options.length, {
   message: 'گزینه صحیح باید یکی از گزینه‌ها باشد',
   path: ['correctIndex'],
@@ -544,6 +547,55 @@ export const schemas = {
       questionId: z.coerce.number().int().positive(),
       correct: z.boolean(),
     })).min(1, 'حداقل یک سؤال لازم است').max(100),
+  }),
+
+  /** Professional exams built from the class question bank. */
+  examCreate: z.object({
+    title: z.string().trim().min(1, 'عنوان آزمون الزامی است').max(120),
+    description: z.string().trim().max(2000).default(''),
+    subject: z.string().trim().max(60).default(''),
+    durationMinutes: z.coerce.number().int().min(1, 'مدت آزمون حداقل یک دقیقه است').max(600).default(20),
+    passPercent: z.coerce.number().int().min(0).max(100).default(50),
+    maxAttempts: z.coerce.number().int().min(1).max(20).default(1),
+    shuffleQuestions: z.boolean().default(true),
+    shuffleOptions: z.boolean().default(true),
+    showAnswers: z.boolean().default(true),
+    rewardPoints: z.coerce.number().int().min(0).max(10000).default(0),
+    opensAt: z.string().trim().max(40).nullable().optional(),
+    closesAt: z.string().trim().max(40).nullable().optional(),
+    questionIds: z.array(z.coerce.number().int().positive())
+      .min(1, 'حداقل یک سؤال انتخاب کنید')
+      .max(200, 'حداکثر ۲۰۰ سؤال در هر آزمون مجاز است'),
+  }).refine((value) => {
+    if (!value.opensAt || !value.closesAt) return true;
+    return Date.parse(value.closesAt) >= Date.parse(value.opensAt);
+  }, { message: 'زمان پایان باید بعد از زمان شروع باشد', path: ['closesAt'] }),
+
+  examUpdate: z.object({
+    title: z.string().trim().min(1, 'عنوان آزمون الزامی است').max(120).optional(),
+    description: z.string().trim().max(2000).optional(),
+    subject: z.string().trim().max(60).optional(),
+    durationMinutes: z.coerce.number().int().min(1).max(600).optional(),
+    passPercent: z.coerce.number().int().min(0).max(100).optional(),
+    maxAttempts: z.coerce.number().int().min(1).max(20).optional(),
+    shuffleQuestions: z.boolean().optional(),
+    shuffleOptions: z.boolean().optional(),
+    showAnswers: z.boolean().optional(),
+    rewardPoints: z.coerce.number().int().min(0).max(10000).optional(),
+    opensAt: z.string().trim().max(40).nullable().optional(),
+    closesAt: z.string().trim().max(40).nullable().optional(),
+    questionIds: z.array(z.coerce.number().int().positive())
+      .min(1, 'حداقل یک سؤال انتخاب کنید')
+      .max(200)
+      .optional(),
+  }).refine((value) => {
+    if (!value.opensAt || !value.closesAt) return true;
+    return Date.parse(value.closesAt) >= Date.parse(value.opensAt);
+  }, { message: 'زمان پایان باید بعد از زمان شروع باشد', path: ['closesAt'] })
+    .refine((value) => Object.keys(value).length > 0, { message: 'هیچ تغییری ارسال نشده است' }),
+
+  examAnswer: z.object({
+    optionIndex: z.coerce.number().int('گزینه معتبر نیست').min(0).max(9),
   }),
 
   /** «جای‌گیری»: the classroom grid and where every student sits. */
