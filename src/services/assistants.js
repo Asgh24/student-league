@@ -9,6 +9,7 @@ export const ASSISTANT_PERMISSIONS = [
   { key: 'scores', label: 'لیگ انفرادی و امتیازها', icon: '🏆' },
   { key: 'teams', label: 'لیگ تیمی', icon: '🛡️' },
   { key: 'attendance', label: 'حضور و غیاب', icon: '🗓️' },
+  { key: 'discipline', label: 'انضباط', icon: '📏' },
   { key: 'evaluations', label: 'ارزشیابی دروس', icon: '📝' },
   { key: 'raffle', label: 'قرعه‌کشی', icon: '🎲' },
   { key: 'representative', label: 'نماینده کلاس', icon: '👑' },

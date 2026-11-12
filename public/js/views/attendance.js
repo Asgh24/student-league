@@ -54,7 +54,7 @@ async function copyToClipboard(text) {
   return copied;
 }
 
-async function openManagerShad({ leagueName, day, items }) {
+async function openManagerShad({ leagueName, day, items, shadPvUrl }) {
   const absentees = items.filter((student) => student.status === 'absent');
   if (absentees.length === 0) {
     notify.error('برای این روز دانش‌آموز غایبی ثبت نشده است');
@@ -63,9 +63,12 @@ async function openManagerShad({ leagueName, day, items }) {
 
   const message = buildManagerAbsenteesMessage({ leagueName, day, absentees });
 
+  // Prefer the manager's saved private Shad link; fall back to the Shad web
+  // entrance when the teacher has not saved one yet.
+  const target = shadPvUrl || SHAD_WEB_URL;
   // Open during the click gesture before awaiting clipboard permission, or the
   // browser may treat the new tab as an unwanted popup.
-  const tab = window.open(SHAD_WEB_URL, '_blank');
+  const tab = window.open(target, '_blank');
   if (tab) {
     try {
       tab.opener = null;
@@ -74,6 +77,9 @@ async function openManagerShad({ leagueName, day, items }) {
     }
   } else {
     notify.warn('مرورگر صفحهٔ شاد را مسدود کرد؛ اجازهٔ باز شدن پنجره را بدهید و دوباره تلاش کنید');
+  }
+  if (!shadPvUrl) {
+    notify.info('لینک PV مدیر ذخیره نشده است؛ صفحهٔ اصلی شاد باز شد. می‌توانید لینک PV را در همین صفحه وارد و ذخیره کنید');
   }
 
   const copied = await copyToClipboard(message);
@@ -218,6 +224,26 @@ export async function renderAttendance({ params }) {
     }
     setLeaguePill({ name: league.league.name });
     day = sheet.date;
+    let managerShadUrl = sheet.settings?.managerShadPvUrl ?? '';
+    const managerShadInput = el('input', {
+      type: 'url',
+      id: 'manager-shad-url',
+      value: managerShadUrl,
+      placeholder: 'https://web.shad.ir/#/pv/...',
+      maxLength: 2000,
+    });
+
+    async function saveManagerShad() {
+      const raw = managerShadInput.value.trim();
+      try {
+        const result = await api.put(`/leagues/${leagueId}/attendance/manager-shad`, { url: raw });
+        managerShadUrl = result.settings?.managerShadPvUrl ?? '';
+        managerShadInput.value = managerShadUrl;
+        notify.ok(managerShadUrl ? 'لینک PV مدیر ذخیره شد' : 'لینک PV مدیر پاک شد');
+      } catch (error) {
+        notify.error(errorMessage(error));
+      }
+    }
 
     async function setStatus(studentId, status) {
       try {
@@ -276,6 +302,14 @@ export async function renderAttendance({ params }) {
             ]),
           ]),
         ]),
+        el('div.field', {}, [
+          el('label', { for: 'manager-shad-url', text: 'لینک PV مدیر مدرسه در شاد (اختیاری)' }),
+          el('div.row', {}, [
+            managerShadInput,
+            button('ذخیره لینک', { kind: 'soft', icon: '💾', onClick: () => saveManagerShad() }),
+          ]),
+          el('p.small.muted', { text: 'با ذخیره این لینک، دکمهٔ «ارسال به شاد مدیر مدرسه» مستقیماً گفت‌وگوی PV مدیر را باز می‌کند. هر زمان می‌توانید آن را تغییر دهید.' }),
+        ]),
         el('div.row', { style: { margin: '10px 0' } }, [
           button('همه حاضر', { icon: '✅', onClick: () => bulk('present') }),
           button('همه غایب', { kind: 'danger', icon: '❌', onClick: () => bulk('absent') }),
@@ -284,7 +318,7 @@ export async function renderAttendance({ params }) {
           button('ارسال به شاد مدیر مدرسه', {
             kind: 'soft',
             icon: '🟢',
-            onClick: () => openManagerShad({ leagueName: league.league.name, day, items: sheet.items }),
+            onClick: () => openManagerShad({ leagueName: league.league.name, day, items: sheet.items, shadPvUrl: managerShadUrl }),
           }),
         ]),
         sheet.items.length === 0

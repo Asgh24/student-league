@@ -38,26 +38,61 @@ function signedFa(value) {
 
 export const MAX_REPORT_LINES = 4;
 
-/** Builds the SMS text of one student's day (exported for tests). */
-export function buildDailyMessage({ leagueName, studentName, date, lines = [], totalDelta = 0, homework = [] }) {
+const ATTENDANCE_LABELS = { present: 'حاضر', absent: 'غایب', late: 'تأخیر' };
+const DISCIPLINE_LABELS = { orderly: 'منظم', disorderly: 'بی‌نظمی' };
+
+/**
+ * Builds the SMS text of one student's day (exported for tests).
+ *
+ * The message is intentionally one topic per line, in this order:
+ * date, student, attendance, discipline (with its optional reason),
+ * evaluations (score changes) and homework. This is much easier to read on a
+ * phone than the old comma-separated paragraph.
+ */
+export function buildDailyMessage({
+  leagueName,
+  studentName,
+  date,
+  lines = [],
+  homework = [],
+  attendanceStatus = null,
+  discipline = null,
+}) {
   const dateText = formatJalaliDate(date);
+  const header = leagueName ? `${dateText} — ${leagueName}` : dateText;
+
   const breakdown = [...lines]
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
     .slice(0, MAX_REPORT_LINES)
     .map((line) => `${line.columnName} ${signedFa(line.delta)}`);
   if (lines.length > MAX_REPORT_LINES) breakdown.push(`و ${toPersianDigits(lines.length - MAX_REPORT_LINES)} مورد دیگر`);
-  const detail = breakdown.length ? breakdown.join('، ') : 'امروز تغییری ثبت نشده است';
+  const evaluationText = breakdown.length ? breakdown.join('، ') : 'امروز تغییری ثبت نشده است';
+
+  const attendanceText = ATTENDANCE_LABELS[attendanceStatus] ?? 'ثبت‌نشده';
+
+  const disciplineLabel = DISCIPLINE_LABELS[discipline?.status] ?? '';
+  const disciplineNote = String(discipline?.note ?? '').trim();
+  const disciplineText = disciplineLabel
+    ? `${disciplineLabel}${disciplineNote ? ` — علت: ${disciplineNote}` : ''}`
+    : 'ثبت‌نشده';
 
   // Homework due on the report date, with each student's own status, so the
   // parent sees whether the assignment was done (and what it was worth).
-  const homeworkLine = homework.length
-    ? `\nتکالیف: ${homework.map((item) => {
+  const homeworkText = homework.length
+    ? homework.map((item) => {
       const effect = pointsForStatus(item.status, item.points, item.penaltyPoints);
       return `${item.title} (${HOMEWORK_STATUS_LABELS[item.status] ?? item.status}${effect ? `، ${signedFa(effect)}` : ''})`;
-    }).join('، ')}`
-    : '';
+    }).join('، ')
+    : 'تکلیفی برای این روز ثبت نشده است';
 
-  return `${leagueName} | گزارش روزانه ${dateText}\n${studentName}: ${detail}${homeworkLine}\nجمع تغییرات: ${signedFa(totalDelta)}`;
+  return [
+    `تاریخ: ${header}`,
+    `دانش‌آموز: ${studentName}`,
+    `وضعیت حضور: ${attendanceText}`,
+    `انضباط: ${disciplineText}`,
+    `ارزشیابی: ${evaluationText}`,
+    `تکالیف: ${homeworkText}`,
+  ].join('\n');
 }
 
 /**
@@ -74,7 +109,8 @@ export function buildSampleDailyMessage({ leagueName = 'لیگ نمونه', date
       { columnName: 'انضباطی', delta: -1 },
       { columnName: 'فارسی', delta: 1 },
     ],
-    totalDelta: 2,
+    attendanceStatus: 'present',
+    discipline: { status: 'disorderly', note: 'صحبت با همکلاسی' },
     homework: [{ title: 'تمرین ریاضی', points: 10, status: 'done' }],
   });
 }
@@ -126,11 +162,24 @@ export function dailyReport(db, leagueId, date) {
   }
 
   const contacts = new Map(contactsList(db, leagueId).map((row) => [row.id, row]));
+
+  // Attendance and discipline are separate per-day sheets; the report only
+  // reads them, it never changes them.
+  const attendanceRows = db.prepare('SELECT student_id AS studentId, status FROM attendance WHERE league_id = ? AND day = ?')
+    .all(leagueId, date);
+  const attendanceByStudent = new Map(attendanceRows.map((row) => [row.studentId, row.status]));
+
+  const disciplineRows = db.prepare('SELECT student_id AS studentId, status, note FROM discipline WHERE league_id = ? AND day = ?')
+    .all(leagueId, date);
+  const disciplineByStudent = new Map(disciplineRows.map((row) => [row.studentId, { status: row.status, note: row.note ?? '' }]));
+
   const channels = reportChannels(db, league.teacher_id);
   const items = [];
   for (const contact of contacts.values()) {
     const lines = byStudent.get(contact.id) ?? [];
     const homework = homeworkByStudent.get(contact.id) ?? [];
+    const attendanceStatus = attendanceByStudent.get(contact.id) ?? null;
+    const discipline = disciplineByStudent.get(contact.id) ?? null;
     const totalDelta = lines.reduce((sum, line) => sum + line.delta, 0);
     const changes = lines.reduce((sum, line) => sum + line.changes, 0);
     items.push({
@@ -141,11 +190,22 @@ export function dailyReport(db, leagueId, date) {
       shadPvUrl: contact.shadPvUrl,
       hasParentPhone: contact.hasParentPhone,
       hasShadPvUrl: contact.hasShadPvUrl,
+      attendanceStatus,
+      discipline,
       totalDelta,
       changes,
       lines,
       homework,
-      message: buildDailyMessage({ leagueName: league.name, studentName: contact.name, date, lines, totalDelta, homework }),
+      message: buildDailyMessage({
+        leagueName: league.name,
+        studentName: contact.name,
+        date,
+        lines,
+        totalDelta,
+        homework,
+        attendanceStatus,
+        discipline,
+      }),
     });
   }
 

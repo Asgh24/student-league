@@ -76,8 +76,11 @@ describe('daily parent report data', () => {
     ]));
     expect(row.message).toContain('آرش آزمون');
     expect(row.message).toContain('-۱۰۰');
-    expect(row.message).toContain(`گزارش روزانه ${formatJalaliDate(today)}`);
-    expect(row.message).toContain('جمع تغییرات: -۷۵');
+    expect(row.message).toContain(`تاریخ: ${formatJalaliDate(today)}`);
+    expect(row.message).toContain('لیگ الف');
+    expect(row.message).toContain('وضعیت حضور: ثبت‌نشده');
+    expect(row.message).toContain('انضباط: ثبت‌نشده');
+    expect(row.message).toContain('ارزشیابی: انضباطی -۱۰۰، ریاضی +۲۵');
 
     const untouched = res.body.items.find((item) => item.studentId === fixture.studentsA[2].id);
     expect(untouched.changes).toBe(0);
@@ -102,7 +105,9 @@ describe('daily parent report data', () => {
     expect(message).toContain('هنری +۶۰');
     expect(message).toContain('و ۲ مورد دیگر');
     expect(message).not.toContain('فارسی');
-    expect(message).toContain('جمع تغییرات: +۵۰');
+    expect(message.split('\n').map((line) => line.split(':')[0])).toEqual([
+      'تاریخ', 'دانش‌آموز', 'وضعیت حضور', 'انضباط', 'ارزشیابی', 'تکالیف',
+    ]);
   });
 
   it('defaults to today and hides the report from other teachers', async () => {
@@ -175,7 +180,48 @@ describe('daily parent report data', () => {
       leagueName: 'لیگ نمونه', studentName: 'علی رضایی', date: '2026-10-21',
       lines: [], totalDelta: 0,
     });
-    expect(withoutHomework).not.toContain('تکالیف:');
+    expect(withoutHomework).toContain('تکالیف: تکلیفی برای این روز ثبت نشده است');
+    expect(withoutHomework).toContain('انضباط: ثبت‌نشده');
+  });
+
+  it('adds the attendance status and the discipline reason on their own lines', async () => {
+    const today = todayIso();
+    const [first, second] = fixture.studentsA;
+
+    await client.post(`/api/v1/leagues/${fixture.leagueA.id}/attendance`, {
+      date: today,
+      records: [
+        { studentId: first.id, status: 'late' },
+        { studentId: second.id, status: 'absent' },
+      ],
+    });
+    await client.post(`/api/v1/leagues/${fixture.leagueA.id}/discipline`, {
+      date: today,
+      records: [
+        { studentId: first.id, status: 'disorderly', note: 'صحبت با همکلاسی' },
+        { studentId: second.id, status: 'orderly' },
+      ],
+    });
+
+    const res = await client.get(`/api/v1/leagues/${fixture.leagueA.id}/reports/daily?date=${today}`);
+    expect(res.status).toBe(200);
+
+    const firstRow = res.body.items.find((item) => item.studentId === first.id);
+    expect(firstRow.attendanceStatus).toBe('late');
+    expect(firstRow.discipline).toEqual({ status: 'disorderly', note: 'صحبت با همکلاسی' });
+    expect(firstRow.message.split('\n')).toEqual([
+      expect.stringContaining('تاریخ:'),
+      'دانش‌آموز: آرش آزمون',
+      'وضعیت حضور: تأخیر',
+      'انضباط: بی‌نظمی — علت: صحبت با همکلاسی',
+      'ارزشیابی: امروز تغییری ثبت نشده است',
+      'تکالیف: تکلیفی برای این روز ثبت نشده است',
+    ]);
+
+    const secondRow = res.body.items.find((item) => item.studentId === second.id);
+    expect(secondRow.message).toContain('وضعیت حضور: غایب');
+    expect(secondRow.message).toContain('انضباط: منظم');
+    expect(secondRow.message).not.toContain('علت:');
   });
 });
 

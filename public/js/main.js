@@ -19,6 +19,7 @@ import { homePath, can, isAdmin, isAssistant, isStudent, isTeacher, setLeagueId,
 import { notify } from './ui.js';
 
 import { renderAttendance } from './views/attendance.js';
+import { renderDiscipline } from './views/discipline.js';
 import { renderAssistants } from './views/assistants.js';
 import { renderContacts } from './views/contacts.js';
 import { renderTeacherDashboard } from './views/dashboard.js';
@@ -73,6 +74,7 @@ const LEAGUE_NAV = [
   ['', '🏆', 'لیگ انفرادی', 'scores'],
   ['teams', '🛡️', 'لیگ تیمی', 'teams'],
   ['attendance', '🗓️', 'حضور و غیاب', 'attendance'],
+  ['discipline', '📏', 'انضباط', 'discipline'],
   ['evaluations', '📝', 'ارزشیابی', 'evaluations'],
   ['report-cards', '📊', 'کارنامه دانش‌آموز', 'evaluations'],
   ['raffle', '🎲', 'قرعه‌کشی', 'raffle'],
@@ -238,6 +240,7 @@ const routes = [
   { path: 'teacher/league/:id', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderLeague(ctx) },
   { path: 'teacher/league/:id/teams', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderTeams(ctx) },
   { path: 'teacher/league/:id/attendance', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderAttendance(ctx) },
+  { path: 'teacher/league/:id/discipline', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderDiscipline(ctx) },
   { path: 'teacher/league/:id/evaluations', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderEvaluations(ctx) },
   { path: 'teacher/league/:id/raffle', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderRaffle(ctx) },
   { path: 'teacher/league/:id/representative', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderRepresentative(ctx) },

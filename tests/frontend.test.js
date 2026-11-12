@@ -63,6 +63,7 @@ const { renderContacts } = await import('../public/js/views/contacts.js');
 const { renderReports } = await import('../public/js/views/reports.js');
 const { renderReportCards } = await import('../public/js/views/reportCards.js');
 const { buildManagerAbsenteesMessage, renderAttendance } = await import('../public/js/views/attendance.js');
+const { renderDiscipline } = await import('../public/js/views/discipline.js');
 const { renderFun } = await import('../public/js/views/fun.js');
 const { renderSettings } = await import('../public/js/views/settings.js');
 const { stopwatchCard } = await import('../public/js/views/timer.js');
@@ -294,7 +295,7 @@ describe('student progress chart', () => {
 });
 
 describe('teacher dashboard', () => {
-  it('renders the league selector and the seventeen tool tiles', async () => {
+  it('renders the league selector and the eighteen tool tiles', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/leagues') {
         return Promise.resolve({
@@ -313,9 +314,10 @@ describe('teacher dashboard', () => {
     await renderTeacherDashboard();
 
     const tiles = document.querySelectorAll('#view .tile');
-    expect(tiles).toHaveLength(18);
+    expect(tiles).toHaveLength(19);
     expect(document.querySelector('#view').textContent).toContain('کلاس ششم الف');
     expect(document.querySelector('#view').textContent).toContain('لیگ انفرادی');
+    expect(document.querySelector('#view').textContent).toContain('انضباط');
     expect(document.querySelector('#view').textContent).toContain('ارزشیابی دروس');
     expect(document.querySelector('#view').textContent).toContain('جای‌گیری');
     expect(document.querySelector('#view').textContent).toContain('شماره‌ها');
@@ -358,7 +360,7 @@ describe('teacher dashboard', () => {
 
     // no manual refresh and no second call to renderTeacherDashboard
     await vi.waitFor(() => expect(document.querySelector('#view').textContent).toContain('لیگ تازه'));
-    expect(document.querySelectorAll('#view .tile')).toHaveLength(18);
+    expect(document.querySelectorAll('#view .tile')).toHaveLength(19);
     expect(api.get).toHaveBeenCalledWith('/leagues/7');
   });
 });
@@ -891,7 +893,7 @@ describe('student manual report card on phones', () => {
 describe('attendance manager Shad message', () => {
   const day = '2026-11-09';
 
-  function mockAttendance(items) {
+  function mockAttendance(items, settings = {}) {
     api.get.mockImplementation((url) => {
       if (url === '/leagues/3') {
         return Promise.resolve({ league: { id: 3, name: 'کلاس ششم' } });
@@ -900,6 +902,7 @@ describe('attendance manager Shad message', () => {
         return Promise.resolve({
           date: day,
           today: day,
+          settings,
           counters: {
             present: items.filter((item) => item.status === 'present').length,
             absent: items.filter((item) => item.status === 'absent').length,
@@ -971,6 +974,129 @@ describe('attendance manager Shad message', () => {
     } finally {
       open.mockRestore();
     }
+  });
+
+  it('opens the saved school manager PV link instead of the generic Shad page', async () => {
+    mockAttendance([
+      { studentId: 1, name: 'آرش', status: 'absent', attended: 2, recorded: 3 },
+    ], { managerShadPvUrl: 'https://web.shad.ir/#/pv/manager-1' });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const open = vi.spyOn(window, 'open').mockReturnValue({ opener: window });
+
+    try {
+      await renderAttendance({ params: { id: '3' } });
+      [...document.querySelectorAll('#view button')]
+        .find((node) => node.textContent.includes('ارسال به شاد مدیر مدرسه')).click();
+
+      await vi.waitFor(() => expect(open).toHaveBeenCalledWith('https://web.shad.ir/#/pv/manager-1', '_blank'));
+      await vi.waitFor(() => expect(writeText).toHaveBeenCalled());
+    } finally {
+      open.mockRestore();
+      if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard);
+      else delete navigator.clipboard;
+    }
+  });
+
+  it('saves and later changes the manager PV link from the attendance page', async () => {
+    mockAttendance([
+      { studentId: 1, name: 'آرش', status: 'present', attended: 3, recorded: 3 },
+    ], { managerShadPvUrl: 'https://web.shad.ir/#/pv/old' });
+    api.put.mockResolvedValueOnce({ settings: { managerShadPvUrl: 'https://web.shad.ir/#/pv/new' } });
+
+    await renderAttendance({ params: { id: '3' } });
+    const input = document.querySelector('#manager-shad-url');
+    expect(input.value).toBe('https://web.shad.ir/#/pv/old');
+
+    input.value = 'https://web.shad.ir/#/pv/new';
+    [...document.querySelectorAll('#view button')]
+      .find((node) => node.textContent.includes('ذخیره لینک')).click();
+
+    await vi.waitFor(() => expect(api.put).toHaveBeenCalledWith(
+      '/leagues/3/attendance/manager-shad',
+      { url: 'https://web.shad.ir/#/pv/new' },
+    ));
+    await vi.waitFor(() => expect(document.getElementById('toasts').textContent).toContain('لینک PV مدیر ذخیره شد'));
+  });
+});
+
+describe('daily discipline sheet', () => {
+  const day = '2026-11-09';
+
+  function mockDiscipline(items) {
+    api.get.mockImplementation((url) => {
+      if (url === '/leagues/3') {
+        return Promise.resolve({ league: { id: 3, name: 'کلاس ششم' } });
+      }
+      if (url === '/leagues/3/discipline') {
+        return Promise.resolve({
+          date: day,
+          today: day,
+          labels: { orderly: 'منظم', disorderly: 'بی‌نظمی' },
+          counters: {
+            orderly: items.filter((item) => item.status === 'orderly').length,
+            disorderly: items.filter((item) => item.status === 'disorderly').length,
+            unmarked: items.filter((item) => !item.status).length,
+          },
+          items,
+        });
+      }
+      if (url === '/leagues/3/discipline/history?limit=30') {
+        return Promise.resolve({ items: [] });
+      }
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+  }
+
+  it('renders the sheet and saves a status and a reason', async () => {
+    mockDiscipline([
+      { studentId: 1, name: 'آرش', status: null, note: '', orderly: 0, disorderly: 0, recorded: 0 },
+      { studentId: 2, name: 'سارا', status: 'disorderly', note: '', orderly: 1, disorderly: 1, recorded: 2 },
+    ]);
+    api.post.mockResolvedValue({ applied: 1 });
+
+    await renderDiscipline({ params: { id: '3' } });
+
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('انضباط');
+    expect(view.querySelectorAll('table.grid-table tbody tr')).toHaveLength(2);
+    expect(view.querySelector('input[aria-label="علت انضباط آرش"]').disabled).toBe(true);
+
+    const sarahRow = [...view.querySelectorAll('table.grid-table tbody tr')]
+      .find((row) => row.textContent.includes('سارا'));
+    [...sarahRow.querySelectorAll('button')]
+      .find((node) => node.textContent === 'منظم').click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith(
+      '/leagues/3/discipline',
+      { date: day, records: [{ studentId: 2, status: 'orderly' }] },
+    ));
+
+    const note = sarahRow.querySelector('input[aria-label="علت انضباط سارا"]');
+    note.value = 'صحبت با همکلاسی';
+    note.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith(
+      '/leagues/3/discipline',
+      { date: day, records: [{ studentId: 2, status: 'disorderly', note: 'صحبت با همکلاسی' }] },
+    ));
+  });
+
+  it('marks every student orderly from the bulk action', async () => {
+    mockDiscipline([
+      { studentId: 1, name: 'آرش', status: null, note: '', orderly: 0, disorderly: 0, recorded: 0 },
+    ]);
+    api.post.mockResolvedValue({ applied: 1 });
+
+    await renderDiscipline({ params: { id: '3' } });
+    [...document.querySelectorAll('#view button')]
+      .find((node) => node.textContent.includes('همه منظم')).click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith(
+      '/leagues/3/discipline/bulk',
+      { date: day, status: 'orderly' },
+    ));
   });
 });
 

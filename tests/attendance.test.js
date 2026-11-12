@@ -133,6 +133,42 @@ describe('attendance', () => {
   });
 });
 
+describe('school manager Shad PV link', () => {
+  it('saves the link, exposes it in the sheet and allows changing it later', async () => {
+    const saved = await client.put(`/api/v1/leagues/${fixture.leagueA.id}/attendance/manager-shad`, {
+      url: 'https://web.shad.ir/#/pv/manager-1',
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.body.settings.managerShadPvUrl).toBe('https://web.shad.ir/#/pv/manager-1');
+
+    let sheet = await client.get(`/api/v1/leagues/${fixture.leagueA.id}/attendance?date=${DAY}`);
+    expect(sheet.body.settings.managerShadPvUrl).toBe('https://web.shad.ir/#/pv/manager-1');
+
+    // The link stays editable after the first confirmation.
+    const changed = await client.put(`/api/v1/leagues/${fixture.leagueA.id}/attendance/manager-shad`, {
+      url: 'https://web.shad.ir/#/pv/manager-2',
+    });
+    expect(changed.body.settings.managerShadPvUrl).toBe('https://web.shad.ir/#/pv/manager-2');
+
+    sheet = await client.get(`/api/v1/leagues/${fixture.leagueA.id}/attendance?date=${DAY}`);
+    expect(sheet.body.settings.managerShadPvUrl).toBe('https://web.shad.ir/#/pv/manager-2');
+  });
+
+  it('rejects unsafe or malformed links and can clear the saved link', async () => {
+    for (const url of ['javascript:alert(1)', 'not a url', 'ftp://web.shad.ir/pv']) {
+      const res = await client.put(`/api/v1/leagues/${fixture.leagueA.id}/attendance/manager-shad`, { url });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_SHAD_URL');
+    }
+
+    await client.put(`/api/v1/leagues/${fixture.leagueA.id}/attendance/manager-shad`, {
+      url: 'https://web.shad.ir/#/pv/manager-1',
+    });
+    const cleared = await client.put(`/api/v1/leagues/${fixture.leagueA.id}/attendance/manager-shad`, { url: '' });
+    expect(cleared.body.settings.managerShadPvUrl).toBe('');
+  });
+});
+
 describe('sending absentees to the manager', () => {
   async function markAbsent() {
     await client.post(`/api/v1/leagues/${fixture.leagueA.id}/attendance`, {

@@ -19,6 +19,9 @@ export const SETTINGS_DEFAULTS = {
   // Size of the classroom seating grid (see the seating page).
   seatingRows: 4,
   seatingCols: 6,
+  // Private Shad (PV) link of the school manager, opened from the attendance
+  // page when sending the absentee list.
+  managerShadPvUrl: '',
 };
 
 /** Point values are whole numbers; the guard keeps accidental typos bounded. */
@@ -49,6 +52,7 @@ const SETTING_KEYS = {
   evalPointsNeedsWork: encodePoints,
   seatingRows: encodeGridSize,
   seatingCols: encodeGridSize,
+  managerShadPvUrl: (v) => String(v ?? '').trim().slice(0, 2000),
 };
 
 export function readSettings(db, leagueId) {
@@ -62,6 +66,8 @@ export function readSettings(db, leagueId) {
       settings.grade = row.value;
     } else if (row.key === 'seatingRows' || row.key === 'seatingCols') {
       settings[row.key] = Number.parseInt(row.value, 10) || SETTINGS_DEFAULTS[row.key];
+    } else if (row.key === 'managerShadPvUrl') {
+      settings.managerShadPvUrl = row.value;
     } else if (row.key === 'evalPointsEnabled') {
       settings.evalPointsEnabled = row.value === '1';
     } else if (row.key.startsWith('evalPoints')) {

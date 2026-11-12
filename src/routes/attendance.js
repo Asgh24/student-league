@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import { badRequest } from '../lib/errors.js';
 import { asyncHandler, todayIso } from '../lib/http.js';
+import { normalizeHttpUrl } from '../lib/url.js';
 import { schemas, validate } from '../lib/validate.js';
-import { readSettings } from '../repositories/leagues.js';
+import { readSettings, writeSettings } from '../repositories/leagues.js';
 import { requireTeacher, loadOwnedLeague, requirePermission } from '../middleware/auth.js';
 import {
   attendanceSheet,
@@ -61,6 +63,17 @@ export function createAttendanceRouter({ db }) {
     });
     res.json(result);
   }));
+
+  /** School manager's Shad PV link; editable again at any time. */
+  router.put('/manager-shad', validate({ body: schemas.attendanceManagerShad }), (req, res) => {
+    const raw = String(req.body.url ?? '').trim();
+    const url = raw ? normalizeHttpUrl(raw) : '';
+    if (raw && !url) {
+      throw badRequest('INVALID_SHAD_URL', 'لینک PV مدیر باید یک آدرس کامل با http یا https باشد');
+    }
+    writeSettings(db, req.league.id, { managerShadPvUrl: url });
+    res.json({ settings: readSettings(db, req.league.id) });
+  });
 
   router.get('/history', validate({ query: schemas.pagination }), (req, res) => {
     const { page, limit } = req.query;

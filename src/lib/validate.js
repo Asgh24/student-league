@@ -453,6 +453,26 @@ export const schemas = {
     phone: z.string().trim().min(1, 'شماره مدیر یا معاون آموزشی الزامی است').max(24),
   }),
 
+  /** School manager's private Shad link, editable at any time. */
+  attendanceManagerShad: z.object({
+    url: z.string().trim().max(2000).default(''),
+  }),
+
+  /** Independent daily discipline sheet (no automatic score effect). */
+  disciplineSet: z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ نامعتبر است'),
+    records: z.array(z.object({
+      studentId: z.coerce.number().int().positive(),
+      status: z.enum(['orderly', 'disorderly']).nullable().optional(),
+      note: z.string().trim().max(500).optional(),
+    })).min(1, 'حداقل یک ردیف لازم است').max(500),
+  }),
+
+  disciplineBulk: z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ نامعتبر است'),
+    status: z.enum(['orderly', 'disorderly']),
+  }),
+
   dateQuery: z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ نامعتبر است').optional(),
   }),

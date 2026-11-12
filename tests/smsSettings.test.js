@@ -145,9 +145,10 @@ describe('teacher sms.ir settings', () => {
       leagueName: fixture.leagueA.name,
       date: '2026-10-21',
     }));
-    expect(res.body.sampleMessage).toContain('گزارش روزانه');
+    expect(res.body.sampleMessage).toContain('تاریخ:');
     expect(res.body.sampleMessage).toContain('علی رضایی');
-    expect(res.body.sampleMessage).toContain('جمع تغییرات');
+    expect(res.body.sampleMessage).toContain('انضباط: بی‌نظمی — علت: صحبت با همکلاسی');
+    expect(res.body.sampleMessage).toContain('تکالیف:');
   });
 
   it('validates the line number and refuses other roles', async () => {

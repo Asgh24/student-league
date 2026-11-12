@@ -7,6 +7,7 @@ import { createAttendanceRouter } from './attendance.js';
 import { createAuthRouter } from './auth.js';
 import { createColumnsRouter, createLeagueColumnsRouter } from './columns.js';
 import { createLeagueContactsRouter } from './contacts.js';
+import { createDisciplineRouter } from './discipline.js';
 import { createLeagueEvaluationsRouter } from './evaluations.js';
 import { createFilesRouter, createLeagueFilesRouter } from './files.js';
 import { createHomeworkRouter, createLeagueHomeworkRouter } from './homework.js';
@@ -46,6 +47,7 @@ export function createApiRouter(ctx) {
   router.use('/leagues/:id/scores', createScoresRouter(ctx));
   router.use('/leagues/:id/teams', createLeagueTeamsRouter(ctx));
   router.use('/leagues/:id/attendance', createAttendanceRouter(ctx));
+  router.use('/leagues/:id/discipline', createDisciplineRouter(ctx));
   router.use('/leagues/:id/evaluations', createLeagueEvaluationsRouter(ctx));
   router.use('/leagues/:id/homework', createLeagueHomeworkRouter(ctx));
   router.use('/leagues/:id/questions', createLeagueQuestionsRouter(ctx));

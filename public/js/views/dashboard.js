@@ -12,6 +12,7 @@ const TOOLS = [
   { suffix: '', icon: '🏆', label: 'لیگ انفرادی', perm: 'scores' },
   { suffix: 'teams', icon: '🛡️', label: 'لیگ تیمی', perm: 'teams' },
   { suffix: 'attendance', icon: '🗓️', label: 'حضور و غیاب', perm: 'attendance' },
+  { suffix: 'discipline', icon: '📏', label: 'انضباط', perm: 'discipline' },
   { suffix: 'evaluations', icon: '📝', label: 'ارزشیابی دروس', perm: 'evaluations' },
   { suffix: 'report-cards', icon: '📊', label: 'کارنامه دانش‌آموزان', perm: 'evaluations' },
   { suffix: 'raffle', icon: '🎲', label: 'قرعه‌کشی', perm: 'raffle' },
