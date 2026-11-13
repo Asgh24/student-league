@@ -1623,12 +1623,35 @@ td.delta-cell.is-negative {
   }
 }
 .login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 .login-brand__logo {
-  font-size: 2.6rem;
+  font-size: 2.4rem;
   line-height: 1;
+}
+.login-brand__wordmark {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: clamp(1.7rem, 6vw, 2.2rem);
+  font-weight: 900;
+  line-height: 1.25;
+}
+.login-brand h1 {
+  margin: 2px 0 8px;
+  font-size: clamp(1.02rem, 3.4vw, 1.18rem);
+  font-weight: 800;
+}
+.login-brand__tagline {
+  margin: 0;
+  max-width: 36ch;
+  color: var(--ink-soft);
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.9;
 }
 .brand-gradient {
   background: linear-gradient(90deg, var(--brand), var(--brand-2), var(--pink));

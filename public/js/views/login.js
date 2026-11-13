@@ -161,8 +161,9 @@ export function renderLogin({ navigate }) {
   const form = el('form.card.login-card', { novalidate: 'true' }, [
     el('div.login-brand', {}, [
       el('div.login-brand__logo', { text: '🏆', 'aria-hidden': 'true' }),
+      el('span.login-brand__wordmark.brand-gradient', { text: state.meta.brandName || 'تیچ لینک' }),
       el('h1.brand-gradient', { text: state.meta.appName }),
-      el('p.muted.small', { text: 'لیگ کلاسی، امتیازدهی، حضور و غیاب و ابزارهای آموزشی' }),
+      el('p.login-brand__tagline', { text: 'لیگ کلاسی، امتیازدهی، حضور و غیاب و ابزارهای آموزشی' }),
     ]),
     el('div.tabs', {}, [loginTab, signupTab]),
     loginFields,

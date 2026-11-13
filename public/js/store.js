@@ -7,6 +7,7 @@ const listeners = new Set();
 export const state = {
   meta: {
     appName: 'لیگ جامع دانش‌آموزی',
+    brandName: 'تیچ لینک',
     version: '',
     likesPerDay: 10,
     maxUploadBytes: 0,
@@ -36,7 +37,11 @@ function emit() {
 
 export function setMeta(meta) {
   state.meta = { ...state.meta, ...meta };
-  if (state.meta.appName && typeof document !== 'undefined') document.title = state.meta.appName;
+  if (typeof document !== 'undefined') {
+    const { appName, brandName } = state.meta;
+    if (brandName && appName) document.title = `${brandName} | ${appName}`;
+    else if (appName || brandName) document.title = appName || brandName;
+  }
   emit();
 }
 

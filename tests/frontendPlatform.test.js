@@ -130,6 +130,21 @@ describe('login form', () => {
     await vi.waitFor(() => expect(login).toHaveBeenCalledWith('teacher', 'teacher1234'));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('teacher'));
   });
+
+  it('shows the Trade name above the league title with a readable description', () => {
+    renderLogin({ navigate: vi.fn() });
+    const brand = document.querySelector('form.login-card .login-brand');
+    const wordmark = brand.querySelector('.login-brand__wordmark');
+    const heading = brand.querySelector('h1');
+    const tagline = brand.querySelector('.login-brand__tagline');
+
+    expect(wordmark.textContent).toBe('تیچ لینک');
+    expect(wordmark.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tagline.textContent).toContain('لیگ کلاسی');
+    expect(tagline.classList.contains('small')).toBe(false);
+    expect(tagline.classList.contains('muted')).toBe(false);
+    expect(document.title).toBe('تیچ لینک | لیگ جامع دانش‌آموزی');
+  });
 });
 
 describe('teacher signup', () => {
