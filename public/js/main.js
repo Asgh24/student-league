@@ -16,6 +16,7 @@ import {
   showTopbar,
 } from './shell.js';
 import { homePath, can, isAdmin, isAssistant, isStudent, isTeacher, setLeagueId, setMeta, setUser, state, storedLeagueId, subscribe } from './store.js';
+import { initPalette, openPaletteDialog } from './theme.js';
 import { notify } from './ui.js';
 
 import { renderAttendance } from './views/attendance.js';
@@ -318,6 +319,10 @@ document.getElementById('support-btn')?.addEventListener('click', () => {
   openSupport();
 });
 document.getElementById('footer-support')?.addEventListener('click', openSupport);
+document.getElementById('palette-btn')?.addEventListener('click', () => {
+  closeDrawer();
+  openPaletteDialog();
+});
 
 bindShellHandlers({
   onLeaguePill: () => {
@@ -336,6 +341,7 @@ function paintFooterYear() {
 }
 
 async function boot() {
+  initPalette();
   paintFooterYear();
   try {
     const metaPayload = await apiMeta();

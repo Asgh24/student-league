@@ -8,7 +8,7 @@ import { config } from '../config.js';
 import { badRequest } from '../lib/errors.js';
 import { todayIso } from '../lib/http.js';
 import { formatJalaliDate } from '../lib/jalali.js';
-import { HOMEWORK_STATUS_LABELS, pointsForStatus } from '../lib/homeworkStatus.js';
+import { HOMEWORK_STATUS_LABELS } from '../lib/homeworkStatus.js';
 import { toPersianDigits } from '../lib/normalize.js';
 import { normalizeMobile } from '../lib/phone.js';
 import { getLeague } from '../repositories/leagues.js';
@@ -30,24 +30,29 @@ function localDayWindow(date) {
   return { start: new Date(start).toISOString(), end: new Date(start + 86400000).toISOString() };
 }
 
-function signedFa(value) {
-  const number = Number(value) || 0;
-  if (number === 0) return toPersianDigits(0);
-  return `${number > 0 ? '+' : '-'}${toPersianDigits(Math.abs(number))}`;
-}
-
 export const MAX_REPORT_LINES = 4;
 
 const ATTENDANCE_LABELS = { present: 'حاضر', absent: 'غایب', late: 'تأخیر' };
 const DISCIPLINE_LABELS = { orderly: 'منظم', disorderly: 'بی‌نظمی' };
+const EVALUATION_STATUS_LABELS = { up: 'بهبود', down: 'کاهش', flat: 'بدون تغییر' };
+
+/**
+ * The report never prints points. A score change is reduced to its direction
+ * so the parent sees the status of each variable instead of a number.
+ */
+function evaluationStatus(line) {
+  if (line?.status === 'up' || line?.status === 'down' || line?.status === 'flat') return line.status;
+  const delta = Number(line?.delta) || 0;
+  return delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
+}
 
 /**
  * Builds the SMS text of one student's day (exported for tests).
  *
  * The message is intentionally one topic per line, in this order:
  * date, student, attendance, discipline (with its optional reason),
- * evaluations (score changes) and homework. This is much easier to read on a
- * phone than the old comma-separated paragraph.
+ * evaluation statuses and homework statuses. No points or deltas are ever
+ * written into the report.
  */
 export function buildDailyMessage({
   leagueName,
@@ -62,9 +67,9 @@ export function buildDailyMessage({
   const header = leagueName ? `${dateText} — ${leagueName}` : dateText;
 
   const breakdown = [...lines]
-    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .sort((a, b) => Math.abs(Number(b.delta) || 0) - Math.abs(Number(a.delta) || 0))
     .slice(0, MAX_REPORT_LINES)
-    .map((line) => `${line.columnName} ${signedFa(line.delta)}`);
+    .map((line) => `${line.columnName} (${EVALUATION_STATUS_LABELS[evaluationStatus(line)]})`);
   if (lines.length > MAX_REPORT_LINES) breakdown.push(`و ${toPersianDigits(lines.length - MAX_REPORT_LINES)} مورد دیگر`);
   const evaluationText = breakdown.length ? breakdown.join('، ') : 'امروز تغییری ثبت نشده است';
 
@@ -76,13 +81,9 @@ export function buildDailyMessage({
     ? `${disciplineLabel}${disciplineNote ? ` — علت: ${disciplineNote}` : ''}`
     : 'ثبت‌نشده';
 
-  // Homework due on the report date, with each student's own status, so the
-  // parent sees whether the assignment was done (and what it was worth).
+  // Homework due on the report date, with each student's own status only.
   const homeworkText = homework.length
-    ? homework.map((item) => {
-      const effect = pointsForStatus(item.status, item.points, item.penaltyPoints);
-      return `${item.title} (${HOMEWORK_STATUS_LABELS[item.status] ?? item.status}${effect ? `، ${signedFa(effect)}` : ''})`;
-    }).join('، ')
+    ? homework.map((item) => `${item.title} (${HOMEWORK_STATUS_LABELS[item.status] ?? item.status})`).join('، ')
     : 'تکلیفی برای این روز ثبت نشده است';
 
   return [
@@ -180,7 +181,6 @@ export function dailyReport(db, leagueId, date) {
     const homework = homeworkByStudent.get(contact.id) ?? [];
     const attendanceStatus = attendanceByStudent.get(contact.id) ?? null;
     const discipline = disciplineByStudent.get(contact.id) ?? null;
-    const totalDelta = lines.reduce((sum, line) => sum + line.delta, 0);
     const changes = lines.reduce((sum, line) => sum + line.changes, 0);
     items.push({
       studentId: contact.id,
@@ -192,16 +192,15 @@ export function dailyReport(db, leagueId, date) {
       hasShadPvUrl: contact.hasShadPvUrl,
       attendanceStatus,
       discipline,
-      totalDelta,
       changes,
-      lines,
-      homework,
+      // Only statuses leave the server; deltas never reach the report UI.
+      lines: lines.map((line) => ({ columnName: line.columnName, status: evaluationStatus(line) })),
+      homework: homework.map((item) => ({ title: item.title, status: item.status })),
       message: buildDailyMessage({
         leagueName: league.name,
         studentName: contact.name,
         date,
         lines,
-        totalDelta,
         homework,
         attendanceStatus,
         discipline,

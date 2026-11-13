@@ -1,15 +1,32 @@
-/* Design tokens, reset and layout shell. All colours come from CSS variables. */
+/* Design tokens, reset and layout shell. All colours come from CSS variables.
+   The default palette is "ember" (warm orange with near-black ink). Other
+   palettes live in the `[data-palette="…"]` blocks at the end of this file and
+   are switched at runtime by `public/js/theme.js`. */
 :root {
-  --brand: #7c3aed;
-  --brand-2: #a855f7;
-  --pink: #ec4899;
-  --amber: #f59e0b;
-  --ink: #1e1b4b;
-  --ink-soft: #4c4675;
-  --muted: #7c7aa3;
-  --line: #ece7fb;
+  --brand: #ea580c;
+  --brand-2: #f97316;
+  --brand-deep: #9a3412;
+  --brand-rgb: 234, 88, 12;
+  --brand-2-rgb: 249, 115, 22;
+  --pink: #f59e0b;
+  --pink-rgb: 245, 158, 11;
+  --amber: #d97706;
+  --ink: #1c1917;
+  --ink-soft: #44403c;
+  --ink-rgb: 28, 25, 23;
+  --muted: #78716c;
+  --line: #f1e5d8;
   --surface: #ffffff;
-  --surface-2: #faf7ff;
+  --surface-2: #fff8f2;
+  --brand-50: #fff1e6;
+  --brand-50-strong: #ffedd5;
+  --table-head-bg: linear-gradient(180deg, #fff7ed, #ffedd5);
+  --chat-bg: linear-gradient(180deg, #ffffff 0%, #fff8f2 100%);
+  --page-bg: linear-gradient(150deg, #fff7ed 0%, #ffedd5 100%);
+  --brand-gradient: linear-gradient(90deg, var(--brand) 0%, var(--brand-2) 55%, var(--pink) 100%);
+  --brand-gradient-2: linear-gradient(90deg, var(--brand), var(--brand-2));
+  --brand-soft: linear-gradient(90deg, rgba(var(--brand-rgb), 0.12), rgba(var(--pink-rgb), 0.1));
+  --brand-soft-2: linear-gradient(90deg, rgba(var(--brand-rgb), 0.12), rgba(var(--pink-rgb), 0.12));
   --ok: #16a34a;
   --bad: #dc2626;
   --warn: #f59e0b;
@@ -17,12 +34,72 @@
   --radius: 16px;
   --radius-lg: 24px;
   --radius-xl: 32px;
-  --shadow-sm: 0 4px 14px rgba(124, 58, 237, 0.08);
-  --shadow: 0 10px 30px rgba(124, 58, 237, 0.14);
-  --shadow-lg: 0 24px 60px rgba(76, 29, 149, 0.22);
-  --focus: 0 0 0 3px rgba(168, 85, 247, 0.45);
+  --shadow-sm: 0 4px 14px rgba(var(--brand-rgb), 0.1);
+  --shadow: 0 10px 30px rgba(var(--brand-rgb), 0.16);
+  --shadow-lg: 0 24px 60px rgba(67, 20, 7, 0.22);
+  --inset-shadow: inset 0 1px 3px rgba(67, 20, 7, 0.22);
+  --inset-shadow-strong: inset 0 1px 4px rgba(67, 20, 7, 0.24);
+  --scrim: rgba(28, 25, 23, 0.45);
+  --scrim-strong: rgba(28, 25, 23, 0.5);
+  --focus: 0 0 0 3px rgba(var(--brand-rgb), 0.35);
   --topbar-h: 60px;
   --tap: 44px;
+}
+
+/* Optional palettes. Keeping the old violet theme available means existing
+   teachers can restore the previous look; "ocean" is the cool alternative. */
+[data-palette="violet"] {
+  --brand: #7c3aed;
+  --brand-2: #a855f7;
+  --brand-deep: #5b21b6;
+  --brand-rgb: 124, 58, 237;
+  --brand-2-rgb: 168, 85, 247;
+  --pink: #ec4899;
+  --pink-rgb: 236, 72, 153;
+  --amber: #f59e0b;
+  --ink: #1e1b4b;
+  --ink-soft: #4c4675;
+  --ink-rgb: 30, 27, 75;
+  --muted: #7c7aa3;
+  --line: #ece7fb;
+  --surface-2: #faf7ff;
+  --brand-50: #f5f0ff;
+  --brand-50-strong: #f1ecff;
+  --table-head-bg: linear-gradient(180deg, #f7f3ff, #f1e9ff);
+  --chat-bg: linear-gradient(180deg, #fdfbff 0%, #faf7ff 100%);
+  --page-bg: linear-gradient(150deg, #faf5ff 0%, #fef3f7 100%);
+  --shadow-lg: 0 24px 60px rgba(76, 29, 149, 0.22);
+  --inset-shadow: inset 0 1px 3px rgba(43, 14, 90, 0.22);
+  --inset-shadow-strong: inset 0 1px 4px rgba(43, 14, 90, 0.24);
+  --scrim: rgba(30, 27, 75, 0.45);
+  --scrim-strong: rgba(30, 27, 75, 0.5);
+}
+
+[data-palette="ocean"] {
+  --brand: #0284c7;
+  --brand-2: #0ea5e9;
+  --brand-deep: #075985;
+  --brand-rgb: 2, 132, 199;
+  --brand-2-rgb: 14, 165, 233;
+  --pink: #6366f1;
+  --pink-rgb: 99, 102, 241;
+  --amber: #f59e0b;
+  --ink: #0f172a;
+  --ink-soft: #334155;
+  --ink-rgb: 15, 23, 42;
+  --muted: #64748b;
+  --line: #dbeafe;
+  --surface-2: #f0f9ff;
+  --brand-50: #e0f2fe;
+  --brand-50-strong: #bae6fd;
+  --table-head-bg: linear-gradient(180deg, #f0f9ff, #e0f2fe);
+  --chat-bg: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%);
+  --page-bg: linear-gradient(150deg, #f0f9ff 0%, #e0f2fe 100%);
+  --shadow-lg: 0 24px 60px rgba(7, 45, 74, 0.22);
+  --inset-shadow: inset 0 1px 3px rgba(7, 45, 74, 0.22);
+  --inset-shadow-strong: inset 0 1px 4px rgba(7, 45, 74, 0.24);
+  --scrim: rgba(15, 23, 42, 0.45);
+  --scrim-strong: rgba(15, 23, 42, 0.5);
 }
 
 *,
@@ -47,7 +124,7 @@ body {
   font-size: 15px;
   line-height: 1.7;
   color: var(--ink);
-  background: linear-gradient(150deg, #faf5ff 0%, #fef3f7 100%);
+  background: var(--page-bg);
   background-attachment: fixed;
   overflow-x: hidden;
 }
@@ -118,8 +195,8 @@ a {
   padding-right: max(14px, env(safe-area-inset-right));
   padding-left: max(14px, env(safe-area-inset-left));
   color: #fff;
-  background: linear-gradient(90deg, var(--brand) 0%, var(--brand-2) 55%, var(--pink) 100%);
-  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.35);
+  background: var(--brand-gradient);
+  box-shadow: 0 6px 20px rgba(var(--brand-rgb), 0.35);
 }
 
 .topbar__title {
@@ -175,7 +252,7 @@ a {
 .scrim {
   position: fixed;
   inset: 0;
-  background: rgba(30, 27, 75, 0.45);
+  background: var(--scrim);
   backdrop-filter: blur(2px);
   z-index: 70;
 }
@@ -205,7 +282,7 @@ a {
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  background: linear-gradient(90deg, var(--brand), var(--brand-2));
+  background: var(--brand-gradient-2);
   color: #fff;
   position: sticky;
   top: 0;
@@ -232,7 +309,7 @@ a {
 }
 .drawer__nav a:hover,
 .drawer__nav a.is-active {
-  background: linear-gradient(90deg, rgba(124, 58, 237, 0.12), rgba(236, 72, 153, 0.1));
+  background: var(--brand-soft);
   color: var(--brand);
 }
 .drawer__group {

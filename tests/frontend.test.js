@@ -2028,16 +2028,20 @@ describe('daily parent report', () => {
         {
           studentId: 11, name: 'آرش آزمون', parentPhone: '09123456789', studentPhone: '', hasParentPhone: true,
           shadPvUrl: 'https://web.shad.ir/#/pv/abc', hasShadPvUrl: true,
-          totalDelta: -100, changes: 1,
-          lines: [{ columnName: 'انضباطی', delta: -100, changes: 1 }],
-          message: 'لیگ تست | گزارش روزانه ۱۴۰۵/۰۷/۲۹\nآرش آزمون: انضباطی -۱۰۰\nجمع تغییرات: -۱۰۰',
+          changes: 1,
+          lines: [{ columnName: 'انضباطی', status: 'down', changes: 1 }],
+          attendanceStatus: 'late', discipline: { status: 'disorderly', note: 'صحبت با همکلاسی' },
+          homework: [{ title: 'تمرین ریاضی', status: 'done' }],
+          message: 'لیگ تست | گزارش روزانه ۱۴۰۵/۰۷/۲۹\nآرش آزمون: انضباطی (کاهش)\nتکالیف: تمرین ریاضی (انجام شد)',
         },
         {
           studentId: 12, name: 'بهار بنفش', parentPhone: '', studentPhone: '', hasParentPhone: false,
           shadPvUrl: '', hasShadPvUrl: false,
-          totalDelta: 25, changes: 1,
-          lines: [{ columnName: 'ریاضی', delta: 25, changes: 1 }],
-          message: 'لیگ تست | گزارش روزانه ۱۴۰۵/۰۷/۲۹\nبهار بنفش: ریاضی +۲۵\nجمع تغییرات: +۲۵',
+          changes: 1,
+          lines: [{ columnName: 'ریاضی', status: 'up', changes: 1 }],
+          attendanceStatus: 'present', discipline: { status: 'orderly', note: '' },
+          homework: [],
+          message: 'لیگ تست | گزارش روزانه ۱۴۰۵/۰۷/۲۹\nبهار بنفش: ریاضی (بهبود)\nتکالیف: تکلیفی برای این روز ثبت نشده است',
         },
       ],
       channels: { sms: true, shad: true },
@@ -2046,7 +2050,7 @@ describe('daily parent report', () => {
         provider: 'sms.ir', configured: false, source: 'none', lineNumber: '', hasApiKey: false,
         own: { hasApiKey: false, lineNumber: '', updatedAt: null }, partialOwnSettings: false,
       },
-      sampleMessage: 'لیگ تست | گزارش روزانه ۱۴۰۵/۰۷/۲۹\nعلی رضایی: ریاضی +۲، انضباطی -۱\nجمع تغییرات: +۲',
+      sampleMessage: 'لیگ تست | گزارش روزانه ۱۴۰۵/۰۷/۲۹\nعلی رضایی: ریاضی (بهبود)، انضباطی (کاهش)\nتکالیف: تمرین ریاضی (انجام شد)',
       recent: [],
     };
   }
@@ -2066,6 +2070,10 @@ describe('daily parent report', () => {
     expect(view.textContent).toContain('کلید API و شماره خط پنل sms.ir خودتان');
     expect(view.textContent).toContain('انضباطی');
     expect(view.textContent).toContain('آرش آزمون: انضباطی');
+    expect(view.textContent).toContain('انضباطی: کاهش');
+    expect(view.textContent).toContain('ریاضی: بهبود');
+    expect(view.textContent).toContain('تمرین ریاضی: انجام شد');
+    expect(view.textContent).not.toContain('جمع تغییرات');
     expect(view.textContent).toContain('۱ دانش‌آموز انتخاب شده');
 
     const checks = [...view.querySelectorAll('tbody input[type="checkbox"]')];
@@ -2244,7 +2252,7 @@ describe('daily parent report', () => {
       shadButton.click();
 
       await vi.waitFor(() => expect(open).toHaveBeenCalledWith('https://web.shad.ir/#/pv/abc', '_blank'));
-      await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('آرش آزمون: انضباطی -۱۰۰')));
+      await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('آرش آزمون: انضباطی (کاهش)')));
       await vi.waitFor(() => expect(document.getElementById('toasts').textContent).toContain('متن گزارش کپی شد'));
     } finally {
       open.mockRestore();
@@ -2269,6 +2277,16 @@ describe('daily parent report', () => {
       .find((node) => node.textContent.includes('ارسال با شاد'));
     expect(shadButton).not.toBeUndefined();
     expect(shadButton.disabled).toBe(false);
+  });
+
+  it('labels the mobile report cards with the status columns, never the old points columns', () => {
+    const css = fs.readFileSync(path.join(rootDir, 'public', 'css', 'components.css'), 'utf8');
+    expect(css).not.toContain("content: 'تغییرات امروز'");
+    expect(css).not.toContain("content: 'جمع'");
+    for (const label of ['وضعیت حضور', 'انضباط', 'ارزشیابی', 'تکالیف', 'شماره والد']) {
+      expect(css).toContain(`content: '${label}'`);
+    }
+    expect(css).toContain('td:nth-child(7)');
   });
 });
 

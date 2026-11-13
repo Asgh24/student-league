@@ -1,5 +1,6 @@
 /**
- * «گزارش روزانه» — condensed daily change report for parents.
+ * «گزارش روزانه» — condensed daily status report for parents. It never prints
+ * points; only the status of attendance, discipline, evaluations and homework.
  *
  * The teacher picks a Shamsi day, selects the students (students with a change
  * and a parent number are selected by default), reviews the exact message and
@@ -24,6 +25,42 @@ const STATUS_LABELS = {
   failed: { label: 'ناموفق', kind: 'bad' },
   skipped: { label: 'بدون شماره', kind: 'muted' },
 };
+
+const EVALUATION_STATUS = {
+  up: { label: 'بهبود', kind: 'ok' },
+  down: { label: 'کاهش', kind: 'bad' },
+  flat: { label: 'بدون تغییر', kind: 'muted' },
+};
+
+const ATTENDANCE_STATUS = {
+  present: { label: 'حاضر', kind: 'ok' },
+  absent: { label: 'غایب', kind: 'bad' },
+  late: { label: 'تأخیر', kind: 'amber' },
+};
+
+const DISCIPLINE_STATUS = {
+  orderly: { label: 'منظم', kind: 'ok' },
+  disorderly: { label: 'بی‌نظمی', kind: 'bad' },
+};
+
+const HOMEWORK_STATUS = {
+  done: { label: 'انجام شد', kind: 'ok' },
+  not_done: { label: 'انجام نشد', kind: 'muted' },
+  incomplete: { label: 'ناقص', kind: 'amber' },
+  absent: { label: 'غایب', kind: 'bad' },
+  not_brought: { label: 'نیاورده', kind: 'bad' },
+};
+
+/** Status-only view of a report line; older payloads only carry `delta`. */
+function evaluationStatusOf(line) {
+  if (line?.status && EVALUATION_STATUS[line.status]) return line.status;
+  const delta = Number(line?.delta) || 0;
+  return delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
+}
+
+function statusChip(meta, fallback = 'ثبت‌نشده') {
+  return meta ? chip(meta.label, meta.kind) : chip(fallback, 'muted');
+}
 
 /** Clipboard write with a selection fallback for older browsers. */
 async function copyToClipboard(text) {
@@ -51,18 +88,6 @@ async function copyToClipboard(text) {
   }
   area.remove();
   return copied;
-}
-
-function signed(value) {
-  const number = Number(value) || 0;
-  if (number === 0) return fa(0);
-  return `${number > 0 ? '+' : '−'}${fa(Math.abs(number))}`;
-}
-
-function deltaKind(value) {
-  if (value > 0) return 'ok';
-  if (value < 0) return 'bad';
-  return 'muted';
 }
 
 export async function renderReports({ params }) {
@@ -158,7 +183,7 @@ export async function renderReports({ params }) {
             ? (item.hasShadPvUrl ? chip('شاد ✓', 'ok') : chip('لینک شاد ثبت نشده', 'bad'))
             : null,
           el('span.spacer'),
-          el(`span.chip.chip--${deltaKind(item.totalDelta)}`, { text: `جمع ${signed(item.totalDelta)}` }),
+          chip(`${fa(item.changes)} تغییر ثبت‌شده`, 'muted'),
         ]),
         el('pre.report-message__body', { dir: 'rtl', text: item.message }),
         el('div.row.report-message__actions', { style: { marginTop: '6px', flexWrap: 'wrap' } }, [
@@ -257,7 +282,7 @@ export async function renderReports({ params }) {
       el('div.row', { style: { flexWrap: 'wrap', alignItems: 'flex-end' } }, [
         el('div.field', { style: { minWidth: '220px' } }, [el('label', { for: 'report-date', text: 'تاریخ (شمسی)' }), field]),
         button('امروز', { kind: 'ghost', icon: '📆', onClick: () => { date = todayIso(); void load(); } }),
-        el('span.small.muted', { text: `تغییرات ثبت‌شده در ${formatJalaliDate(date)}` }),
+        el('span.small.muted', { text: `وضعیت ثبت‌شده در ${formatJalaliDate(date)}` }),
       ]),
     ]);
   }
@@ -342,8 +367,10 @@ export async function renderReports({ params }) {
       el('tr', {}, [
         el('th', { scope: 'col', text: 'انتخاب' }),
         el('th', { scope: 'col', text: 'دانش‌آموز' }),
-        el('th', { scope: 'col', text: 'تغییرات امروز' }),
-        el('th', { scope: 'col', text: 'جمع' }),
+        el('th', { scope: 'col', text: 'وضعیت حضور' }),
+        el('th', { scope: 'col', text: 'انضباط' }),
+        el('th', { scope: 'col', text: 'ارزشیابی' }),
+        el('th', { scope: 'col', text: 'تکالیف' }),
         el('th', { scope: 'col', text: 'شماره والد' }),
       ]),
     ]));
@@ -355,11 +382,18 @@ export async function renderReports({ params }) {
         'aria-label': `انتخاب ${item.name}`,
         onchange: () => toggle(item.studentId, checkbox.checked),
       });
-      const changesCell = el('td', {}, item.lines.length
-        ? item.lines.map((line) => el(`span.chip.chip--${deltaKind(line.delta)}`, {
-          text: `${line.columnName} ${signed(line.delta)}`,
-        }))
+      const evaluationCell = el('td', {}, item.lines?.length
+        ? item.lines.map((line) => {
+          const meta = EVALUATION_STATUS[evaluationStatusOf(line)];
+          return chip(`${line.columnName}: ${meta.label}`, meta.kind);
+        })
         : [el('span.small.muted', { text: 'بدون تغییر' })]);
+      const homeworkCell = el('td', {}, item.homework?.length
+        ? item.homework.map((homework) => {
+          const meta = HOMEWORK_STATUS[homework.status] ?? { label: homework.status, kind: 'muted' };
+          return chip(`${homework.title}: ${meta.label}`, meta.kind);
+        })
+        : [el('span.small.muted', { text: 'بدون تکلیف' })]);
       const node = el('tr', { class: selected.has(item.studentId) ? 'is-selected' : '' }, [
         el('td', {}, [el('label.report-check', {}, [checkbox])]),
         el('td.name-cell', {}, [
@@ -368,8 +402,10 @@ export async function renderReports({ params }) {
             ? (item.hasShadPvUrl ? chip('شاد ✓', 'ok') : chip('شاد ثبت نشده', 'bad'))
             : null,
         ]),
-        changesCell,
-        el('td', {}, [el(`span.chip.chip--${deltaKind(item.totalDelta)}`, { text: signed(item.totalDelta) })]),
+        el('td', {}, [statusChip(ATTENDANCE_STATUS[item.attendanceStatus])]),
+        el('td', {}, [statusChip(DISCIPLINE_STATUS[item.discipline?.status])]),
+        evaluationCell,
+        homeworkCell,
         el('td', {}, item.hasParentPhone
           ? [el('span.small', { text: item.parentPhone })]
           : [el('span.chip.chip--bad', { text: 'ثبت نشده' })]),
@@ -378,7 +414,7 @@ export async function renderReports({ params }) {
       rowsByStudent.set(item.studentId, { item, node, checkbox });
     }
     if (report.items.length === 0) {
-      tbody.appendChild(el('tr', {}, [el('td', { colspan: '5' }, [el('p.muted.small', { text: 'هنوز دانش‌آموزی در این لیگ نیست.' })])]));
+      tbody.appendChild(el('tr', {}, [el('td', { colspan: '7' }, [el('p.muted.small', { text: 'هنوز دانش‌آموزی در این لیگ نیست.' })])]));
     }
     table.appendChild(tbody);
     return el('div.table-wrap', {}, [table]);
@@ -573,7 +609,7 @@ export async function renderReports({ params }) {
       pageHead({
         icon: '📨',
         title: 'گزارش روزانه والدین',
-        subtitle: 'خلاصهٔ تغییرات هر روز؛ تحویل با پیامک یا شاد، با انتخاب خودتان',
+        subtitle: 'خلاصهٔ وضعیت روزانهٔ هر دانش‌آموز، بدون درج امتیاز؛ تحویل با پیامک یا شاد',
         actions: [backToWorkbench()],
       }),
       el('div.grid.grid--stats', {}, stats),

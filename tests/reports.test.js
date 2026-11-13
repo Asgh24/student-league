@@ -68,19 +68,20 @@ describe('daily parent report data', () => {
     expect(res.body.summary.withoutParentPhone).toBe(3);
 
     const row = res.body.items.find((item) => item.studentId === first.id);
-    expect(row.totalDelta).toBe(-75);
+    expect(row.totalDelta).toBeUndefined();
     expect(row.changes).toBe(2);
     expect(row.lines).toEqual(expect.arrayContaining([
-      expect.objectContaining({ columnName: 'انضباطی', delta: -100 }),
-      expect.objectContaining({ columnName: 'ریاضی', delta: 25 }),
+      expect.objectContaining({ columnName: 'انضباطی', status: 'down' }),
+      expect.objectContaining({ columnName: 'ریاضی', status: 'up' }),
     ]));
     expect(row.message).toContain('آرش آزمون');
-    expect(row.message).toContain('-۱۰۰');
+    expect(row.message).not.toContain('-۱۰۰');
+    expect(row.message).not.toContain('+۲۵');
     expect(row.message).toContain(`تاریخ: ${formatJalaliDate(today)}`);
     expect(row.message).toContain('لیگ الف');
     expect(row.message).toContain('وضعیت حضور: ثبت‌نشده');
     expect(row.message).toContain('انضباط: ثبت‌نشده');
-    expect(row.message).toContain('ارزشیابی: انضباطی -۱۰۰، ریاضی +۲۵');
+    expect(row.message).toContain('ارزشیابی: انضباطی (کاهش)، ریاضی (بهبود)');
 
     const untouched = res.body.items.find((item) => item.studentId === fixture.studentsA[2].id);
     expect(untouched.changes).toBe(0);
@@ -102,9 +103,10 @@ describe('daily parent report data', () => {
       ],
       totalDelta: 50,
     });
-    expect(message).toContain('هنری +۶۰');
+    expect(message).toContain('هنری (بهبود)');
     expect(message).toContain('و ۲ مورد دیگر');
     expect(message).not.toContain('فارسی');
+    expect(message).not.toContain('+۶۰');
     expect(message.split('\n').map((line) => line.split(':')[0])).toEqual([
       'تاریخ', 'دانش‌آموز', 'وضعیت حضور', 'انضباط', 'ارزشیابی', 'تکالیف',
     ]);
@@ -140,24 +142,26 @@ describe('daily parent report data', () => {
     expect(res.status).toBe(200);
 
     const row = res.body.items.find((item) => item.studentId === first.id);
-    expect(row.homework).toEqual([{ title: 'تمرین ریاضی', points: 10, penaltyPoints: 0, status: 'done' }]);
-    expect(row.message).toContain('تکالیف: تمرین ریاضی (انجام شد، +۱۰)');
-    // The homework points are real score history of the same day also.
+    expect(row.homework).toEqual([{ title: 'تمرین ریاضی', status: 'done' }]);
+    expect(row.message).toContain('تکالیف: تمرین ریاضی (انجام شد)');
+    expect(row.message).not.toContain('+۱۰');
+    // The report item exposes only the direction of the change, never its points.
     expect(row.lines).toEqual(expect.arrayContaining([
-      expect.objectContaining({ columnName: 'انضباطی', delta: 10 }),
+      expect.objectContaining({ columnName: 'انضباطی', status: 'up' }),
     ]));
 
     const absentRow = res.body.items.find((item) => item.studentId === second.id);
-    expect(absentRow.homework).toEqual([{ title: 'تمرین ریاضی', points: 10, penaltyPoints: 0, status: 'absent' }]);
-    expect(absentRow.message).toContain('تکالیف: تمرین ریاضی (غایب، -۱۰)');
+    expect(absentRow.homework).toEqual([{ title: 'تمرین ریاضی', status: 'absent' }]);
+    expect(absentRow.message).toContain('تکالیف: تمرین ریاضی (غایب)');
+    expect(absentRow.message).not.toContain('-۱۰');
     expect(absentRow.lines).toEqual(expect.arrayContaining([
-      expect.objectContaining({ columnName: 'انضباطی', delta: -10 }),
+      expect.objectContaining({ columnName: 'انضباطی', status: 'down' }),
     ]));
 
     // A student with no status recorded defaults to انجام نشد, and homework
     // due on another day never appears.
     const untouched = res.body.items.find((item) => item.studentId === fixture.studentsA[2].id);
-    expect(untouched.homework).toEqual([{ title: 'تمرین ریاضی', points: 10, penaltyPoints: 0, status: 'not_done' }]);
+    expect(untouched.homework).toEqual([{ title: 'تمرین ریاضی', status: 'not_done' }]);
     expect(untouched.message).toContain('تکالیف: تمرین ریاضی (انجام نشد)');
     expect(res.body.items.every((item) => !item.message.includes('تکلیف دیروز'))).toBe(true);
   });
@@ -175,7 +179,9 @@ describe('daily parent report data', () => {
         { title: 'آزمایش', points: 5, penaltyPoints: 3, status: 'not_brought' },
       ],
     });
-    expect(message).toContain('تکالیف: تمرین ریاضی (انجام شد، +۱۰)، خواندن (ناقص)، آزمایش (نیاورده، -۳)');
+    expect(message).toContain('تکالیف: تمرین ریاضی (انجام شد)، خواندن (ناقص)، آزمایش (نیاورده)');
+    expect(message).not.toContain('+۱۰');
+    expect(message).not.toContain('-۳');
     const withoutHomework = buildDailyMessage({
       leagueName: 'لیگ نمونه', studentName: 'علی رضایی', date: '2026-10-21',
       lines: [], totalDelta: 0,

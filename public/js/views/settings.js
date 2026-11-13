@@ -5,6 +5,7 @@ import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
 import { renderView, setTopbarTitle } from '../shell.js';
 import { isStudent, setPersianDigits, state } from '../store.js';
+import { paletteSwatches } from '../theme.js';
 import { notify } from '../ui.js';
 import { button, card, field, pageHead } from './common.js';
 
@@ -60,9 +61,16 @@ function digitsCard() {
   ]);
 }
 
+function paletteCard() {
+  return card({ title: 'پالت رنگی', icon: '🎨' }, [
+    el('p.small.muted', { text: 'رنگ‌بندی سامانه را انتخاب کنید. تم پیش‌فرض نارنجی و مشکی است و انتخاب شما در همین مرورگر ذخیره می‌شود.' }),
+    paletteSwatches(),
+  ]);
+}
+
 export function renderSettings() {
   setTopbarTitle('تنظیمات');
-  const cards = [passwordCard()];
+  const cards = [paletteCard(), passwordCard()];
   if (isStudent()) cards.push(digitsCard());
   if (state.user) {
     cards.push(card({ title: 'حساب کاربری', icon: '🪪' }, [
