@@ -29,25 +29,33 @@ function copyFonts() {
   const blocks = [];
   const copied = new Set();
 
-  for (const subset of SUBSETS) {
-    for (const weight of WEIGHTS) {
-      const cssFile = path.join(rootDir, 'node_modules', '@fontsource', 'vazirmatn', `${subset}-${weight}.css`);
-      if (!fs.existsSync(cssFile)) throw new Error(`Font CSS not found: ${cssFile}`);
-      let css = fs.readFileSync(cssFile, 'utf8');
+  // The per-weight files (e.g. `400.css`) are the only @fontsource files that
+  // keep the per-subset `unicode-range`; the per-subset files omit it. Without
+  // it the later `latin` face wins for Persian text, the browser finds no
+  // Arabic glyphs there and silently falls back to a system font.
+  for (const weight of WEIGHTS) {
+    const weightCss = fs.readFileSync(
+      path.join(rootDir, 'node_modules', '@fontsource', 'vazirmatn', `${weight}.css`),
+      'utf8',
+    );
 
-      // Keep only the woff2 source, then point it at the vendored copy.
-      css = css.replace(/,\s*url\(([^)]+\.woff)\)\s*format\(['"]woff['"]\)/g, '');
+    for (const match of weightCss.matchAll(/\/\* vazirmatn-([a-z-]+)-(\d+)-normal \*\/\s*(@font-face\s*\{[^}]*\})/g)) {
+      const [, subset, blockWeight, block] = match;
+      if (!SUBSETS.includes(subset) || Number(blockWeight) !== weight) continue;
 
-      for (const match of css.matchAll(/url\(([^)]+)\)/g)) {
-        const raw = match[1].replace(/['"]/g, '').trim();
-        const fileName = path.basename(raw);
-        if (copied.has(fileName)) continue;
+      let css = block;
+      for (const url of css.matchAll(/url\(([^)]+\.woff2)\)/g)) {
+        const fileName = path.basename(url[1].replace(/['"]/g, '').trim());
         const src = path.join(rootDir, 'node_modules', '@fontsource', 'vazirmatn', 'files', fileName);
         if (!fs.existsSync(src)) continue;
-        fs.copyFileSync(src, path.join(fontsDir, fileName));
-        copied.add(fileName);
+        if (!copied.has(fileName)) {
+          fs.copyFileSync(src, path.join(fontsDir, fileName));
+          copied.add(fileName);
+        }
       }
 
+      // Keep only the woff2 source, then point it at the vendored copy.
+      css = css.replace(/,\s*url\([^)]+\.woff\)\s*format\(['"]woff['"]\)/g, '');
       css = css.replace(/url\(([^)]+)\)/g, (_all, raw) => {
         const trimmed = raw.replace(/['"]/g, '').trim();
         return `url('/vendor/fonts/${path.basename(trimmed)}')`;

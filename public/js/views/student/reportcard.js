@@ -162,7 +162,7 @@ export async function renderReportCard() {
     );
 
     if (hasItems) {
-      renderBars(canvas, data.items.map((item) => item.name), data.items.map((item) => item.value), {
+      await renderBars(canvas, data.items.map((item) => item.name), data.items.map((item) => item.value), {
         persianDigits: state.persianDigits,
       });
     }

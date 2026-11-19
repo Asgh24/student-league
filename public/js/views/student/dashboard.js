@@ -93,7 +93,7 @@ export async function renderStudentDashboard() {
   );
 
   if (hasSeries) {
-    renderPointsChart(canvas, data.series, { persianDigits: state.persianDigits });
+    await renderPointsChart(canvas, data.series, { persianDigits: state.persianDigits });
   }
   return undefined;
 }

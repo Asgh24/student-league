@@ -28,6 +28,148 @@ function planPreview(plan) {
   ]);
 }
 
+/**
+ * One card per headline capability. The copy stays short on purpose: the
+ * landing page is a shop window, the full details live in the README and the
+ * in-app help.
+ */
+const FEATURES = [
+  {
+    icon: '🏆',
+    title: 'لیگ و امتیازدهی زنده',
+    text: 'لیگ انفرادی و تیمی با ستون‌های امتیاز پویا، رتبه‌بندی لحظه‌ای، مدال قهرمانی و تاریخچهٔ کامل هر تغییر.',
+    tags: ['لیگ تیمی', 'رتبه‌بندی', 'مدال'],
+  },
+  {
+    icon: '📝',
+    title: 'ارزشیابی و کارنامه',
+    text: 'ثبت نمرهٔ عددی یا توصیفی برای هر درس، تبدیل هوشمند نمره به امتیاز لیگ و کارنامهٔ نموداری برای دانش‌آموز.',
+    tags: ['توصیفی', 'عددی', 'نمودار'],
+  },
+  {
+    icon: '🗓️',
+    title: 'حضور و غیاب و برنامهٔ هفتگی',
+    text: 'ثبت روزانهٔ حاضر، غایب و تأخیر، نسبت حضور هر دانش‌آموز و برنامهٔ شنبه تا جمعه که دانش‌آموز هم می‌بیند.',
+    tags: ['حضور روزانه', 'برنامهٔ کلاس'],
+  },
+  {
+    icon: '💬',
+    title: 'گزارش روزانه و پیامک والدین',
+    text: 'گزارش خودکار عملکرد هر دانش‌آموز با پیامک یا شاد، پیام دلخواه به والدین و صندوق خروجی قابل پیگیری.',
+    tags: ['پیامک', 'شاد', 'والدین'],
+  },
+  {
+    icon: '🎯',
+    title: 'ابزارهای زندهٔ کلاس',
+    text: 'قرعه‌کشی، گردونهٔ شانس، تایمر، نمایندهٔ منصفانهٔ کلاس و تابلوی زندهٔ رده‌بندی برای نمایش روی ویدیوپروژکتور.',
+    tags: ['قرعه‌کشی', 'تابلوی زنده'],
+  },
+  {
+    icon: '🤖',
+    title: 'سؤال‌سازی با هوش مصنوعی',
+    text: 'قالب آماده را به هر چت هوش مصنوعی بدهید و پاسخ JSON را برگردانید؛ سؤال‌ها بدون هیچ کلید API ساخته و ذخیره می‌شوند.',
+    tags: ['بدون کلید API', 'آزمون'],
+  },
+  {
+    icon: '🛡️',
+    title: 'چند معلمی، اشتراک و بکاپ',
+    text: 'ثبت‌نام آزمایشی، پنل مدیر، پرداخت زرین‌پال و پشتیبان‌گیری خودکار؛ داده‌های کلاس همیشه قابل بازیابی‌اند.',
+    tags: ['۱۴ روز رایگان', 'بکاپ خودکار'],
+  },
+];
+
+/** Kept module level so navigating away and back never stacks observers. */
+let featureObserver = null;
+
+function featureCard(feature, index) {
+  return el('li.feature-card', { dataset: { index: String(index + 1) } }, [
+    el('span.feature-card__aura', { 'aria-hidden': 'true' }),
+    el('div.feature-card__head', {}, [
+      el('span.feature-card__icon', { text: feature.icon, 'aria-hidden': 'true' }),
+      el('span.feature-card__num', {
+        text: number(index + 1, true).padStart(2, '۰'),
+        'aria-hidden': 'true',
+      }),
+    ]),
+    el('h3.feature-card__title', { text: feature.title }),
+    el('p.feature-card__text', { text: feature.text }),
+    el('ul.feature-card__tags', {}, feature.tags.map((tag) => el('li', { text: tag }))),
+  ]);
+}
+
+/** Reveals each card once, as it scrolls into view (with a reduced-motion path). */
+function animateFeatureCards(section) {
+  const cards = [...section.querySelectorAll('.feature-card')];
+  const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent ?? '');
+  const prefersReducedMotion = typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (isJsdom || prefersReducedMotion || typeof window.IntersectionObserver !== 'function') {
+    cards.forEach((card) => card.classList.add('is-visible'));
+    return;
+  }
+
+  featureObserver?.disconnect();
+  try {
+    featureObserver = new window.IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        entry.target.classList.add('is-visible');
+        featureObserver?.unobserve(entry.target);
+      }
+    }, { threshold: 0.18, rootMargin: '0px 0px -8% 0px' });
+  } catch {
+    // Never leave the showcase invisible if the observer cannot be created.
+    cards.forEach((card) => card.classList.add('is-visible'));
+    return;
+  }
+  cards.forEach((card) => featureObserver.observe(card));
+}
+
+/** Closing card that turns the showcase into a signup entry point. */
+function ctaCard(onStart) {
+  const trialDays = number(state.meta.trialDays ?? 14, true);
+  return el('li.feature-card.feature-card--cta', {}, [
+    el('span.feature-card__aura', { 'aria-hidden': 'true' }),
+    el('span.feature-card__icon.feature-card__icon--cta', { text: '🚀', 'aria-hidden': 'true' }),
+    el('h3.feature-card__title', { text: 'آمادهٔ شروع هستید؟' }),
+    el('p.feature-card__text', {
+      text: `همین حالا حساب معلم بسازید؛ ${trialDays} روز همهٔ ابزارها بدون هزینه باز است و بعد از آن طرح دلخواهتان را انتخاب می‌کنید.`,
+    }),
+    el('button.btn.feature-card__cta', { type: 'button', onclick: onStart }, [
+      el('span', { text: '✨', 'aria-hidden': 'true' }),
+      el('span', { text: 'شروع دورهٔ آزمایشی' }),
+    ]),
+  ]);
+}
+
+/** Visual showcase of the product below the plans, one card at a time. */
+function featuresSection(onStart) {
+  const section = el('section.login-features#features', {
+    'aria-labelledby': 'features-title',
+  }, [
+    el('div.login-features__head', {}, [
+      el('span.login-features__eyebrow', {}, [
+        el('span', { text: '✨', 'aria-hidden': 'true' }),
+        el('span', { text: 'فراتر از یک دفتر نمره' }),
+      ]),
+      el('h2#features-title', {}, [
+        el('span.brand-gradient', { text: 'قابلیت‌هایی' }),
+        el('span', { text: ' که کلاس را زنده می‌کند' }),
+      ]),
+      el('p', {
+        text: 'هر چیزی که یک معلم برای ادارهٔ کلاس نیاز دارد، از امتیازدهی و ارزشیابی تا پیامک والدین و ابزارهای زندهٔ کلاس، در یک سامانهٔ یکپارچه.',
+      }),
+    ]),
+    el('ol.login-features__grid', { role: 'list' }, [...FEATURES.map(featureCard), ctaCard(onStart)]),
+    el('p.login-features__hint', {}, [
+      el('span.login-features__arrow', { text: '↓', 'aria-hidden': 'true' }),
+      el('span', { text: 'برای دیدن همهٔ قابلیت‌ها اسکرول کنید' }),
+    ]),
+  ]);
+  animateFeatureCards(section);
+  return section;
+}
+
 /** Public storefront under the login form, so visitors see the plans first. */
 function plansSection() {
   const plans = Array.isArray(state.meta?.plans) ? state.meta.plans : [];
@@ -59,6 +201,9 @@ function supportButton() {
 
 export function renderLogin({ navigate }) {
   setTopbarTitle(state.meta.appName);
+  // A previous visit may still have an observer attached to detached cards.
+  featureObserver?.disconnect();
+  featureObserver = null;
 
   let mode = 'login';
   const trialDays = state.meta.trialDays ?? 14;
@@ -221,7 +366,15 @@ export function renderLogin({ navigate }) {
   });
 
   renderView(el('div.login-shell', {}, [
-    el('div.login-page', {}, [form, plansSection()]),
+    el('div.login-page', {}, [
+      form,
+      plansSection(),
+      featuresSection(() => {
+        setMode('signup');
+        form.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        signupUsername.focus({ preventScroll: true });
+      }),
+    ]),
   ]));
   loginUsername.focus();
 

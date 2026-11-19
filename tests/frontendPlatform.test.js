@@ -199,6 +199,42 @@ describe('landing page plans', () => {
     expect(cards[1].querySelector('.plan-card__old')).toBeNull();
   });
 
+  it('introduces the key features below the plans with a scroll reveal', () => {
+    setMeta({ appName: 'لیگ جامع دانش‌آموزی', trialDays: 14, plans: [] });
+    renderLogin({ navigate: vi.fn() });
+
+    const page = document.querySelector('.login-page');
+    const children = [...page.children];
+    expect(children.indexOf(document.querySelector('.login-plans')))
+      .toBeLessThan(children.indexOf(document.querySelector('.login-features')));
+
+    const features = document.querySelectorAll('.feature-card:not(.feature-card--cta)');
+    expect(features).toHaveLength(7);
+    expect(document.querySelectorAll('.feature-card')).toHaveLength(8);
+
+    const text = document.querySelector('.login-features').textContent;
+    expect(text).toContain('قابلیت‌هایی');
+    expect(text).toContain('لیگ و امتیازدهی زنده');
+    expect(text).toContain('گزارش روزانه و پیامک والدین');
+    expect(text).toContain('سؤال‌سازی با هوش مصنوعی');
+    expect(text).toContain('۱۴ روز همهٔ ابزارها');
+
+    // jsdom has no real IntersectionObserver, so every card starts visible.
+    expect(document.querySelectorAll('.feature-card.is-visible')).toHaveLength(8);
+  });
+
+  it('turns the closing showcase card into the signup form', () => {
+    setMeta({ appName: 'لیگ جامع دانش‌آموزی', trialDays: 14, plans: [] });
+    renderLogin({ navigate: vi.fn() });
+
+    const submit = document.querySelector('form.login-card button[type="submit"]');
+    expect(submit.textContent).toContain('ورود به سامانه');
+    document.querySelector('.feature-card--cta .feature-card__cta').click();
+    expect(submit.textContent).toContain('ساخت حساب');
+    expect(document.getElementById('signup-display-name').required).toBe(true);
+    expect(document.getElementById('signup-username').required).toBe(true);
+  });
+
   it('lets a visitor without an account send a support message from the login page', async () => {
     api.post.mockResolvedValueOnce({ message: { id: 1 } });
     renderLogin({ navigate: vi.fn() });

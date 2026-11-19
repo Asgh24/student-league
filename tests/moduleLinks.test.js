@@ -79,4 +79,28 @@ describe('frontend module links', () => {
     }
     expect(problems).toEqual([]);
   });
+
+  it('resolves every lazily loaded route view to a real export', () => {
+    const mainFile = path.join(ROOT, 'main.js');
+    const source = fs.readFileSync(mainFile, 'utf8');
+    const pattern = /loadView\(\(\)\s*=>\s*import\(['"]([^'"]+)['"]\)\s*,\s*['"]([A-Za-z0-9_$]+)['"]\)/g;
+    const routes = [...source.matchAll(pattern)];
+
+    // The landing page must not eagerly pull the whole application.
+    expect(routes.length).toBeGreaterThan(40);
+    expect(source).not.toMatch(/from\s+['"]\.\/views\/(?:dashboard|qa|reports|admin\/dashboard)\.js['"]/);
+
+    const problems = [];
+    for (const [, specifier, exportName] of routes) {
+      const target = path.resolve(path.dirname(mainFile), specifier);
+      if (!fs.existsSync(target)) {
+        problems.push(`route → missing file ${specifier}`);
+        continue;
+      }
+      if (!exportedNames(fs.readFileSync(target, 'utf8')).has(exportName)) {
+        problems.push(`${specifier} does not export ${exportName}`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
 });

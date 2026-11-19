@@ -19,58 +19,26 @@ import { homePath, can, isAdmin, isAssistant, isStudent, isTeacher, setLeagueId,
 import { initPalette, openPaletteDialog } from './theme.js';
 import { notify } from './ui.js';
 
-import { renderAttendance } from './views/attendance.js';
-import { renderDiscipline } from './views/discipline.js';
-import { renderAssistants } from './views/assistants.js';
-import { renderContacts } from './views/contacts.js';
-import { renderTeacherDashboard } from './views/dashboard.js';
-import { renderEvaluations } from './views/evaluations.js';
-import { renderFiles } from './views/files.js';
-import { renderFun } from './views/fun.js';
-import { renderHomework } from './views/homework.js';
-import { renderLeague } from './views/league.js';
-import { renderLiveBoard } from './views/liveboard.js';
 import { renderLogin } from './views/login.js';
-import { renderStudentMessages, renderTeacherMessages } from './views/messages.js';
-import { renderSupport } from './views/support.js';
-import { renderQa } from './views/qa.js';
-import { renderRaffle } from './views/raffle.js';
-import { renderRepresentative } from './views/representative.js';
-import { renderRepresentativeBoard } from './views/representativeBoard.js';
-import { renderReportCards } from './views/reportCards.js';
-import { renderReports } from './views/reports.js';
-import { renderSchedule } from './views/schedule.js';
-import { renderSeating } from './views/seating.js';
-import { renderSettings } from './views/settings.js';
-import { renderSubscription } from './views/subscription.js';
+// The guest support dialog is tiny and shared by the header/footer buttons.
 import { openGuestSupportDialog } from './views/guestSupport.js';
-import { renderTeams } from './views/teams.js';
-import { renderTimerTools } from './views/timer.js';
-import { renderWheel } from './views/wheel.js';
 
-import { renderStudentAttendance } from './views/student/attendance.js';
-import { renderStudentDashboard } from './views/student/dashboard.js';
-import { renderStudentHomework } from './views/student/homework.js';
-import { renderStudentEvaluations } from './views/student/evaluations.js';
-import { renderStudentHistory } from './views/student/history.js';
-import { renderStudentLikes } from './views/student/likes.js';
-import { renderStudentQuestions } from './views/student/questions.js';
-import { renderStudentExams } from './views/student/exams.js';
-import { renderStudentRanking } from './views/student/ranking.js';
-import { renderReportCard } from './views/student/reportcard.js';
-import { renderStudentSchedule } from './views/student/schedule.js';
-import { renderStudentTeam } from './views/student/team.js';
-import { renderStudentReportCard as renderManualReportCard } from './views/student/reportcard-manual.js';
+/**
+ * Every other screen is loaded on demand. The login page is the first thing a
+ * visitor sees, and without this it paid for every teacher, student and admin
+ * module (hundreds of kilobytes) before it could paint. `loadView` keeps the
+ * route table declarative while importing the module only when it is visited.
+ */
+function loadView(loader, exportName) {
+  return async (ctx) => {
+    const module = await loader();
+    if (typeof module[exportName] !== 'function') {
+      throw new Error(`view module does not export ${exportName}`);
+    }
+    return module[exportName](ctx);
+  };
+}
 
-import { renderAdminDashboard } from './views/admin/dashboard.js';
-import { renderAdminBackup } from './views/admin/backup.js';
-import { renderAdminExpiredUsers } from './views/admin/expiredUsers.js';
-import { renderAdminPaymentSettings } from './views/admin/paymentSettings.js';
-import { renderAdminPayments } from './views/admin/payments.js';
-import { renderAdminPlans } from './views/admin/plans.js';
-import { renderAdminSms } from './views/admin/sms.js';
-import { renderAdminSupport } from './views/admin/support.js';
-import { renderAdminTeachers } from './views/admin/teachers.js';
 
 const LEAGUE_NAV = [
   ['', '🏆', 'لیگ انفرادی', 'scores'],
@@ -234,64 +202,70 @@ const routes = [
     path: '',
     view: () => homePath(),
   },
-  { path: 'teacher', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderTeacherDashboard(ctx) },
-  { path: 'teacher/settings', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSettings(ctx) },
-  { path: 'teacher/messages', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderTeacherMessages(ctx) },
-  { path: 'teacher/support', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSupport(ctx) },
-  { path: 'teacher/subscription', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSubscription(ctx) },
-  { path: 'teacher/assistants', guard: () => (isTeacher() && !isAssistant() ? undefined : 'teacher'), view: (ctx) => renderAssistants(ctx) },
-  { path: 'teacher/league/:id', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderLeague(ctx) },
-  { path: 'teacher/league/:id/teams', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderTeams(ctx) },
-  { path: 'teacher/league/:id/attendance', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderAttendance(ctx) },
-  { path: 'teacher/league/:id/discipline', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderDiscipline(ctx) },
-  { path: 'teacher/league/:id/evaluations', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderEvaluations(ctx) },
-  { path: 'teacher/league/:id/raffle', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderRaffle(ctx) },
-  { path: 'teacher/league/:id/representative', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderRepresentative(ctx) },
-  { path: 'teacher/league/:id/representative/board', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderRepresentativeBoard(ctx) },
-  { path: 'teacher/league/:id/wheel', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderWheel(ctx) },
-  { path: 'teacher/league/:id/live', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderLiveBoard(ctx) },
-  { path: 'teacher/league/:id/timer', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderTimerTools(ctx) },
-  { path: 'teacher/league/:id/homework', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderHomework(ctx) },
-  { path: 'teacher/league/:id/qa', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderQa(ctx) },
-  { path: 'teacher/league/:id/schedule', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSchedule(ctx) },
-  { path: 'teacher/league/:id/files', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderFiles(ctx) },
-  { path: 'teacher/league/:id/seating', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderSeating(ctx) },
-  { path: 'teacher/league/:id/contacts', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderContacts(ctx) },
-  { path: 'teacher/league/:id/reports', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderReports(ctx) },
+  { path: 'teacher', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/dashboard.js'), 'renderTeacherDashboard') },
+  { path: 'teacher/settings', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/settings.js'), 'renderSettings') },
+  { path: 'teacher/messages', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/messages.js'), 'renderTeacherMessages') },
+  { path: 'teacher/support', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/support.js'), 'renderSupport') },
+  { path: 'teacher/subscription', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/subscription.js'), 'renderSubscription') },
+  { path: 'teacher/assistants', guard: () => (isTeacher() && !isAssistant() ? undefined : 'teacher'), view: loadView(() => import('./views/assistants.js'), 'renderAssistants') },
+  { path: 'teacher/league/:id', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/league.js'), 'renderLeague') },
+  { path: 'teacher/league/:id/teams', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/teams.js'), 'renderTeams') },
+  { path: 'teacher/league/:id/attendance', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/attendance.js'), 'renderAttendance') },
+  { path: 'teacher/league/:id/discipline', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/discipline.js'), 'renderDiscipline') },
+  { path: 'teacher/league/:id/evaluations', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/evaluations.js'), 'renderEvaluations') },
+  { path: 'teacher/league/:id/raffle', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/raffle.js'), 'renderRaffle') },
+  { path: 'teacher/league/:id/representative', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/representative.js'), 'renderRepresentative') },
+  { path: 'teacher/league/:id/representative/board', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/representativeBoard.js'), 'renderRepresentativeBoard') },
+  { path: 'teacher/league/:id/wheel', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/wheel.js'), 'renderWheel') },
+  { path: 'teacher/league/:id/live', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/liveboard.js'), 'renderLiveBoard') },
+  { path: 'teacher/league/:id/timer', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/timer.js'), 'renderTimerTools') },
+  { path: 'teacher/league/:id/homework', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/homework.js'), 'renderHomework') },
+  { path: 'teacher/league/:id/qa', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/qa.js'), 'renderQa') },
+  { path: 'teacher/league/:id/schedule', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/schedule.js'), 'renderSchedule') },
+  { path: 'teacher/league/:id/files', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/files.js'), 'renderFiles') },
+  { path: 'teacher/league/:id/seating', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/seating.js'), 'renderSeating') },
+  { path: 'teacher/league/:id/contacts', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/contacts.js'), 'renderContacts') },
+  { path: 'teacher/league/:id/reports', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/reports.js'), 'renderReports') },
   // Report cards (separate from daily reports)
-  { path: 'teacher/league/:id/report-cards', guard: () => (isTeacher() ? undefined : 'login'), view: (ctx) => renderReportCards(ctx) },
-  { path: 'admin', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminDashboard(ctx) },
-  { path: 'admin/teachers', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminTeachers(ctx) },
-  { path: 'admin/expired-users', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminExpiredUsers(ctx) },
-  { path: 'admin/plans', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminPlans(ctx) },
-  { path: 'admin/payments', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminPayments(ctx) },
-  { path: 'admin/payment-settings', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminPaymentSettings(ctx) },
-  { path: 'admin/sms', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminSms(ctx) },
-  { path: 'admin/support', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminSupport(ctx) },
-  { path: 'admin/backup', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderAdminBackup(ctx) },
-  { path: 'admin/settings', guard: () => (isAdmin() ? undefined : 'login'), view: (ctx) => renderSettings(ctx) },
-  { path: 'fun', guard: () => (state.user ? undefined : 'login'), view: () => renderFun() },
-  { path: 'student', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentDashboard(ctx) },
-  { path: 'student/report-card', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderReportCard(ctx) },
-  { path: 'student/evaluations', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentEvaluations(ctx) },
-  { path: 'student/attendance', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentAttendance(ctx) },
-  { path: 'student/homework', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentHomework(ctx) },
-  { path: 'student/schedule', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentSchedule(ctx) },
-  { path: 'student/team', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentTeam(ctx) },
-  { path: 'student/history', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentHistory(ctx) },
-  { path: 'student/ranking', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentRanking(ctx) },
-  { path: 'student/likes', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentLikes(ctx) },
-  { path: 'student/exams', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentExams(ctx) },
-  { path: 'student/questions', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentQuestions(ctx) },
-  { path: 'student/messages', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderStudentMessages(ctx) },
-  { path: 'student/support', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderSupport(ctx) },
-  { path: 'student/report-cards', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderManualReportCard(ctx) },
-  { path: 'student/settings', guard: () => (isStudent() ? undefined : 'login'), view: (ctx) => renderSettings(ctx) },
+  { path: 'teacher/league/:id/report-cards', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/reportCards.js'), 'renderReportCards') },
+  { path: 'admin', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/admin/dashboard.js'), 'renderAdminDashboard') },
+  { path: 'admin/teachers', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/admin/teachers.js'), 'renderAdminTeachers') },
+  { path: 'admin/expired-users', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/admin/expiredUsers.js'), 'renderAdminExpiredUsers') },
+  { path: 'admin/plans', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/admin/plans.js'), 'renderAdminPlans') },
+  { path: 'admin/payments', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/admin/payments.js'), 'renderAdminPayments') },
+  { path: 'admin/payment-settings', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/admin/paymentSettings.js'), 'renderAdminPaymentSettings') },
+  { path: 'admin/sms', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/admin/sms.js'), 'renderAdminSms') },
+  { path: 'admin/support', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/admin/support.js'), 'renderAdminSupport') },
+  { path: 'admin/backup', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/admin/backup.js'), 'renderAdminBackup') },
+  { path: 'admin/settings', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/settings.js'), 'renderSettings') },
+  { path: 'fun', guard: () => (state.user ? undefined : 'login'), view: loadView(() => import('./views/fun.js'), 'renderFun') },
+  { path: 'student', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/dashboard.js'), 'renderStudentDashboard') },
+  { path: 'student/report-card', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/reportcard.js'), 'renderReportCard') },
+  { path: 'student/evaluations', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/evaluations.js'), 'renderStudentEvaluations') },
+  { path: 'student/attendance', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/attendance.js'), 'renderStudentAttendance') },
+  { path: 'student/homework', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/homework.js'), 'renderStudentHomework') },
+  { path: 'student/schedule', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/schedule.js'), 'renderStudentSchedule') },
+  { path: 'student/team', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/team.js'), 'renderStudentTeam') },
+  { path: 'student/history', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/history.js'), 'renderStudentHistory') },
+  { path: 'student/ranking', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/ranking.js'), 'renderStudentRanking') },
+  { path: 'student/likes', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/likes.js'), 'renderStudentLikes') },
+  { path: 'student/exams', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/exams.js'), 'renderStudentExams') },
+  { path: 'student/questions', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/questions.js'), 'renderStudentQuestions') },
+  { path: 'student/messages', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/messages.js'), 'renderStudentMessages') },
+  { path: 'student/support', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/support.js'), 'renderSupport') },
+  { path: 'student/report-cards', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/reportcard-manual.js'), 'renderStudentReportCard') },
+  { path: 'student/settings', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/settings.js'), 'renderSettings') },
 ];
 
 const router = createRouter({
   routes,
+  onNavigate() {
+    // Reveal the footer only once a view exists; showing it during boot made it
+    // jump down the page (a large layout shift on the public landing page).
+    document.getElementById('site-footer')?.removeAttribute('hidden');
+  },
   onError(error) {
+    document.getElementById('site-footer')?.removeAttribute('hidden');
     if (error?.code === 'SUBSCRIPTION_REQUIRED') {
       notify.warn(errorMessage(error));
       void router.navigate('teacher/subscription', { replace: true });
@@ -300,6 +274,7 @@ const router = createRouter({
     notify.error(errorMessage(error));
   },
   fallback() {
+    document.getElementById('site-footer')?.removeAttribute('hidden');
     void router.navigate(homePath(), { replace: true });
   },
 });
@@ -343,18 +318,22 @@ function paintFooterYear() {
 async function boot() {
   initPalette();
   paintFooterYear();
-  try {
-    const metaPayload = await apiMeta();
-    setMeta(metaPayload ?? {});
-  } catch {
+
+  // Meta and the session are independent; requesting them together removes a
+  // full round trip before the first screen can render.
+  const [metaResult, sessionResult] = await Promise.allSettled([apiMeta(), apiMe()]);
+
+  if (metaResult.status === 'fulfilled') {
+    setMeta(metaResult.value ?? {});
+  } else {
     setMeta({ appName: 'لیگ جامع دانش‌آموزی' });
   }
 
-  try {
-    const session = await apiMe();
+  if (sessionResult.status === 'fulfilled') {
+    const session = sessionResult.value;
     if (session?.csrfToken) setCsrfToken(session.csrfToken);
     setUser(session?.user ?? null);
-  } catch {
+  } else {
     setUser(null);
   }
 

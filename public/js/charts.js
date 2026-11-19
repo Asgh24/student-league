@@ -5,6 +5,36 @@ export function chartLib() {
   return typeof window !== 'undefined' && window.Chart ? window.Chart : null;
 }
 
+let chartLoading = null;
+
+/**
+ * Loads the vendored Chart.js bundle the first time a chart is drawn. The login
+ * page (and every screen without a chart) never downloads its ~200 KB.
+ */
+export function loadChart() {
+  if (typeof document === 'undefined') return Promise.resolve(chartLib());
+  // jsdom never fetches or executes the injected script, so awaiting it would
+  // hang every view test. The suites only assert the surrounding markup.
+  const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent ?? '');
+  if (isJsdom) return Promise.resolve(chartLib());
+  const existing = chartLib();
+  if (existing) return Promise.resolve(existing);
+  if (!chartLoading) {
+    chartLoading = new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = '/vendor/chart.umd.js';
+      script.async = true;
+      script.addEventListener('load', () => resolve(chartLib()), { once: true });
+      script.addEventListener('error', () => {
+        chartLoading = null;
+        resolve(null);
+      }, { once: true });
+      document.head.appendChild(script);
+    });
+  }
+  return chartLoading;
+}
+
 export const COLORS = {
   line: '#7c3aed',
   fill: 'rgba(124, 58, 237, 0.16)',
@@ -117,9 +147,11 @@ export function buildPointsChartConfig(series, { persianDigits = true } = {}) {
   return { config, labels, data, deltas, colors };
 }
 
-function mountChart(canvas, config) {
-  const Lib = chartLib();
-  if (!Lib || !canvas) return null;
+async function mountChart(canvas, config) {
+  if (!canvas) return null;
+  const Lib = await loadChart();
+  // The view may have been replaced while the bundle was downloading.
+  if (!Lib || canvas.isConnected === false) return null;
   if (canvas.__chart) {
     canvas.__chart.destroy();
     canvas.__chart = null;
@@ -129,13 +161,13 @@ function mountChart(canvas, config) {
   return instance;
 }
 
-/** Renders the student progress chart. Returns the Chart instance or null. */
+/** Renders the student progress chart. Resolves to the Chart instance or null. */
 export function renderPointsChart(canvas, series, options = {}) {
   const { config } = buildPointsChartConfig(series, options);
   return mountChart(canvas, config);
 }
 
-/** Simple bar chart used by the report card. */
+/** Simple bar chart used by the report card. Resolves to the Chart or null. */
 export function renderBars(canvas, labels, values, { persianDigits = true, label = 'امتیاز' } = {}) {
   const config = {
     type: 'bar',

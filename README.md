@@ -89,6 +89,14 @@ commit button so the cells get the width, and touch targets grow), keyboard-acce
 dialogs and focus trapping, CSRF protection, bcrypt password hashing, strict
 per-endpoint authorization.
 
+Load speed: the login screen downloads only its own view module — every other
+screen (teacher, student, admin, league) is a dynamic `import()` resolved when the
+route is first visited. Chart.js is injected the first time a chart is drawn, the
+`/meta` and `/me` requests run in parallel, and the footer is withheld until the
+first view mounts, which keeps the public page at roughly 30 requests and near-zero
+layout shift. Vendored fonts carry proper `unicode-range` subsets so Persian text
+uses the Arabic files and Latin names use the Latin files instead of loading both.
+
 ---
 
 ## Tech stack
@@ -857,7 +865,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 
 ```
  Test Files  46 passed (46)
-      Tests  579 passed (579)
+      Tests  583 passed (583)
 ```
 
 | Suite | Tests | Covers |
@@ -889,9 +897,9 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `aiQuestionFormat.test.js` | 11 | Prompt template contents/league name, fenced and bare-array parsing, field aliases, Persian digits, 1-based fallback, points clamping, duplicate/invalid skipping, ten-question cap and error messages |
 | `aiAssistantFrontend.test.js` | 7 | Provider-free importer: copyable template, no API key, paste parsing with preview, alias/Persian-digit input, invalid JSON and out-of-range answers, per-question points, selection and bulk-save hand-off |
 | `frontend.test.js` | 65 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (17 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters + monthly placeholder button, weekly schedule rows/columns, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill and descriptive max hiding, student evaluation cards, MCQ option editor, student MCQ/text answering, merged add-student dialog, student credential dialog, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, custom parent-message box with confirmation and send, modal focus/footer lifecycle |
-| `frontendPlatform.test.js` | 10 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, expired-user deletion section, teacher file storage card, shared inbox thread/composer, admin settings label |
+| `frontendPlatform.test.js` | 12 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, expired-user deletion section, teacher file storage card, shared inbox thread/composer, admin settings label, landing feature showcase below the plans with its signup call-to-action |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
-| `moduleLinks.test.js` | 2 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not) |
+| `moduleLinks.test.js` | 3 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not), and every lazily loaded route view exists and exports the expected renderer |
 | `githubBackup.test.js` | 26 | Off-site backups against an in-memory GitHub Contents/Blob API: upload + manifest checksum, Blob download above 1 MB, full push→restore round trip, retention/pruning, public-repo refusal, size limit, missing repo and 404 handling, checksum-mismatch safety, schema-only/empty detection, staged restore + cancel, scheduler due-time/retry/state handling |
 | `adminExpiredUsers.test.js` | 3 | Expired-only user listing, typed-confirmation hard delete with cascaded leagues/students/files, linked student-login cleanup, uploaded-blob cleanup, session invalidation, and refusal of active accounts or non-admin callers |
 | `adminBackup.test.js` | 3 | Admin-only backup status, unconfigured deployment, manual GitHub push, snapshot listing, staged restore/cancel, private local SQLite download |
@@ -899,7 +907,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `frontendBackup.test.js` | 2 | Backup page renders missing-env guidance, disables manual backup, lists remote snapshots and the local download link |
 | `frontendRepresentative.test.js` | 5 | Representative hero/progress/status/history render, animated draw updates the winner, name search filters only the status list, copy-ready announcement, and projector board render |
 | `bootstrap.test.js` | 7 | First teacher account: creation, password verification, skip when accounts exist, `--force` reset, refusal of short/demo-default passwords, production-vs-development default |
-| `hardening.test.js` | 15 | Anonymous requests create no session row, logout clears the configured cookie, login performs a bcrypt comparison for unknown users, `/healthz` integrity scan is cached, expired sessions are swept, app JS/CSS revalidate after deployment, `TRUST_PROXY` fails closed |
+| `hardening.test.js` | 16 | Anonymous requests create no session row, logout clears the configured cookie, login performs a bcrypt comparison for unknown users, `/healthz` integrity scan is cached, expired sessions are swept, app JS/CSS revalidate after deployment, Chart.js stays on demand, `TRUST_PROXY` fails closed |
 
 Backend suites use throwaway SQLite databases (`tests/helpers.js`), so `npm test`
 never touches your real `DATA_DIR`.

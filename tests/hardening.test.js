@@ -1,4 +1,6 @@
 import bcrypt from 'bcryptjs';
+import fs from 'node:fs';
+import path from 'node:path';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { databaseStatus } from '../src/db.js';
@@ -187,6 +189,19 @@ describe('static asset caching', () => {
     expect(res.headers['content-encoding']).toBe('gzip');
     // Supertest decompresses the body, so this proves the CSS really arrived.
     expect(res.text.length).toBeGreaterThan(1000);
+  });
+});
+
+describe('on-demand heavy assets', () => {
+  it('does not ship Chart.js to pages that never draw a chart', () => {
+    const root = process.cwd();
+    const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
+    expect(html).not.toContain('chart.umd.js');
+    expect(html).toContain('modulepreload');
+
+    const charts = fs.readFileSync(path.join(root, 'public', 'js', 'charts.js'), 'utf8');
+    expect(charts).toContain("script.src = '/vendor/chart.umd.js'");
+    expect(charts).toContain('document.head.appendChild(script)');
   });
 });
 
