@@ -2030,6 +2030,7 @@ describe('daily parent report', () => {
           shadPvUrl: 'https://web.shad.ir/#/pv/abc', hasShadPvUrl: true,
           changes: 1,
           lines: [{ columnName: 'انضباطی', status: 'down', changes: 1 }],
+          evaluations: [{ title: 'آزمون ریاضی', grade: 'خیلی خوب (۱۸ از ۲۰)', bandKey: 'very-good' }],
           attendanceStatus: 'late', discipline: { status: 'disorderly', note: 'صحبت با همکلاسی' },
           homework: [{ title: 'تمرین ریاضی', status: 'done' }],
           message: 'لیگ تست | گزارش روزانه ۱۴۰۵/۰۷/۲۹\nآرش آزمون: انضباطی (کاهش)\nتکالیف: تمرین ریاضی (انجام شد)',
@@ -2039,6 +2040,7 @@ describe('daily parent report', () => {
           shadPvUrl: '', hasShadPvUrl: false,
           changes: 1,
           lines: [{ columnName: 'ریاضی', status: 'up', changes: 1 }],
+          evaluations: [],
           attendanceStatus: 'present', discipline: { status: 'orderly', note: '' },
           homework: [],
           message: 'لیگ تست | گزارش روزانه ۱۴۰۵/۰۷/۲۹\nبهار بنفش: ریاضی (بهبود)\nتکالیف: تکلیفی برای این روز ثبت نشده است',
@@ -2069,6 +2071,7 @@ describe('daily parent report', () => {
     expect(view.textContent).toContain('نمونهٔ متن پیامکی');
     expect(view.textContent).toContain('کلید API و شماره خط پنل sms.ir خودتان');
     expect(view.textContent).toContain('انضباطی');
+    expect(view.textContent).toContain('آزمون ریاضی: خیلی خوب (۱۸ از ۲۰)');
     expect(view.textContent).toContain('آرش آزمون: انضباطی');
     expect(view.textContent).toContain('انضباطی: کاهش');
     expect(view.textContent).toContain('ریاضی: بهبود');

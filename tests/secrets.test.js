@@ -26,14 +26,14 @@ describe('provider secret encryption key', () => {
   it('decrypts legacy rows when SECRETS_KEY is set to the old session secret', () => {
     delete process.env.SECRETS_KEY;
     process.env.SESSION_SECRET = 'legacy-session-secret-long-enough';
-    const legacy = encryptSecret('legacy-groq-key');
+    const legacy = encryptSecret('legacy-sms-key');
 
     // This is how an existing deployment migrates: SECRETS_KEY keeps the old
     // value, while SESSION_SECRET can now rotate independently.
     process.env.SECRETS_KEY = 'legacy-session-secret-long-enough';
     process.env.SESSION_SECRET = 'rotated-session-secret-long-enough';
 
-    expect(decryptSecret(legacy)).toBe('legacy-groq-key');
+    expect(decryptSecret(legacy)).toBe('legacy-sms-key');
   });
 
   it('rejects tampered ciphertext instead of returning garbage', () => {

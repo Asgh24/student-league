@@ -13,6 +13,7 @@ import { toPersianDigits } from '../lib/normalize.js';
 import { normalizeMobile } from '../lib/phone.js';
 import { getLeague } from '../repositories/leagues.js';
 import { contactsList } from './contacts.js';
+import { descriptiveLevel, numericBand } from './evaluations.js';
 import { reportChannels } from './reportChannels.js';
 import {
   deliverSms,
@@ -47,18 +48,41 @@ function evaluationStatus(line) {
 }
 
 /**
+ * The recorded mark of one evaluation in words. Descriptive evaluations use
+ * their level label; numeric ones use the usual Iranian band plus the exact
+ * mark and scale, so the parent sees «خیلی خوب (۱۸ از ۲۰)».
+ */
+function evaluationGrade(row) {
+  if (row.kind === 'descriptive') {
+    const level = descriptiveLevel(row.label);
+    if (level) return { grade: level.label, bandKey: level.key };
+    const label = String(row.label ?? '').trim();
+    return { grade: label || 'ثبت نشده', bandKey: 'muted' };
+  }
+  const band = numericBand(row.score, row.scaleMax);
+  const scoreText = toPersianDigits(String(Number(row.score)));
+  const maxText = toPersianDigits(String(Number(row.scaleMax)));
+  const markText = `${scoreText} از ${maxText}`;
+  return {
+    grade: band ? `${band.label} (${markText})` : markText,
+    bandKey: band?.key ?? 'muted',
+  };
+}
+
+/**
  * Builds the SMS text of one student's day (exported for tests).
  *
  * The message is intentionally one topic per line, in this order:
  * date, student, attendance, discipline (with its optional reason),
- * evaluation statuses and homework statuses. No points or deltas are ever
- * written into the report.
+ * evaluation titles with their recorded grade, change statuses and homework
+ * statuses. No points or score deltas are ever written into the report.
  */
 export function buildDailyMessage({
   leagueName,
   studentName,
   date,
   lines = [],
+  evaluations = [],
   homework = [],
   attendanceStatus = null,
   discipline = null,
@@ -71,7 +95,16 @@ export function buildDailyMessage({
     .slice(0, MAX_REPORT_LINES)
     .map((line) => `${line.columnName} (${EVALUATION_STATUS_LABELS[evaluationStatus(line)]})`);
   if (lines.length > MAX_REPORT_LINES) breakdown.push(`و ${toPersianDigits(lines.length - MAX_REPORT_LINES)} مورد دیگر`);
-  const evaluationText = breakdown.length ? breakdown.join('، ') : 'امروز تغییری ثبت نشده است';
+
+  // Recorded evaluations for this day come first, with their exact title and
+  // grade; the change direction of score columns follows them.
+  const evaluationParts = [
+    ...evaluations.map((item) => `${item.title} — ${item.grade}`),
+    ...breakdown,
+  ];
+  const evaluationText = evaluationParts.length
+    ? evaluationParts.join('، ')
+    : 'امروز ارزشیابی یا تغییری ثبت نشده است';
 
   const attendanceText = ATTENDANCE_LABELS[attendanceStatus] ?? 'ثبت‌نشده';
 
@@ -109,6 +142,10 @@ export function buildSampleDailyMessage({ leagueName = 'لیگ نمونه', date
       { columnName: 'ریاضی', delta: 2 },
       { columnName: 'انضباطی', delta: -1 },
       { columnName: 'فارسی', delta: 1 },
+    ],
+    evaluations: [
+      { title: 'آزمون ریاضی', grade: 'خیلی خوب (۱۸ از ۲۰)' },
+      { title: 'روخوانی فارسی', grade: 'قابل قبول' },
     ],
     attendanceStatus: 'present',
     discipline: { status: 'disorderly', note: 'صحبت با همکلاسی' },
@@ -164,6 +201,24 @@ export function dailyReport(db, leagueId, date) {
 
   const contacts = new Map(contactsList(db, leagueId).map((row) => [row.id, row]));
 
+  // Course evaluations held on the report day, with each student's own recorded
+  // mark. Ungraded rows are skipped so a parent never receives an empty entry.
+  const evaluationRows = db.prepare(`
+    SELECT es.student_id AS studentId, e.title AS title, e.kind AS kind,
+           e.scale_max AS scaleMax, es.score AS score, es.label AS label
+    FROM evaluations e
+    JOIN evaluation_scores es ON es.evaluation_id = e.id
+    WHERE e.league_id = ? AND e.held_on = ?
+      AND (es.score IS NOT NULL OR es.label <> '')
+    ORDER BY e.id ASC, es.student_id ASC
+  `).all(leagueId, date);
+  const evaluationsByStudent = new Map();
+  for (const row of evaluationRows) {
+    if (!evaluationsByStudent.has(row.studentId)) evaluationsByStudent.set(row.studentId, []);
+    const { grade, bandKey } = evaluationGrade(row);
+    evaluationsByStudent.get(row.studentId).push({ title: row.title, grade, bandKey });
+  }
+
   // Attendance and discipline are separate per-day sheets; the report only
   // reads them, it never changes them.
   const attendanceRows = db.prepare('SELECT student_id AS studentId, status FROM attendance WHERE league_id = ? AND day = ?')
@@ -178,6 +233,7 @@ export function dailyReport(db, leagueId, date) {
   const items = [];
   for (const contact of contacts.values()) {
     const lines = byStudent.get(contact.id) ?? [];
+    const evaluations = evaluationsByStudent.get(contact.id) ?? [];
     const homework = homeworkByStudent.get(contact.id) ?? [];
     const attendanceStatus = attendanceByStudent.get(contact.id) ?? null;
     const discipline = disciplineByStudent.get(contact.id) ?? null;
@@ -195,12 +251,14 @@ export function dailyReport(db, leagueId, date) {
       changes,
       // Only statuses leave the server; deltas never reach the report UI.
       lines: lines.map((line) => ({ columnName: line.columnName, status: evaluationStatus(line) })),
+      evaluations,
       homework: homework.map((item) => ({ title: item.title, status: item.status })),
       message: buildDailyMessage({
         leagueName: league.name,
         studentName: contact.name,
         date,
         lines,
+        evaluations,
         homework,
         attendanceStatus,
         discipline,

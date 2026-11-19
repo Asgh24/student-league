@@ -37,6 +37,23 @@ async function setShadUrl(studentId, shadPvUrl) {
   });
 }
 
+async function createEvaluation(overrides = {}) {
+  return client.post(`/api/v1/leagues/${fixture.leagueA.id}/evaluations`, {
+    subject: 'ریاضی',
+    title: 'آزمون فصل ۲',
+    kind: 'numeric',
+    scaleMin: 0,
+    scaleMax: 20,
+    heldOn: todayIso(),
+    note: '',
+    ...overrides,
+  });
+}
+
+async function saveMarks(evaluationId, scores) {
+  return client.put(`/api/v1/leagues/${fixture.leagueA.id}/evaluations/${evaluationId}/scores`, { scores });
+}
+
 beforeEach(async () => {
   ctx = createTestDatabase();
   fixture = buildFixture(ctx.db);
@@ -85,7 +102,7 @@ describe('daily parent report data', () => {
 
     const untouched = res.body.items.find((item) => item.studentId === fixture.studentsA[2].id);
     expect(untouched.changes).toBe(0);
-    expect(untouched.message).toContain('امروز تغییری ثبت نشده است');
+    expect(untouched.message).toContain('امروز ارزشیابی یا تغییری ثبت نشده است');
   });
 
   it('trims the message to the strongest lines', () => {
@@ -166,6 +183,60 @@ describe('daily parent report data', () => {
     expect(res.body.items.every((item) => !item.message.includes('تکلیف دیروز'))).toBe(true);
   });
 
+  it('adds each recorded evaluation title and grade ahead of the change statuses', async () => {
+    const today = todayIso();
+    const [first, second] = fixture.studentsA;
+
+    const numeric = await createEvaluation({ subject: 'ریاضی', title: 'آزمون فصل ۲' });
+    expect(numeric.status).toBe(201);
+    const descriptive = await createEvaluation({
+      subject: 'فارسی', title: 'روخوانی درس ۳', kind: 'descriptive', heldOn: today,
+    });
+    expect(descriptive.status).toBe(201);
+    const old = await createEvaluation({ title: 'آزمون هفتهٔ قبل', heldOn: '2026-01-01' });
+    expect(old.status).toBe(201);
+
+    expect((await saveMarks(numeric.body.evaluation.id, [
+      { studentId: first.id, score: 18 },
+      { studentId: second.id, score: 12 },
+    ])).status).toBe(200);
+    expect((await saveMarks(descriptive.body.evaluation.id, [
+      { studentId: first.id, label: 'excellent' },
+      { studentId: second.id, label: 'fair' },
+    ])).status).toBe(200);
+    expect((await saveMarks(old.body.evaluation.id, [
+      { studentId: first.id, score: 5 },
+    ])).status).toBe(200);
+
+    expect((await record(first.id, 25, fixture.columnsA.find((column) => column.name === 'ریاضی').id)).status).toBe(200);
+
+    const res = await client.get(`/api/v1/leagues/${fixture.leagueA.id}/reports/daily?date=${today}`);
+    expect(res.status).toBe(200);
+
+    const row = res.body.items.find((item) => item.studentId === first.id);
+    expect(row.evaluations).toEqual([
+      { title: 'آزمون فصل ۲', grade: 'خیلی خوب (۱۸ از ۲۰)', bandKey: 'very-good' },
+      { title: 'روخوانی درس ۳', grade: 'خیلی خوب', bandKey: 'excellent' },
+    ]);
+    expect(row.message).toContain(
+      'ارزشیابی: آزمون فصل ۲ — خیلی خوب (۱۸ از ۲۰)، روخوانی درس ۳ — خیلی خوب',
+    );
+    expect(row.message).not.toContain('آزمون هفتهٔ قبل');
+
+    const secondRow = res.body.items.find((item) => item.studentId === second.id);
+    expect(secondRow.evaluations).toEqual([
+      { title: 'آزمون فصل ۲', grade: 'قابل قبول (۱۲ از ۲۰)', bandKey: 'fair' },
+      { title: 'روخوانی درس ۳', grade: 'قابل قبول', bandKey: 'fair' },
+    ]);
+    expect(secondRow.message).toContain(
+      'ارزشیابی: آزمون فصل ۲ — قابل قبول (۱۲ از ۲۰)، روخوانی درس ۳ — قابل قبول',
+    );
+
+    // A student with no recorded mark on that evaluation gets no evaluation line.
+    const untouched = res.body.items.find((item) => item.studentId === fixture.studentsA[2].id);
+    expect(untouched.evaluations).toEqual([]);
+  });
+
   it('renders the homework line in buildDailyMessage and the sample message', () => {
     const message = buildDailyMessage({
       leagueName: 'لیگ نمونه',
@@ -220,7 +291,7 @@ describe('daily parent report data', () => {
       'دانش‌آموز: آرش آزمون',
       'وضعیت حضور: تأخیر',
       'انضباط: بی‌نظمی — علت: صحبت با همکلاسی',
-      'ارزشیابی: امروز تغییری ثبت نشده است',
+      'ارزشیابی: امروز ارزشیابی یا تغییری ثبت نشده است',
       'تکالیف: تکلیفی برای این روز ثبت نشده است',
     ]);
 

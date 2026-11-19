@@ -352,7 +352,7 @@ cp /tmp/league-20261019T145242Z.db "$DATA_DIR/league.db"
 **not** in the snapshot — the same limitation as the local `npm run backup`. In practice,
 copy that folder to your own storage, or accept re-uploading those files after a container
 reset. The rest of the app (leagues, students, scores, attendance, evaluations) is fully
-covered. Teacher-saved sms.ir/Groq keys are inside the database and come back with the
+covered. Teacher-saved sms.ir keys are inside the database and come back with the
 snapshot, but only if `SECRETS_KEY` is unchanged.
 
 ---

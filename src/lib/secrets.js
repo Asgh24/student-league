@@ -1,9 +1,8 @@
 /**
  * Small symmetric helper for provider credentials stored in SQLite.
  *
- * sms.ir and Groq API keys are secrets: they are never returned by an API and
- * they are encrypted with a stable deployment key before they touch the
- * database. `SECRETS_KEY` is deliberately separate from `SESSION_SECRET`, so
+ * The sms.ir API key is a secret: it is never returned by an API and is
+ * encrypted with a stable deployment key before it touches the database. `SECRETS_KEY` is deliberately separate from `SESSION_SECRET`, so
  * rotating the session secret does not make a restored backup undecryptable.
  * Deployments that predate `SECRETS_KEY` keep using their session secret; reads
  * also try the session secret so old rows can be decrypted and re-saved.

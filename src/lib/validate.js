@@ -215,26 +215,6 @@ export const schemas = {
     'حداقل یکی از تنظیمات پیامک را وارد کنید',
   ),
 
-  /**
-   * Per-teacher Groq settings. Sending an empty/omitted `apiKey` keeps the
-   * saved key; `clearApiKey` removes it and falls back to the server key.
-   */
-  aiSettings: z.object({
-    apiKey: z.string().trim().max(300).optional(),
-    clearApiKey: z.boolean().optional().default(false),
-  }).refine(
-    (value) => (value.apiKey !== undefined && value.apiKey !== '') || value.clearApiKey,
-    'کلید API یا درخواست حذف آن را وارد کنید',
-  ),
-
-  /** Ask the AI assistant to create a multiple-choice quiz or questionnaire. */
-  aiQuestions: z.object({
-    topic: z.string().trim().min(3, 'موضوع آزمون را وارد کنید').max(300),
-    count: z.coerce.number().int().min(1).max(10).default(5),
-    difficulty: z.enum(['easy', 'medium', 'hard']).default('medium'),
-    notes: z.string().trim().max(1000).optional().default(''),
-  }),
-
   /** Admin SMS panel. Mobiles are normalized by the route. */
   smsTest: z.object({
     mobile: z.string().trim().min(10).max(20),

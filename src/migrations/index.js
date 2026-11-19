@@ -8,7 +8,6 @@ import * as contactsReports from './007_contacts_reports.js';
 import * as platform from './008_platform.js';
 import * as mcqQuestions from './009_mcq_questions.js';
 import * as teacherSmsSettings from './010_teacher_sms_settings.js';
-import * as teacherGroqSettings from './011_teacher_groq_settings.js';
 import * as cardToCardPayments from './012_card_to_card_payments.js';
 import * as classRepresentative from './013_class_representative.js';
 import * as assistants from './014_assistants.js';
@@ -38,7 +37,6 @@ export const migrations = [
   platform,
   mcqQuestions,
   teacherSmsSettings,
-  teacherGroqSettings,
   cardToCardPayments,
   classRepresentative,
   assistants,

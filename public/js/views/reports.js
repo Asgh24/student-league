@@ -10,6 +10,7 @@
 
 import { api } from '../api.js';
 import { el } from '../dom.js';
+import { bandKind } from '../evaluationMeta.js';
 import { errorMessage } from '../format.js';
 import { formatJalaliDate, todayIso } from '../jalali.js';
 import { jalaliDateInput } from '../jalaliDate.js';
@@ -382,12 +383,20 @@ export async function renderReports({ params }) {
         'aria-label': `انتخاب ${item.name}`,
         onchange: () => toggle(item.studentId, checkbox.checked),
       });
-      const evaluationCell = el('td', {}, item.lines?.length
-        ? item.lines.map((line) => {
-          const meta = EVALUATION_STATUS[evaluationStatusOf(line)];
-          return chip(`${line.columnName}: ${meta.label}`, meta.kind);
-        })
-        : [el('span.small.muted', { text: 'بدون تغییر' })]);
+      const evaluationCell = el('td', {});
+      for (const evaluation of item.evaluations ?? []) {
+        evaluationCell.appendChild(chip(
+          `${evaluation.title}: ${evaluation.grade}`,
+          bandKind(evaluation.bandKey),
+        ));
+      }
+      for (const line of item.lines ?? []) {
+        const meta = EVALUATION_STATUS[evaluationStatusOf(line)];
+        evaluationCell.appendChild(chip(`${line.columnName}: ${meta.label}`, meta.kind));
+      }
+      if (!evaluationCell.childNodes.length) {
+        evaluationCell.appendChild(el('span.small.muted', { text: 'بدون تغییر' }));
+      }
       const homeworkCell = el('td', {}, item.homework?.length
         ? item.homework.map((homework) => {
           const meta = HOMEWORK_STATUS[homework.status] ?? { label: homework.status, kind: 'muted' };

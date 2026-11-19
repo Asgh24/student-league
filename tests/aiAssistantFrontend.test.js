@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * AI Q&A assistant modal: provider key status, generation preview and the
- * reviewed bulk-save hand-off to the existing Q&A list.
+ * Provider-free AI question importer: template copy step, pasted-JSON parsing,
+ * preview selection and the reviewed bulk-save hand-off to the Q&A list.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -37,17 +37,8 @@ const questions = [
   },
 ];
 
-function config(overrides = {}) {
-  return {
-    provider: 'groq',
-    configured: true,
-    source: 'server',
-    model: 'openai/gpt-oss-20b',
-    hasApiKey: true,
-    serverConfigured: true,
-    own: { hasApiKey: false, updatedAt: null },
-    ...overrides,
-  };
+function answerText() {
+  return JSON.stringify({ questions }, null, 2);
 }
 
 function clickButton(label) {
@@ -56,6 +47,14 @@ function clickButton(label) {
   expect(node, `button «${label}» not found`).toBeTruthy();
   node.click();
   return node;
+}
+
+/** The importer converts on paste/change; setting the value plus change is enough. */
+function pasteAnswer(text) {
+  const area = document.querySelector('#ai-paste');
+  expect(area).not.toBeNull();
+  area.value = text;
+  area.dispatchEvent(new Event('change'));
 }
 
 beforeEach(() => {
@@ -67,68 +66,41 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('AI Q&A assistant UI', () => {
-  it('saves a teacher key, generates a preview and bulk-saves only selected questions', async () => {
-    api.get.mockResolvedValueOnce({
-      config: config({
-        configured: false,
-        source: 'none',
-        hasApiKey: false,
-        serverConfigured: false,
-      }),
-    });
-    api.put.mockResolvedValueOnce({
-      config: config({ source: 'teacher', own: { hasApiKey: true, updatedAt: '2026-10-22T08:00:00.000Z' } }),
-    });
-    api.post.mockImplementation((url) => {
-      if (url === '/leagues/1/ai/questions') {
-        return Promise.resolve({
-          questions,
-          meta: { provider: 'groq', model: 'openai/gpt-oss-20b', source: 'teacher', generated: 2 },
-        });
-      }
-      if (url === '/leagues/1/questions/bulk') {
-        return Promise.resolve({ items: [questions[0]] });
-      }
-      return Promise.reject(new Error(`unexpected post ${url}`));
-    });
+describe('AI question importer UI', () => {
+  it('shows a copyable template and never asks for an API key', async () => {
+    await openAiAssistant({ leagueId: 1, leagueName: 'کلاس هفتم', reload: vi.fn() });
+
+    const text = document.querySelector('#modal-root').textContent;
+    expect(text).toContain('ساخت سؤال با هوش مصنوعی');
+    expect(text).toContain('کلید API نمی‌خواهد');
+
+    const template = document.querySelector('#ai-template');
+    expect(template).not.toBeNull();
+    expect(template.value).toContain('"questions"');
+    expect(template.value).toContain('"correctIndex"');
+    expect(template.value).toContain('کلاس «کلاس هفتم»');
+    expect(document.body.textContent).not.toContain('Groq');
+    expect(document.querySelector('#ai-groq-key')).toBeNull();
+
+    expect(clickButton('کپی قالب')).toBeTruthy();
+    expect(document.querySelector('#ai-paste')).not.toBeNull();
+    expect(api.get).not.toHaveBeenCalled();
+    expect(api.put).not.toHaveBeenCalled();
+  });
+
+  it('parses a pasted fenced answer and bulk-saves only the selected questions', async () => {
+    api.post.mockResolvedValue({ items: [questions[0]] });
     const reload = vi.fn().mockResolvedValue(undefined);
 
     await openAiAssistant({ leagueId: 1, leagueName: 'کلاس هفتم', reload });
+    pasteAnswer(`\`\`\`json\n${answerText()}\n\`\`\``);
 
-    expect(document.querySelector('#modal-root').textContent).toContain('دستیار هوش مصنوعی');
-    expect(document.querySelector('#modal-root').textContent).toContain('کلید تنظیم نشده');
-    expect(document.querySelector('#ai-topic')).not.toBeNull();
-    expect(document.querySelector('#ai-groq-key')).not.toBeNull();
-    expect(document.querySelector('#ai-count').value).toBe('5');
-    expect(document.querySelector('#ai-difficulty').value).toBe('medium');
-    expect(clickButton('ساخت سؤال با هوش مصنوعی').disabled).toBe(true);
-
-    document.querySelector('#ai-groq-key').value = 'gsk_frontend_test_key';
-    clickButton('ذخیره کلید');
-    await vi.waitFor(() => expect(api.put).toHaveBeenCalledWith('/ai/settings', {
-      apiKey: 'gsk_frontend_test_key',
-    }));
-    await vi.waitFor(() => expect(clickButton('ساخت سؤال با هوش مصنوعی').disabled).toBe(false));
-    expect(document.querySelector('#modal-root').textContent).toContain('کلید شخصی شما');
-    expect(document.querySelector('#modal-root').textContent).not.toContain('gsk_frontend_test_key');
-
-    document.querySelector('#ai-topic').value = 'جغرافیا و ریاضی';
-    document.querySelector('#ai-count').value = '3';
-    document.querySelector('#ai-difficulty').value = 'easy';
-    document.querySelector('#ai-notes').value = 'سؤال‌های کوتاه';
-    clickButton('ساخت سؤال با هوش مصنوعی');
-
-    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/leagues/1/ai/questions', {
-      topic: 'جغرافیا و ریاضی',
-      count: 3,
-      difficulty: 'easy',
-      notes: 'سؤال‌های کوتاه',
-    }));
-    await vi.waitFor(() => expect(document.querySelectorAll('.ai-question')).toHaveLength(2));
+    expect(document.querySelectorAll('.ai-question')).toHaveLength(2);
     expect(document.querySelectorAll('.ai-question .mcq-preview__option.is-correct')).toHaveLength(2);
+    expect(document.querySelector('.ai-question .mcq-preview__option.is-correct').textContent).toContain('تهران');
     expect(document.querySelector('.ai-preview__tools').textContent).toContain('۲ از ۲');
-    expect(reload).not.toHaveBeenCalled();
+    expect(document.querySelector('.ai-status').textContent).toContain('۲ سؤال آماده شد');
+    expect(api.post).not.toHaveBeenCalled();
 
     const checks = [...document.querySelectorAll('.ai-question input[type="checkbox"]')];
     checks[1].click();
@@ -142,75 +114,46 @@ describe('AI Q&A assistant UI', () => {
     expect(document.querySelector('.modal-backdrop')).toBeNull();
   });
 
-  it('uses the server key without asking for one and can clear a personal key', async () => {
-    api.get.mockResolvedValueOnce({
-      config: config({
-        source: 'teacher',
-        own: { hasApiKey: true, updatedAt: '2026-10-20T10:00:00.000Z' },
-      }),
-    });
-    api.put.mockResolvedValueOnce({
-      config: config({ source: 'server', own: { hasApiKey: false, updatedAt: null } }),
-    });
-
+  it('accepts a bare array with common aliases and Persian digits', async () => {
     await openAiAssistant({ leagueId: 2, reload: vi.fn() });
+    pasteAnswer(JSON.stringify([
+      { question: 'آب چیست؟', choices: ['مایع', 'گاز'], correctAnswer: 'گزینه ۱', points: '۳۰' },
+    ]));
 
-    expect(document.querySelector('#modal-root').textContent).toContain('کلید شخصی شما');
-    expect(document.querySelector('#ai-clear-key')).not.toBeNull();
-    expect(clickButton('ساخت سؤال با هوش مصنوعی').disabled).toBe(false);
-
-    document.querySelector('#ai-clear-key').click();
-    clickButton('ذخیره کلید');
-    await vi.waitFor(() => expect(api.put).toHaveBeenCalledWith('/ai/settings', { clearApiKey: true }));
-    await vi.waitFor(() => expect(document.querySelector('#modal-root').textContent).toContain('کلید پیشفرض سامانه'));
-    expect(document.body.textContent).toContain('کلید شخصی حذف شد');
+    expect(document.querySelectorAll('.ai-question')).toHaveLength(1);
+    expect(document.querySelector('.ai-question__body').textContent).toBe('آب چیست؟');
+    expect(document.querySelector('.ai-question__points').value).toBe('30');
+    expect(document.querySelector('.ai-question .mcq-preview__option.is-correct').textContent).toContain('مایع');
   });
 
-  it('offers a visible control for changing an already saved API key', async () => {
-    api.get.mockResolvedValueOnce({
-      config: config({
-        source: 'teacher',
-        own: { hasApiKey: true, updatedAt: '2026-10-20T10:00:00.000Z' },
-      }),
-    });
+  it('shows a clear error and no preview when the pasted text has no JSON', async () => {
+    await openAiAssistant({ leagueId: 3, reload: vi.fn() });
+    pasteAnswer('متأسفم، نمی‌توانم این کار را انجام دهم.');
 
-    await openAiAssistant({ leagueId: 4, reload: vi.fn() });
-
-    const details = document.querySelector('details.ai-key');
-    expect(details.open).toBe(false);
-    clickButton('تغییر کلید API');
-    expect(details.open).toBe(true);
-    expect(document.activeElement).toBe(document.querySelector('#ai-groq-key'));
-  });
-
-  it('shows a validation message when the topic is too short and keeps the preview empty', async () => {
-    api.get.mockResolvedValueOnce({ config: config() });
-    const reload = vi.fn();
-    await openAiAssistant({ leagueId: 3, reload });
-
-    document.querySelector('#ai-topic').value = 'ا';
-    clickButton('ساخت سؤال با هوش مصنوعی');
-
-    expect(document.querySelector('.ai-generator .ai-status').textContent).toContain('موضوع آزمون');
-    expect(api.post).not.toHaveBeenCalled();
     expect(document.querySelectorAll('.ai-question')).toHaveLength(0);
+    expect(document.querySelector('.ai-status').textContent).toContain('JSON');
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('rejects an answer whose correct option index is out of range', async () => {
+    await openAiAssistant({ leagueId: 3, reload: vi.fn() });
+    pasteAnswer(JSON.stringify({ questions: [
+      { body: 'سؤال نامعتبر', options: ['یک', 'دو'], correctIndex: 5 },
+      questions[0],
+    ] }));
+
+    expect(document.querySelectorAll('.ai-question')).toHaveLength(1);
+    expect(document.querySelector('.ai-status').textContent).toContain('۱ مورد نامعتبر');
   });
 });
 
-describe('AI Q&A assistant per-question points', () => {
-  it('lets the teacher change each generated question points before bulk saving', async () => {
-    api.get.mockResolvedValueOnce({ config: config() });
-    api.post.mockImplementation((url) => {
-      if (url === '/leagues/1/ai/questions') return Promise.resolve({ questions });
-      if (url === '/leagues/1/questions/bulk') return Promise.resolve({ items: [] });
-      return Promise.reject(new Error(`unexpected post ${url}`));
-    });
+describe('AI question importer points', () => {
+  it('lets the teacher change each question points before bulk saving', async () => {
+    api.post.mockResolvedValue({ items: [] });
     const reload = vi.fn().mockResolvedValue(undefined);
 
     await openAiAssistant({ leagueId: 1, reload });
-    document.querySelector('#ai-topic').value = 'جغرافیا';
-    clickButton('ساخت سؤال با هوش مصنوعی');
-    await vi.waitFor(() => expect(document.querySelectorAll('.ai-question')).toHaveLength(2));
+    pasteAnswer(answerText());
 
     const pointInputs = [...document.querySelectorAll('.ai-question__points')];
     expect(pointInputs).toHaveLength(2);
@@ -228,16 +171,8 @@ describe('AI Q&A assistant per-question points', () => {
   });
 
   it('refuses to save an invalid per-question points value', async () => {
-    api.get.mockResolvedValueOnce({ config: config() });
-    api.post.mockImplementation((url) => {
-      if (url === '/leagues/1/ai/questions') return Promise.resolve({ questions });
-      return Promise.reject(new Error(`unexpected post ${url}`));
-    });
-
     await openAiAssistant({ leagueId: 1, reload: vi.fn() });
-    document.querySelector('#ai-topic').value = 'جغرافیا';
-    clickButton('ساخت سؤال با هوش مصنوعی');
-    await vi.waitFor(() => expect(document.querySelectorAll('.ai-question')).toHaveLength(2));
+    pasteAnswer(answerText());
 
     document.querySelectorAll('.ai-question__points')[0].value = '20000';
     clickButton('ذخیره سؤال‌های انتخاب‌شده');

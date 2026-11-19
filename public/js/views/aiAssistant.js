@@ -1,190 +1,84 @@
 /**
- * AI assistant modal for the Q&A page.
+ * «ساخت سؤال با هوش مصنوعی» — a provider-free importer.
  *
- * The assistant asks Groq for a multiple-choice quiz, shows every generated
- * question for review and only saves the ones the teacher keeps. The Groq key
- * is write-only: this module can save/clear it but never receives it back.
+ * The site never calls an AI provider and stores no API key. The teacher copies a
+ * ready-made prompt into any AI chat, appends their questions, then pastes the
+ * JSON answer here. The text is parsed locally, previewed, and only the
+ * selected questions are saved through the normal bulk endpoint.
  */
 
+import { buildAiQuestionTemplate, parseAiQuestions } from '../aiQuestionFormat.js';
 import { api } from '../api.js';
 import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
 import { notify, openModal } from '../ui.js';
-import { button, chip, fa, faDateTime, field, loadingNode } from './common.js';
+import { button, chip, fa, field } from './common.js';
 
-const SOURCE_LABELS = {
-  teacher: ['کلید شخصی شما', 'ok'],
-  server: ['کلید پیشفرض سامانه', 'gold'],
-  none: ['کلید تنظیم نشده', 'bad'],
-};
+/** Clipboard write with a selection fallback for older browsers. */
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to the textarea fallback */
+  }
 
-const DIFFICULTY_LABELS = {
-  easy: 'آسان',
-  medium: 'متوسط',
-  hard: 'سخت',
-};
-
-function sourceChip(config) {
-  const [label, kind] = SOURCE_LABELS[config?.source] ?? SOURCE_LABELS.none;
-  return chip(label, kind);
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.appendChild(area);
+  area.select();
+  let copied = false;
+  try {
+    copied = Boolean(document.execCommand?.('copy'));
+  } catch {
+    copied = false;
+  }
+  area.remove();
+  return copied;
 }
 
-function selectControl(id, options, selectedValue) {
-  return el('select', { id }, options.map(([value, label]) => el('option', {
-    value,
-    selected: value === selectedValue,
-  }, [label])));
+function stepHead(number, title) {
+  return el('div.ai-step__head', {}, [
+    el('span.ai-step__number', { text: number, 'aria-hidden': 'true' }),
+    el('h3.ai-step__title', { text: title }),
+  ]);
 }
 
 /**
- * Opens the assistant. `reload` is the Q&A list loader, called after a bulk
- * save so the new questions appear immediately.
+ * Opens the importer. `reload` is the Q&A list loader, called after a bulk save
+ * so the new questions appear immediately.
  */
-export async function openAiAssistant({ leagueId, leagueName = '', reload = async () => {} }) {
-  const body = el('div.ai-assistant', {}, [loadingNode('در حال بررسی تنظیمات هوش مصنوعی…')]);
+export function openAiAssistant({ leagueId, leagueName = '', reload = async () => {} }) {
+  const template = buildAiQuestionTemplate({ leagueName });
+  const body = el('div.ai-assistant');
   const modal = openModal({
-    title: '🤖 دستیار هوش مصنوعی',
+    title: '✨ ساخت سؤال با هوش مصنوعی',
     body,
     actions: [{ label: 'بستن', kind: 'ghost' }],
   });
   modal.content.classList.add('modal--ai');
 
-  let config = null;
-  let settingsError = null;
-  try {
-    const payload = await api.get('/ai/settings');
-    config = payload?.config ?? null;
-  } catch (error) {
-    settingsError = error;
-  }
-
-  const keyPanel = el('div.ai-settings');
   const previewBox = el('div.ai-preview');
-  let generateButton = null;
-  let generatorHint = null;
+  const parseStatus = el('p.small.ai-status', { role: 'status' });
+  const templateArea = el('textarea.ai-template', {
+    id: 'ai-template',
+    rows: '10',
+    readonly: 'true',
+    'aria-label': 'قالب پیش‌فرض برای هوش مصنوعی',
+  });
+  templateArea.value = template;
 
-  function updateGeneratorAvailability() {
-    if (!generateButton) return;
-    const ready = Boolean(config?.configured);
-    generateButton.disabled = !ready;
-    if (generatorHint) {
-      generatorHint.textContent = ready
-        ? ''
-        : 'برای شروع، ابتدا کلید API Groq را ذخیره کنید.';
-    }
-  }
-
-  function renderKeyPanel() {
-    keyPanel.replaceChildren();
-    if (settingsError) {
-      keyPanel.appendChild(el('p.small.ai-status', {
-        role: 'alert',
-        text: errorMessage(settingsError),
-      }));
-      return;
-    }
-
-    const details = el('details.ai-key');
-    if (!config?.own?.hasApiKey) details.open = true;
-    const summary = el('summary.ai-key__summary', {}, [
-      el('span', { text: 'تنظیمات کلید Groq' }),
-    ]);
-    details.appendChild(summary);
-
-    const keyInput = el('input', {
-      id: 'ai-groq-key',
-      type: 'password',
-      maxlength: '300',
-      autocomplete: 'off',
-      placeholder: config?.own?.hasApiKey ? 'کلید جدید را وارد کنید (اختیاری)' : 'gsk_...',
-    });
-    const changeKeyButton = button(config?.own?.hasApiKey ? 'تغییر کلید API' : 'تنظیم کلید API', {
-      kind: 'soft',
-      icon: '🔑',
-      onClick: () => {
-        details.open = true;
-        keyInput.focus();
-      },
-    });
-    const toolbar = el('div.ai-key__toolbar', {}, [
-      el('div.row', { style: { gap: '6px', alignItems: 'center' } }, [
-        el('span.small.muted', { text: 'کلید دستیار هوش مصنوعی' }),
-        sourceChip(config),
-      ]),
-      changeKeyButton,
-    ]);
-    const clearInput = el('input', { id: 'ai-clear-key', type: 'checkbox' });
-    const keyStatus = el('p.small.ai-status', { role: 'status' });
-    const saveKeyButton = button('ذخیره کلید', {
-      kind: 'soft',
-      icon: '🔑',
-      onClick: saveKey,
-    });
-
-    const notes = [];
-    if (config?.source === 'teacher') {
-      notes.push('کلید ذخیرهشده شما برای ساخت سؤال استفاده میشود.');
-    } else if (config?.source === 'server') {
-      notes.push('در حال حاضر از کلید پیشفرض سامانه استفاده میشود. میتوانید کلید شخصی خود را هم ذخیره کنید.');
-    } else {
-      notes.push('هنوز کلیدی تنظیم نشده است. یک کلید از کنسول Groq بسازید و همینجا ذخیره کنید.');
-    }
-    if (config?.own?.hasApiKey && config?.own?.updatedAt) {
-      notes.push(`آخرین بهروزرسانی کلید شخصی: ${faDateTime(config.own.updatedAt)}`);
-    }
-
-    async function saveKey() {
-      const apiKey = keyInput.value.trim();
-      const clearApiKey = clearInput.checked;
-      keyStatus.textContent = '';
-      if (!apiKey && !clearApiKey) {
-        keyStatus.textContent = 'کلید جدید را وارد کنید یا گزینه حذف کلید را انتخاب کنید.';
-        keyInput.focus();
-        return;
-      }
-      if (apiKey && clearApiKey) {
-        keyStatus.textContent = 'ذخیره کلید جدید و حذف همزمان ممکن نیست؛ یکی را انتخاب کنید.';
-        return;
-      }
-      saveKeyButton.disabled = true;
-      try {
-        const payload = await api.put('/ai/settings', clearApiKey ? { clearApiKey: true } : { apiKey });
-        config = payload?.config ?? config;
-        notify.ok(clearApiKey ? 'کلید شخصی حذف شد' : 'کلید Groq ذخیره شد');
-        renderKeyPanel();
-        updateGeneratorAvailability();
-      } catch (error) {
-        keyStatus.textContent = errorMessage(error);
-      } finally {
-        saveKeyButton.disabled = false;
-      }
-    }
-
-    const children = [
-      field(config?.own?.hasApiKey ? 'کلید جدید Groq' : 'کلید API Groq', keyInput),
-      el('div.row.ai-key__actions', {}, [saveKeyButton]),
-    ];
-    if (config?.own?.hasApiKey) {
-      children.push(el('label.ai-check', {}, [
-        clearInput,
-        el('span', { text: 'کلید شخصی حذف شود و از کلید پیشفرض سامانه استفاده شود' }),
-      ]));
-    }
-    children.push(el('div.ai-key__notes', {}, notes.map((note) => el('p.small.muted', { text: note }))));
-    children.push(el('p.small.muted', {}, [
-      'کلید را از ',
-      el('a', {
-        href: 'https://console.groq.com/keys',
-        target: '_blank',
-        rel: 'noopener noreferrer',
-        text: 'کنسول Groq',
-      }),
-      ' بگیرید. کلید فقط رمزنگاری‌شده ذخیره می‌شود و هرگز به مرورگر برنمی‌گردد.',
-    ]));
-    children.push(keyStatus);
-    details.append(...children);
-    keyPanel.append(toolbar, details);
-  }
+  const pasteArea = el('textarea.ai-paste', {
+    id: 'ai-paste',
+    rows: '8',
+    placeholder: '{\n  "questions": [\n    { "body": "…", "options": ["…"], "correctIndex": 0, "points": 25 }\n  ]\n}',
+    'aria-label': 'پاسخ هوش مصنوعی',
+  });
 
   function renderPreview(questions) {
     previewBox.replaceChildren();
@@ -312,99 +206,69 @@ export async function openAiAssistant({ leagueId, leagueName = '', reload = asyn
     updateSelection();
   }
 
-  function build() {
-    renderKeyPanel();
+  function convert() {
+    parseStatus.textContent = '';
+    try {
+      const result = parseAiQuestions(pasteArea.value);
+      renderPreview(result.questions);
+      parseStatus.textContent = result.skipped
+        ? `${fa(result.questions.length)} سؤال آماده شد؛ ${fa(result.skipped)} مورد نامعتبر نادیده گرفته شد.`
+        : `${fa(result.questions.length)} سؤال آماده شد. پیش از ذخیره بررسی کنید.`;
+    } catch (error) {
+      previewBox.replaceChildren();
+      parseStatus.textContent = error.message;
+    }
+  }
 
-    const topicInput = el('input', {
-      id: 'ai-topic',
-      type: 'text',
-      maxlength: '300',
-      placeholder: 'مثلاً: کسرها و اعشار — ریاضی ششم',
-    });
-    const countSelect = selectControl('ai-count', [
-      ['3', '۳ سؤال'],
-      ['5', '۵ سؤال'],
-      ['7', '۷ سؤال'],
-      ['10', '۱۰ سؤال'],
-    ], '5');
-    const difficultySelect = selectControl('ai-difficulty', [
-      ['easy', DIFFICULTY_LABELS.easy],
-      ['medium', DIFFICULTY_LABELS.medium],
-      ['hard', DIFFICULTY_LABELS.hard],
-    ], 'medium');
-    const notesInput = el('textarea', {
-      id: 'ai-notes',
-      rows: '2',
-      maxlength: '1000',
-      placeholder: 'اختیاری: فصل، پایه، نکات مهم یا لحن سؤال‌ها',
-    });
-    const status = el('p.small.ai-status', { role: 'status' });
-    generatorHint = el('p.small.muted', { text: '' });
-    generateButton = button('ساخت سؤال با هوش مصنوعی', {
-      type: 'submit',
-      icon: '✨',
-    });
+  const copyButton = button('کپی قالب', {
+    kind: 'soft',
+    icon: '📋',
+    onClick: async () => {
+      const copied = await copyToClipboard(template);
+      if (copied) notify.ok('قالب در حافظه کپی شد');
+      else notify.error('کپی خودکار ممکن نشد؛ متن را انتخاب و دستی کپی کنید');
+      templateArea.focus();
+      templateArea.select();
+    },
+  });
 
-    const form = el('form.ai-form', {}, [
-      field('موضوع آزمون یا پرسشنامه', topicInput, 'هرچه موضوع دقیق‌تر باشد، سؤال‌ها بهتر می‌شوند.'),
-      el('div.ai-form__row', {}, [
-        field('تعداد سؤال', countSelect),
-        field('سطح سختی', difficultySelect),
-      ]),
-      field('توضیحات تکمیلی', notesInput),
-      generatorHint,
-      el('div.row', {}, [generateButton]),
-      status,
-    ]);
+  const convertButton = button('تبدیل به سؤال', {
+    kind: 'soft',
+    icon: '⚡',
+    onClick: convert,
+  });
 
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      status.textContent = '';
-      const topic = topicInput.value.trim();
-      if (topic.length < 3) {
-        status.textContent = 'موضوع آزمون را وارد کنید (حداقل ۳ نویسه).';
-        topicInput.focus();
-        return;
-      }
-      generateButton.disabled = true;
-      status.textContent = '⏳ در حال ساخت سؤال‌ها با Groq…';
-      form.setAttribute('aria-busy', 'true');
-      try {
-        const payload = await api.post(`/leagues/${leagueId}/ai/questions`, {
-          topic,
-          count: Number(countSelect.value),
-          difficulty: difficultySelect.value,
-          notes: notesInput.value.trim(),
-        });
-        const questions = payload?.questions ?? [];
-        status.textContent = questions.length
-          ? `${fa(questions.length)} سؤال ساخته شد. پیش از ذخیره بررسی کنید.`
-          : 'سؤالی ساخته نشد.';
-        if (questions.length) renderPreview(questions);
-      } catch (error) {
-        status.textContent = errorMessage(error);
-      } finally {
-        form.removeAttribute('aria-busy');
-        updateGeneratorAvailability();
-      }
-    });
+  // Pasting is the main flow: convert automatically when the text arrives.
+  pasteArea.addEventListener('paste', () => {
+    setTimeout(() => {
+      if (pasteArea.value.trim()) convert();
+    }, 0);
+  });
+  pasteArea.addEventListener('change', () => {
+    if (pasteArea.value.trim()) convert();
+  });
 
-    body.replaceChildren(...[
-      el('p.ai-assistant__intro.small.muted', {
-        text: `با هوش مصنوعی Groq یک آزمون یا پرسشنامه چندگزینه‌ای بسازید${leagueName ? ` برای «${leagueName}»` : ''}. سؤال‌ها ابتدا پیش‌نمایش می‌شوند و فقط پس از تأیید شما ذخیره می‌شوند.`,
+  body.replaceChildren(
+    el('p.ai-assistant__intro.small.muted', {
+      text: `این بخش به هیچ سرویس هوش مصنوعی متصل نیست و کلید API نمی‌خواهد. قالب پیش‌فرض را کپی کنید، همراه سؤال‌های خود به هر چت هوش مصنوعی بدهید، سپس پاسخ را در کادر دوم بچسبانید${leagueName ? ` تا برای «${leagueName}» به سؤال تبدیل شود` : ''}.`,
+    }),
+    el('section.ai-step', {}, [
+      stepHead('۱', 'قالب را کپی کنید و به هوش مصنوعی بدهید'),
+      el('p.small.muted', {
+        text: 'این متن را کامل کپی کنید، سؤال‌های چهارگزینه‌ای خود را در انتهای آن جای‌گذاری کنید و برای هوش مصنوعی بفرستید. خروجی باید فقط JSON باشد.',
       }),
-      keyPanel,
-      el('section.ai-generator', {}, [
-        el('h3.ai-section__title', { text: 'ساخت آزمون' }),
-        form,
-      ]),
-      previewBox,
-    ]);
-    updateGeneratorAvailability();
-  }
-
-  if (settingsError && !config) {
-    config = { configured: false, source: 'none', own: { hasApiKey: false } };
-  }
-  build();
+      field('قالب پیش‌فرض', templateArea),
+      el('div.ai-step__actions', {}, [copyButton]),
+    ]),
+    el('section.ai-step', {}, [
+      stepHead('۲', 'پاسخ هوش مصنوعی را بچسبانید'),
+      el('p.small.muted', {
+        text: 'پاسخ JSON را همین‌جا بچسبانید؛ سؤال‌ها و گزینه‌ها به‌صورت خودکار جدا می‌شوند. اگر خروجی داخل بلوک ```json بود هم مشکلی نیست.',
+      }),
+      field('پاسخ هوش مصنوعی', pasteArea),
+      el('div.ai-step__actions', {}, [convertButton]),
+      parseStatus,
+    ]),
+    previewBox,
+  );
 }
