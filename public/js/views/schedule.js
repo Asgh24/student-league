@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { emptyState, notify } from '../ui.js';
-import { backToWorkbench, button, card, fa, loadingNode, pageHead } from './common.js';
+import { backToWorkbench, button, card, fa, loadingNode, pageHead, tableWrap } from './common.js';
 
 export async function renderSchedule({ params }) {
   const leagueId = Number(params.id);
@@ -105,7 +105,7 @@ export async function renderSchedule({ params }) {
       }),
       card({ title: 'جدول هفتگی', icon: '📅' }, [
         el('p.small.muted', { text: 'هر ردیف یک روز هفته است و هر ستون یک زنگ. خانه‌های خالی ذخیره نمی‌شوند؛ برای حذف یک درس، متن آن را پاک کنید.' }),
-        el('div.table-wrap', {}, [table]),
+        tableWrap(table, { block: true, titleIndex: 0 }),
       ]),
     );
   }

@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { confirmDialog, emptyState, formDialog, notify, openModal } from '../ui.js';
-import { backToWorkbench, button, card, fa, grid, iconButton, loadingNode, pageHead } from './common.js';
+import { backToWorkbench, button, card, fa, grid, iconButton, loadingNode, pageHead, tableWrap } from './common.js';
 
 function standingsTable(state, reload) {
   const { teams, individualAffectsTeam } = state;
@@ -63,7 +63,7 @@ function standingsTable(state, reload) {
     ]));
   }
   table.appendChild(tbody);
-  return el('div.table-wrap', {}, [table]);
+  return tableWrap(table);
 }
 
 async function createTeam(leagueId, reload) {

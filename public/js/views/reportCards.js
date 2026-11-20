@@ -10,7 +10,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { confirmDialog, emptyState, formDialog, notify, statCard } from '../ui.js';
-import { backToWorkbench, button, card as cardSection, chip, fa, faDateTime, loadingNode, pageHead } from './common.js';
+import { backToWorkbench, button, card as cardSection, chip, fa, faDateTime, loadingNode, pageHead, tableWrap } from './common.js';
 import { renderPerformancePanel, REPORT_CARD_LEVELS } from './reportCardShared.js';
 
 const LEVEL_BULK_BUTTONS = REPORT_CARD_LEVELS.map((level) => ({
@@ -465,19 +465,17 @@ export async function renderReportCards({ params }) {
       ]);
     });
 
-    return el('div.table-wrap', {}, [
-      el('table.grid-table.report-card-grades', {}, [
-        el('thead', {}, [
-          el('tr', {}, [
-            el('th', { text: 'درس' }),
-            el('th', { text: 'نمره کمی (۰ تا ۱۰۰)' }),
-            el('th', { text: 'سطح توصیفی' }),
-            el('th', { text: 'توضیح معلم' }),
-          ]),
+    return tableWrap(el('table.grid-table.report-card-grades', {}, [
+      el('thead', {}, [
+        el('tr', {}, [
+          el('th', { text: 'درس' }),
+          el('th', { text: 'نمره کمی (۰ تا ۱۰۰)' }),
+          el('th', { text: 'سطح توصیفی' }),
+          el('th', { text: 'توضیح معلم' }),
         ]),
-        el('tbody', {}, rows),
       ]),
-    ]);
+      el('tbody', {}, rows),
+    ]), { block: true });
   }
 
   function bulkFillPanel() {

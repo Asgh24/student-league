@@ -1126,6 +1126,13 @@ describe('student weekly schedule', () => {
     expect(rows[1].textContent).toContain('فارسی');
     expect(view.textContent).toContain('برنامه هفتگی');
     expect(view.querySelector('.tab.is-active').textContent).toContain('برنامه هفتگی');
+
+    // The phone layout stacks each day into a card: the day is the title and
+    // every period cell carries the column name as its label.
+    const table = view.querySelector('table.grid-table');
+    expect(table.classList.contains('grid-table--stack')).toBe(true);
+    expect(rows[0].querySelectorAll('td')[0].classList.contains('stack-title')).toBe(true);
+    expect(rows[0].querySelectorAll('td')[1].dataset.label).toBe('زنگ ۱');
   });
 });
 
@@ -2282,14 +2289,26 @@ describe('daily parent report', () => {
     expect(shadButton.disabled).toBe(false);
   });
 
-  it('labels the mobile report cards with the status columns, never the old points columns', () => {
+  it('stacks the daily report table into labelled cards on phones', async () => {
+    api.get.mockResolvedValue(reportPayload());
+    await renderReports({ params: { id: '1' } });
+
+    const view = document.querySelector('#view');
+    const table = view.querySelector('table.report-table');
+    expect(table).not.toBeNull();
+    expect(table.classList.contains('grid-table--stack')).toBe(true);
+    expect(table.closest('.table-wrap')).not.toBeNull();
+
+    const labels = [...table.querySelectorAll('tbody tr:first-child > td')].map((cell) => cell.dataset.label);
+    expect(labels).toEqual(['انتخاب', 'دانش‌آموز', 'وضعیت حضور', 'انضباط', 'ارزشیابی', 'تکالیف', 'شماره والد']);
+
     const css = fs.readFileSync(path.join(rootDir, 'public', 'css', 'components.css'), 'utf8');
+    expect(css).toContain('table.grid-table--stack');
+    expect(css).toContain('content: attr(data-label)');
+    // The labels come from the header row now, not hard-coded nth-child rules.
+    expect(css).not.toContain("content: 'وضعیت حضور'");
     expect(css).not.toContain("content: 'تغییرات امروز'");
     expect(css).not.toContain("content: 'جمع'");
-    for (const label of ['وضعیت حضور', 'انضباط', 'ارزشیابی', 'تکالیف', 'شماره والد']) {
-      expect(css).toContain(`content: '${label}'`);
-    }
-    expect(css).toContain('td:nth-child(7)');
   });
 });
 

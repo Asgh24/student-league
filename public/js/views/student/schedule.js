@@ -5,7 +5,7 @@ import { el } from '../../dom.js';
 import { errorMessage } from '../../format.js';
 import { renderView, setTopbarTitle } from '../../shell.js';
 import { emptyState } from '../../ui.js';
-import { card, fa, loadingNode, pageHead } from '../common.js';
+import { card, fa, loadingNode, pageHead, tableWrap } from '../common.js';
 import { studentTabs } from './tabs.js';
 
 export async function renderStudentSchedule() {
@@ -60,7 +60,7 @@ export async function renderStudentSchedule() {
     card({ title: 'جدول هفتگی', icon: '📅' }, [
       el('p.small.muted', { text: 'هر ردیف یک روز هفته است و هر ستون یک زنگ. خانه‌های خالی بدون درس هستند.' }),
       hasSlots
-        ? el('div.table-wrap', {}, [table])
+        ? tableWrap(table, { titleIndex: 0 })
         : emptyState({ icon: '📅', title: 'برنامه‌ای برای این کلاس ثبت نشده است', hint: 'برنامه توسط معلم تنظیم می‌شود.' }),
     ]),
   );

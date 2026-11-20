@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { emptyState, notify } from '../ui.js';
-import { backToWorkbench, button, card, countdownBox, fa, faDate, faDateTime, grid, loadingNode, pageHead, startCountdown, statCard } from './common.js';
+import { backToWorkbench, button, card, countdownBox, fa, faDate, faDateTime, grid, loadingNode, pageHead, startCountdown, statCard, tableWrap } from './common.js';
 import { createScoresTable } from './scoresTable.js';
 
 function timerCard(leagueId, timer, reload) {
@@ -150,7 +150,7 @@ function rankingCard(league) {
     ]));
   }
   table.appendChild(tbody);
-  return card({ title: 'رتبه‌بندی نهایی', icon: '🏁' }, [el('div.table-wrap', {}, [table])]);
+  return card({ title: 'رتبه‌بندی نهایی', icon: '🏁' }, [tableWrap(table, { labels: ['رتبه', 'دانش‌آموز', 'امتیاز'] })]);
 }
 
 export async function renderLeague({ params }) {

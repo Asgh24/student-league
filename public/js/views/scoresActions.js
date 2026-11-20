@@ -9,7 +9,7 @@ import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
 import { isAssistant } from '../store.js';
 import { confirmDialog, formDialog, notify, openModal } from '../ui.js';
-import { button, fa, faDateTime } from './common.js';
+import { button, fa, faDateTime, tableWrap } from './common.js';
 
 /** Prompts for a custom point delta; resolves to a number or null. */
 export async function askCustomDelta(column) {
@@ -334,7 +334,7 @@ export async function showProfile(row, { columns = [], leagueId = null, reload =
     modal.setContent([
       el('h2.modal__title', { text: `پرونده ${row.name}` }),
       info,
-      el('div.table-wrap', {}, [table]),
+      tableWrap(table, { labels: ['مورد', 'امتیاز'] }),
       history,
       actions,
     ]);

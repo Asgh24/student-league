@@ -2996,104 +2996,146 @@ body.quiz-open {
   }
 }
 
-/* Daily report rows also become cards on phones. */
-@media (max-width: 560px) {
-  table.grid-table.report-table {
+/* ------------------------------------------------- phones: stacked tables
+   Data tables become one card per row so every column stays visible without a
+   sideways scroll. Cells get `data-label` from their header via `tableWrap`
+   in views/common.js; `grid-table--stack-block` puts the label above the value
+   for cells that hold inputs. The score grid and contacts sheet keep their own
+   custom phone layouts. */
+@media (max-width: 700px) {
+  table.grid-table--stack {
     display: block;
     width: 100%;
     min-width: 0;
+    font-size: 0.9rem;
   }
-  .report-table thead {
+  .grid-table--stack thead {
     display: none;
   }
-  .report-table tbody {
+  .grid-table--stack tbody {
     display: block;
   }
-  .report-table tr {
+  .grid-table--stack tbody tr {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    gap: 6px 8px;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--line);
+    column-gap: 8px;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
   }
-  .report-table tr:last-child {
-    border-bottom: 0;
+  .grid-table--stack tbody tr:last-child {
+    margin-bottom: 0;
   }
-  .report-table tr.is-selected {
-    padding: 10px 8px;
-    border-radius: 12px;
-    background: var(--surface-2);
-  }
-  table.grid-table.report-table tbody tr > td {
+  table.grid-table--stack tbody tr > td,
+  table.grid-table--stack tbody tr > th {
+    grid-column: 1 / -1;
     position: static;
-    left: auto;
-    right: auto;
-    display: block;
+    inset: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 10px;
     width: auto;
     min-width: 0;
     max-width: none;
-    padding: 0;
+    padding: 5px 0;
     border: 0;
+    border-bottom: 1px dashed var(--line);
     background: transparent;
     text-align: start;
     white-space: normal;
+    overflow-wrap: anywhere;
   }
-  table.grid-table.report-table td:nth-child(1) {
-    grid-column: 1;
-    grid-row: 1;
+  table.grid-table--stack tbody tr > td:last-child {
+    border-bottom: 0;
   }
-  table.grid-table.report-table td.name-cell {
+  .grid-table--stack tbody tr > td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  /* The name is the card title: full width, no label, a little separation. */
+  table.grid-table--stack tbody tr > td.name-cell,
+  table.grid-table--stack tbody tr > td.stack-title {
     grid-column: 2;
+    grid-row: 1;
+    display: block;
+    padding: 0 0 7px;
+    border-bottom: 1px solid var(--line);
+    font-size: 1rem;
+  }
+  table.grid-table--stack tbody tr > td.name-cell::before,
+  table.grid-table--stack tbody tr > td.stack-title::before {
+    display: none;
+  }
+  /* A bare row number sits beside the title instead of taking its own row. */
+  .grid-table--stack tbody tr > td[data-label="#"] {
+    grid-column: 1;
     grid-row: 1;
     align-self: center;
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    min-height: 22px;
+    padding: 0 6px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--ink-soft);
+    font-size: 0.78rem;
+    font-weight: 700;
   }
-  table.grid-table.report-table td:nth-child(3) {
-    grid-column: 1;
-    grid-row: 2;
+  .grid-table--stack tbody tr > td[data-label="#"]::before {
+    display: none;
   }
-  table.grid-table.report-table td:nth-child(4) {
-    grid-column: 2;
-    grid-row: 2;
-  }
-  table.grid-table.report-table td:nth-child(5) {
-    grid-column: 1 / -1;
-    grid-row: 3;
-  }
-  table.grid-table.report-table td:nth-child(6) {
-    grid-column: 1 / -1;
-    grid-row: 4;
-  }
-  table.grid-table.report-table td:nth-child(7) {
-    grid-column: 1 / -1;
-    grid-row: 5;
-  }
-  table.grid-table.report-table td:nth-child(3)::before,
-  table.grid-table.report-table td:nth-child(4)::before,
-  table.grid-table.report-table td:nth-child(5)::before,
-  table.grid-table.report-table td:nth-child(6)::before,
-  table.grid-table.report-table td:nth-child(7)::before {
+  .grid-table--stack tbody tr > td[colspan] {
     display: block;
-    margin-bottom: 2px;
-    color: var(--muted);
-    font-size: 0.72rem;
+    text-align: center;
   }
-  table.grid-table.report-table td:nth-child(3)::before {
-    content: 'وضعیت حضور';
+  .grid-table--stack tbody tr > td[colspan]::before {
+    display: none;
   }
-  table.grid-table.report-table td:nth-child(4)::before {
-    content: 'انضباط';
+  /* Rank tints move from the cells to the card itself. */
+  .grid-table--stack tbody tr.rank-1 {
+    background: #fdf5e8;
+    border-color: #f0d9b5;
   }
-  table.grid-table.report-table td:nth-child(5)::before {
-    content: 'ارزشیابی';
+  .grid-table--stack tbody tr.rank-2 {
+    background: #f6f7fb;
+    border-color: #d9dce6;
   }
-  table.grid-table.report-table td:nth-child(6)::before {
-    content: 'تکالیف';
+  .grid-table--stack tbody tr.rank-3 {
+    background: #fbf3ec;
+    border-color: #ead9cc;
   }
-  table.grid-table.report-table td:nth-child(7)::before {
-    content: 'شماره والد';
+  .grid-table--stack tbody tr.is-selected {
+    background: var(--surface-2);
   }
-  table.grid-table.report-table tr > td[colspan] {
-    grid-column: 1 / -1;
+  .grid-table--stack .chip {
+    margin: 1px;
+  }
+
+  /* Inputs and selects get the full card width and a label above them. */
+  table.grid-table--stack-block tbody tr > td {
+    display: block;
+  }
+  table.grid-table--stack-block tbody tr > td::before {
+    display: block;
+    margin-bottom: 4px;
+  }
+  table.grid-table--stack-block tbody tr > td input,
+  table.grid-table--stack-block tbody tr > td select,
+  .grid-table--stack-block .report-card-notes {
+    width: 100%;
+    max-width: none;
   }
 }
 

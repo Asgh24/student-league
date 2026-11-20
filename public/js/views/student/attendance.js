@@ -5,7 +5,7 @@ import { el } from '../../dom.js';
 import { errorMessage } from '../../format.js';
 import { renderView, setTopbarTitle } from '../../shell.js';
 import { emptyState } from '../../ui.js';
-import { card, chip, fa, faDate, grid, loadingNode, pageHead, ratioChip, STATUS_KIND, STATUS_LABELS, statCard } from '../common.js';
+import { card, chip, fa, faDate, grid, loadingNode, pageHead, ratioChip, STATUS_KIND, STATUS_LABELS, statCard, tableWrap } from '../common.js';
 import { studentTabs } from './tabs.js';
 
 export async function renderStudentAttendance() {
@@ -52,7 +52,7 @@ export async function renderStudentAttendance() {
     card({ title: 'ریز حضور', icon: '📋' }, [
       (data.items ?? []).length === 0
         ? emptyState({ icon: '🗓️', title: 'رکورد حضوری ثبت نشده است' })
-        : el('div.table-wrap', {}, [table]),
+        : tableWrap(table),
     ]),
   );
   return undefined;

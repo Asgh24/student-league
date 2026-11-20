@@ -2,7 +2,7 @@
 
 import { el } from '../dom.js';
 import { emptyState, statCard } from '../ui.js';
-import { card, chip, fa, faDate } from './common.js';
+import { card, chip, fa, faDate, tableWrap } from './common.js';
 
 export const REPORT_CARD_LEVELS = [
   { value: 'very_good', label: 'خیلی خوب', icon: '🌟' },
@@ -56,20 +56,18 @@ export function renderPerformancePanel(performance) {
 
   const evaluationCard = card({ title: 'دستاوردهای ارزشیابی', icon: '📝' }, [
     evaluations.length
-      ? el('div.table-wrap', {}, [
-        el('table.grid-table', {}, [
-          el('thead', {}, [
-            el('tr', {}, [
-              el('th', { text: 'درس / ارزشیابی' }),
-              el('th', { text: 'تاریخ' }),
-              el('th', { text: 'نتیجه' }),
-              el('th', { text: 'میانگین کلاس' }),
-              el('th', { text: 'امتیاز' }),
-            ]),
+      ? tableWrap(el('table.grid-table', {}, [
+        el('thead', {}, [
+          el('tr', {}, [
+            el('th', { text: 'درس / ارزشیابی' }),
+            el('th', { text: 'تاریخ' }),
+            el('th', { text: 'نتیجه' }),
+            el('th', { text: 'میانگین کلاس' }),
+            el('th', { text: 'امتیاز' }),
           ]),
-          el('tbody', {}, evaluations.map(evaluationRow)),
         ]),
-      ])
+        el('tbody', {}, evaluations.map(evaluationRow)),
+      ]))
       : emptyState({
         icon: '📝',
         title: 'هنوز ارزشیابی ثبت نشده',

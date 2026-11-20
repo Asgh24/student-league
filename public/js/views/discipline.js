@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { emptyState, notify } from '../ui.js';
-import { backToWorkbench, button, card, chip, fa, faDate, grid, loadingNode, pageHead, statCard } from './common.js';
+import { backToWorkbench, button, card, chip, fa, faDate, grid, loadingNode, pageHead, statCard, tableWrap } from './common.js';
 
 const STATUS_LABELS = { orderly: 'منظم', disorderly: 'بی‌نظمی' };
 const STATUS_KIND = { orderly: 'ok', disorderly: 'bad' };
@@ -84,7 +84,7 @@ function sheetTable(items, onSet, onNote) {
     ]));
   });
   table.appendChild(tbody);
-  return el('div.table-wrap', {}, [table]);
+  return tableWrap(table, { block: true });
 }
 
 function historyCard(history) {
@@ -108,7 +108,7 @@ function historyCard(history) {
     ]));
   }
   table.appendChild(tbody);
-  return card({ title: 'تاریخچه انضباط', icon: '🗂️' }, [el('div.table-wrap', {}, [table])]);
+  return card({ title: 'تاریخچه انضباط', icon: '🗂️' }, [tableWrap(table)]);
 }
 
 export async function renderDiscipline({ params }) {

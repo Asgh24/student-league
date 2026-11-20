@@ -5,7 +5,7 @@ import { el } from '../../dom.js';
 import { errorMessage } from '../../format.js';
 import { renderView, setTopbarTitle } from '../../shell.js';
 import { emptyState } from '../../ui.js';
-import { card, chip, fa, loadingNode, pageHead } from '../common.js';
+import { card, chip, fa, loadingNode, pageHead, tableWrap } from '../common.js';
 import { studentTabs } from './tabs.js';
 
 export async function renderStudentRanking() {
@@ -50,7 +50,7 @@ export async function renderStudentRanking() {
     card({ title: 'جدول رده‌بندی', icon: '📋' }, [
       (data.items ?? []).length === 0
         ? emptyState({ icon: '🏅', title: 'هنوز دانش‌آموزی در لیگ نیست' })
-        : el('div.table-wrap', {}, [table]),
+        : tableWrap(table),
       el('p.small.muted', { text: 'فقط نام، امتیاز و رتبه هم‌کلاسی‌ها نمایش داده می‌شود؛ اطلاعات حضور و تاریخچه خصوصی است.' }),
     ]),
   );

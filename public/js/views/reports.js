@@ -17,7 +17,7 @@ import { jalaliDateInput } from '../jalaliDate.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { confirmDialog, emptyState, notify } from '../ui.js';
-import { backToWorkbench, button, card, chip, fa, faDateTime, loadingNode, pageHead, statCard } from './common.js';
+import { backToWorkbench, button, card, chip, fa, faDateTime, loadingNode, pageHead, statCard, tableWrap } from './common.js';
 import { smsSettingsCard } from './smsSettings.js';
 
 const STATUS_LABELS = {
@@ -426,7 +426,7 @@ export async function renderReports({ params }) {
       tbody.appendChild(el('tr', {}, [el('td', { colspan: '7' }, [el('p.muted.small', { text: 'هنوز دانش‌آموزی در این لیگ نیست.' })])]));
     }
     table.appendChild(tbody);
-    return el('div.table-wrap', {}, [table]);
+    return tableWrap(table);
   }
 
   function resultsCard() {
@@ -439,8 +439,8 @@ export async function renderReports({ params }) {
         chip(`ناموفق ${fa(counts.failed ?? 0)}`, 'bad'),
         chip(`بدون شماره ${fa(counts.skipped ?? 0)}`, 'muted'),
       ]),
-      el('div.table-wrap', { style: { marginTop: '10px' } }, [
-        el('table.grid-table', {}, [
+      el('div', { style: { marginTop: '10px' } }, [
+        tableWrap(el('table.grid-table', {}, [
           el('thead', {}, [el('tr', {}, [
             el('th', { text: 'دانش‌آموز' }),
             el('th', { text: 'وضعیت' }),
@@ -454,7 +454,7 @@ export async function renderReports({ params }) {
               el('td.small', { text: result.status === 'skipped' ? 'شماره والد ثبت نشده است.' : result.error ?? '' }),
             ]);
           })),
-        ]),
+        ])),
       ]),
     ]);
   }

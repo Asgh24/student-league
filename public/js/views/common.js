@@ -41,6 +41,29 @@ export function planPrice(plan, formatMoney) {
   ]);
 }
 
+/**
+ * Wraps a data table for horizontal scrolling on desktop and turns every row
+ * into a labelled card on phones, so no column hides behind a sideways swipe.
+ *
+ * Labels come from the header row (or an explicit `labels` array for tables
+ * without a `<thead>`). Cells that already carry `data-label` keep it.
+ * `block` puts the label above the value, which suits cells holding inputs.
+ */
+export function tableWrap(table, { labels = null, block = false, titleIndex = null } = {}) {
+  table.classList.add('grid-table--stack');
+  if (block) table.classList.add('grid-table--stack-block');
+  const headers = labels ?? [...table.querySelectorAll('thead th')].map((th) => th.textContent.trim());
+  for (const row of table.querySelectorAll('tbody tr')) {
+    [...row.children].forEach((cell, index) => {
+      if (cell.tagName !== 'TD') return;
+      if (index === titleIndex) cell.classList.add('stack-title');
+      const label = headers[index];
+      if (label && !cell.dataset.label) cell.dataset.label = label;
+    });
+  }
+  return el('div.table-wrap', {}, [table]);
+}
+
 /** Page header with an optional action row. */
 export function pageHead({ icon = '', title, subtitle = '', actions = [] }) {
   const head = el('div.page-head');

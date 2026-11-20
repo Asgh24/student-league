@@ -11,7 +11,7 @@ import { renderBars } from '../../charts.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../../shell.js';
 import { state } from '../../store.js';
 import { emptyState, openModal } from '../../ui.js';
-import { button, card, fa, faDate, grid, loadingNode, pageHead, statCard } from '../common.js';
+import { button, card, fa, faDate, grid, loadingNode, pageHead, statCard, tableWrap } from '../common.js';
 import { reportFilters, sessionCard } from './reportSessions.js';
 import { studentTabs } from './tabs.js';
 
@@ -84,7 +84,7 @@ function totalsTable(data) {
     ]));
   }
   table.appendChild(tbody);
-  return el('div.table-wrap', {}, [table]);
+  return tableWrap(table);
 }
 
 export async function renderReportCard() {

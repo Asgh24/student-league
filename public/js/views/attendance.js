@@ -7,7 +7,7 @@ import { formatJalaliDate, toPersianDigits } from '../jalali.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId } from '../store.js';
 import { emptyState, formDialog, notify } from '../ui.js';
-import { backToWorkbench, button, card, chip, fa, faDate, grid, loadingNode, pageHead, ratioChip, STATUS_KIND, STATUS_LABELS, statCard } from './common.js';
+import { backToWorkbench, button, card, chip, fa, faDate, grid, loadingNode, pageHead, ratioChip, STATUS_KIND, STATUS_LABELS, statCard, tableWrap } from './common.js';
 
 function shiftIso(iso, days) {
   const date = new Date(`${iso}T00:00:00Z`);
@@ -168,7 +168,7 @@ function sheetTable(items, onSet) {
     ]));
   });
   table.appendChild(tbody);
-  return el('div.table-wrap', {}, [table]);
+  return tableWrap(table);
 }
 
 function historyCard(history) {
@@ -194,7 +194,7 @@ function historyCard(history) {
     ]));
   }
   table.appendChild(tbody);
-  return card({ title: 'تاریخچه حضور', icon: '🗂️' }, [el('div.table-wrap', {}, [table])]);
+  return card({ title: 'تاریخچه حضور', icon: '🗂️' }, [tableWrap(table)]);
 }
 
 export async function renderAttendance({ params }) {

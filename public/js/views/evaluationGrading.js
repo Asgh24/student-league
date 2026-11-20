@@ -5,7 +5,7 @@ import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
 import { bandFor, bandKind, DESCRIPTIVE_LEVELS } from '../evaluationMeta.js';
 import { notify } from '../ui.js';
-import { button, card, chip, fa, faDate } from './common.js';
+import { button, card, chip, fa, faDate, tableWrap } from './common.js';
 
 /**
  * Builds the grading card. `onSaved` receives the API payload (evaluation +
@@ -101,12 +101,10 @@ export function gradingCard({ leagueId, detail, onSaved, onClose }) {
 
   const marked = students.filter((student) => (descriptive ? student.label : student.score !== null && student.score !== undefined)).length;
 
-  const table = el('div.table-wrap', {}, [
-    el('table.grid-table', {}, [
-      el('thead', {}, [el('tr', {}, [el('th', { text: 'دانش‌آموز' }), el('th', { text: 'نمره' }), el('th', { text: 'سطح' })])]),
-      el('tbody', {}, rows),
-    ]),
-  ]);
+  const table = tableWrap(el('table.grid-table', {}, [
+    el('thead', {}, [el('tr', {}, [el('th', { text: 'دانش‌آموز' }), el('th', { text: 'نمره' }), el('th', { text: 'سطح' })])]),
+    el('tbody', {}, rows),
+  ]), { block: true });
 
   return card({
     title: `نمرات ${evaluation.subject} — ${evaluation.title}`,
