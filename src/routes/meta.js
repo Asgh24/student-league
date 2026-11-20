@@ -3,13 +3,15 @@ import { config } from '../config.js';
 import { listPlans } from '../services/subscription.js';
 
 /** Public, unauthenticated metadata used to brand the single page shell. */
-export function createMetaRouter({ db, version = '1.0.0' }) {
+export function createMetaRouter({ db, version = '1.0.0', release = 'development' }) {
   const router = Router();
 
   router.get('/', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
     res.json({
       appName: config.appName,
       version,
+      release,
       timezoneOffsetMinutes: config.tzOffsetMinutes,
       likesPerDay: config.limits.likesPerDay,
       maxUploadBytes: config.limits.maxUploadBytes,

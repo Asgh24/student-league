@@ -38,7 +38,7 @@ export function staticCacheControl(filePath, isProd = config.isProd) {
  * Builds the Express application. The same process serves the JSON API and the
  * static single page frontend, so it can run on any plain Node.js host.
  */
-export function createApp({ db, version = '1.0.0', sessionStore = createSessionStore(db) }) {
+export function createApp({ db, version = '1.0.0', release = 'development', sessionStore = createSessionStore(db) }) {
   const app = express();
   app.disable('x-powered-by');
   if (config.trustProxy) app.set('trust proxy', 1);
@@ -88,7 +88,7 @@ export function createApp({ db, version = '1.0.0', sessionStore = createSessionS
     }),
   );
 
-  app.use('/healthz', createHealthRouter({ db, version }));
+  app.use('/healthz', createHealthRouter({ db, version, release }));
 
   // Payment provider redirects arrive here. They are deliberately outside
   // `/api/v1` (no CSRF/JSON middleware) and before the SPA fallback.
@@ -100,7 +100,7 @@ export function createApp({ db, version = '1.0.0', sessionStore = createSessionS
   // chain means anonymous page views never write a session row.
   app.use(attachUser(db));
 
-  app.use('/api/v1', assistantActionLog(db), apiRateLimit(), csrfProtection, createApiRouter({ db }));
+  app.use('/api/v1', assistantActionLog(db), apiRateLimit(), csrfProtection, createApiRouter({ db, version, release }));
   app.use('/api', notFoundHandler);
 
   // Hash routing keeps the SPA on "/", this fallback only helps deep links.

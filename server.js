@@ -7,7 +7,7 @@ import { createApp, publicDir } from './src/app.js';
 import { createSessionStore, startSessionSweep } from './src/middleware/session.js';
 import { runSeed } from './src/seed.js';
 import { runAdminBootstrap, runBootstrap } from './src/bootstrap.js';
-import { APP_VERSION } from './src/version.js';
+import { APP_RELEASE, APP_VERSION } from './src/version.js';
 import { createClientFor, isConfigured, pushBackup, applyStagedRestore, restoreOnBoot } from './src/services/githubBackup.js';
 import { createBackupScheduler } from './src/services/backupScheduler.js';
 import { startUploadSweep } from './src/services/storage.js';
@@ -56,7 +56,7 @@ async function boot() {
   }
 
   const sessionStore = createSessionStore(db);
-  const app = createApp({ db, version: APP_VERSION, sessionStore });
+  const app = createApp({ db, version: APP_VERSION, release: APP_RELEASE, sessionStore });
   const sweepTimer = startSessionSweep(sessionStore, {
     onSweep: (removed) => logger.info('expired sessions removed', { removed }),
   });
@@ -85,6 +85,7 @@ async function boot() {
       env: config.env,
       app: config.appName,
       version: APP_VERSION,
+      release: APP_RELEASE,
       dataDir: config.dataDir,
       staticDir: publicDir,
     });

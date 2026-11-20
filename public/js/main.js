@@ -17,6 +17,7 @@ import {
 } from './shell.js';
 import { homePath, can, isAdmin, isAssistant, isStudent, isTeacher, setLeagueId, setMeta, setUser, state, storedLeagueId, subscribe } from './store.js';
 import { initPalette, openPaletteDialog } from './theme.js';
+import { startUpdateNotifier } from './updateNotifier.js';
 import { notify } from './ui.js';
 
 import { renderLogin } from './views/login.js';
@@ -341,6 +342,7 @@ async function boot() {
   if (state.leagueId === null) setLeagueId(storedLeagueId());
 
   renderShell();
+  startUpdateNotifier({ currentRelease: metaResult.status === 'fulfilled' ? metaResult.value?.release : null });
   startAdminBadgePolling();
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason;

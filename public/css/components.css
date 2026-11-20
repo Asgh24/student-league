@@ -365,6 +365,69 @@ textarea:focus {
   font-weight: 700;
 }
 
+/* --------------------------------------------------------- update available */
+.update-banner {
+  position: fixed;
+  z-index: 130;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  left: max(10px, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(680px, calc(100% - 20px));
+  margin-inline: auto;
+  padding: 10px 12px;
+  border: 1px solid rgba(var(--brand-rgb), 0.24);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 94%, var(--brand-50));
+  box-shadow: 0 12px 36px rgba(31, 41, 55, 0.22);
+  color: var(--ink);
+  animation: update-banner-in 220ms ease-out both;
+}
+.update-banner[hidden] {
+  display: none;
+}
+.update-banner__icon {
+  flex: 0 0 auto;
+  font-size: 1.35rem;
+}
+.update-banner__copy {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 1px;
+}
+.update-banner__copy strong {
+  font-size: 0.92rem;
+}
+.update-banner__copy span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.update-banner .btn {
+  flex: 0 0 auto;
+}
+@keyframes update-banner-in {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 520px) {
+  .update-banner {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .update-banner__copy {
+    padding-top: 2px;
+  }
+  .update-banner .btn {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-banner { animation: none; }
+}
+
 /* ---------------------------------------------------------------- tables */
 .table-wrap {
   overflow-x: auto;

@@ -864,31 +864,31 @@ npm run lint    # eslint .
 Latest run on this machine (Windows, Node 26.3.0):
 
 ```
- Test Files  46 passed (46)
-      Tests  583 passed (583)
+ Test Files  48 passed (48)
+      Tests  587 passed (587)
 ```
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
 | `auth.test.js` | 15 | Login success/failure, wrong password, unknown user, rate limiting, role separation, logout, password change, session lifetime, missing and stale CSRF tokens |
-| `authorization.test.js` | 12 | Teacher A cannot read/write teacher B's league; students blocked from teacher endpoints |
+| `authorization.test.js` | 17 | Teacher A cannot read/write teacher B's league; students blocked from teacher endpoints |
 | `validation.test.js` | 11 | zod rejections with `VALIDATION_ERROR` + `details`, bad ids, out-of-range values |
-| `scores.test.js` | 10 | Transactional commit with several deltas, totals, history rows, zero-delta rejection, matrix shape |
+| `scores.test.js` | 12 | Transactional commit with several deltas, totals, history rows, zero-delta rejection, matrix shape |
 | `columns.test.js` | 7 | Create/rename/step, delete with keep vs discard |
 | `teams.test.js` | 8 | Team scoring formula on/off, assignment, unassigned panel, adjustments |
-| `attendance.test.js` | 8 | Daily set, bulk "all present", counters, history, summary ratios |
+| `attendance.test.js` | 14 | Daily set, bulk "all present", counters, history, summary ratios |
 | `ranking.test.js` | 5 | Competition ranking with ties, title thresholds |
 | `jalali.test.js` | 16 | Gregorian↔Jalali round-trips, leap years (1399/1403 vs 1400), month lengths, reference dates |
-| `uploads.test.js` | 12 | Allowed/blocked extensions, MIME and size checks, filename sanitization, authorization on download, shared per-teacher quota across leagues and space freed by deletion |
+| `uploads.test.js` | 14 | Allowed/blocked extensions, MIME and size checks, filename sanitization, authorization on download, shared per-teacher quota across leagues and space freed by deletion |
 | `raffle.test.js` | 11 | Randomness, exclude-previous, pool cycling, history, reset |
 | `representative.test.js` | 8 | Fair one-pick-per-student cycles, progress, cycle completion/refusal, forced cycle advance, undo-last, full reset, empty league, teacher isolation |
-| `tools.test.js` | 19 | Wheel segments, shuffle, timer, live board, homework, multiple-choice + legacy text Q&A, presentation quiz, schedule, league lifecycle |
-| `student.test.js` | 26 | Dashboard series/medals, report card totals + session lines with derived quality and subject/date filters, grade setting, own attendance/history, likes quota, self-like rejection, settings, teacher-managed username/password (update, optional first-time login, username conflicts, isolation) |
+| `tools.test.js` | 32 | Wheel segments, shuffle, timer, live board, homework, multiple-choice + legacy text Q&A, presentation quiz, schedule, league lifecycle |
+| `student.test.js` | 32 | Dashboard series/medals, report card totals + session lines with derived quality and subject/date filters, grade setting, own attendance/history, likes quota, self-like rejection, settings, teacher-managed username/password (update, optional first-time login, username conflicts, isolation) |
 | `evaluations.test.js` | 23 | Evaluation CRUD + column reference, numeric/descriptive marks, scale and label validation, clearing a mark, subject/date filters, no transfer into league points, foreign-teacher and student isolation, own-marks student payload |
-| `reports.test.js` | 10 | Daily parent report grouping, message trimming, authorization and SMS queue/delivery paths; free-text custom messages store the exact teacher text as `kind = 'custom'`, skip students without a parent number, and reject blank messages |
-| `contacts.test.js` | 5 | Parent/student phone normalization, validation, clearing and teacher isolation |
-| `seating.test.js` | 6 | Seating plan persistence, random reshuffle, clearing, teacher-only access |
-| `platform.test.js` | 10 | Teacher signup + 14-day trial, expired access + admin grant, admin/teacher/student separation, teacher create/search/filter, plan CRUD, mock checkout and renewal, Zarinpal request/verify (Rial, codes 100/101) |
+| `reports.test.js` | 18 | Daily parent report grouping, message trimming, authorization and SMS queue/delivery paths; free-text custom messages store the exact teacher text as `kind = 'custom'`, skip students without a parent number, and reject blank messages |
+| `contacts.test.js` | 6 | Parent/student phone normalization, validation, clearing and teacher isolation |
+| `seating.test.js` | 7 | Seating plan persistence, random reshuffle, clearing, teacher-only access |
+| `platform.test.js` | 11 | Teacher signup + 14-day trial, expired access + admin grant, admin/teacher/student separation, teacher create/search/filter, plan CRUD, mock checkout and renewal, Zarinpal request/verify (Rial, codes 100/101) |
 | `cardPayments.test.js` | 14 | Admin card settings/normalization, one pending receipt per teacher, exact-duration approval with idempotent re-approval, remaining-trial preservation, unlimited-account guards, no cross-teacher access, private receipt streaming/signature checks, reject/cancel/retry, missing-receipt and non-card guards |
 | `frontendCardPayments.test.js` | 7 | Teacher card details + receipt modal upload, disabled purchase during review, unlimited-account notice, unconfigured-card warning, admin settings form, receipt preview/approve actions, numeric navigation badge |
 | `messages.test.js` | 12 | Teacher↔student threads, unread/read receipts, replies, ownership isolation, no-login students, empty body, unique conversations, contacts, admin exclusion |
@@ -896,8 +896,8 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `smsSettings.test.js` | 6 | Per-teacher encrypted sms.ir key/line, write-only API, teacher isolation, teacher credential precedence, incomplete-settings fallback block, validation and sample message |
 | `aiQuestionFormat.test.js` | 11 | Prompt template contents/league name, fenced and bare-array parsing, field aliases, Persian digits, 1-based fallback, points clamping, duplicate/invalid skipping, ten-question cap and error messages |
 | `aiAssistantFrontend.test.js` | 7 | Provider-free importer: copyable template, no API key, paste parsing with preview, alias/Persian-digit input, invalid JSON and out-of-range answers, per-question points, selection and bulk-save hand-off |
-| `frontend.test.js` | 65 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (17 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters + monthly placeholder button, weekly schedule rows/columns, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill and descriptive max hiding, student evaluation cards, MCQ option editor, student MCQ/text answering, merged add-student dialog, student credential dialog, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, custom parent-message box with confirmation and send, modal focus/footer lifecycle |
-| `frontendPlatform.test.js` | 12 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, expired-user deletion section, teacher file storage card, shared inbox thread/composer, admin settings label, landing feature showcase below the plans with its signup call-to-action |
+| `frontend.test.js` | 96 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (17 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters + monthly placeholder button, weekly schedule rows/columns, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill and descriptive max hiding, student evaluation cards, MCQ option editor, student MCQ/text answering, merged add-student dialog, student credential dialog, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, custom parent-message box with confirmation and send, modal focus/footer lifecycle |
+| `frontendPlatform.test.js` | 24 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, expired-user deletion section, teacher file storage card, shared inbox thread/composer, admin settings label, landing feature showcase below the plans with its signup call-to-action |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 3 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not), and every lazily loaded route view exists and exports the expected renderer |
 | `githubBackup.test.js` | 26 | Off-site backups against an in-memory GitHub Contents/Blob API: upload + manifest checksum, Blob download above 1 MB, full push→restore round trip, retention/pruning, public-repo refusal, size limit, missing repo and 404 handling, checksum-mismatch safety, schema-only/empty detection, staged restore + cancel, scheduler due-time/retry/state handling |
@@ -907,7 +907,9 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `frontendBackup.test.js` | 2 | Backup page renders missing-env guidance, disables manual backup, lists remote snapshots and the local download link |
 | `frontendRepresentative.test.js` | 5 | Representative hero/progress/status/history render, animated draw updates the winner, name search filters only the status list, copy-ready announcement, and projector board render |
 | `bootstrap.test.js` | 7 | First teacher account: creation, password verification, skip when accounts exist, `--force` reset, refusal of short/demo-default passwords, production-vs-development default |
-| `hardening.test.js` | 16 | Anonymous requests create no session row, logout clears the configured cookie, login performs a bcrypt comparison for unknown users, `/healthz` integrity scan is cached, expired sessions are swept, app JS/CSS revalidate after deployment, Chart.js stays on demand, `TRUST_PROXY` fails closed |
+| `hardening.test.js` | 18 | Anonymous requests create no session row, logout clears the configured cookie, login performs a bcrypt comparison for unknown users, `/healthz` integrity scan is cached, expired sessions are swept, app JS/CSS revalidate after deployment, Chart.js stays on demand, `TRUST_PROXY` fails closed |
+| `version.test.js` | 2 | Automatic frontend content fingerprint, uncached lightweight release endpoint and release metadata |
+| `updateNotifier.test.js` | 2 | Update notice stays hidden on the current release, appears after a deployment and applies the newly detected release |
 
 Backend suites use throwaway SQLite databases (`tests/helpers.js`), so `npm test`
 never touches your real `DATA_DIR`.
