@@ -46,6 +46,7 @@ vi.mock('../public/js/api.js', () => {
 
 const { api } = await import('../public/js/api.js');
 const { renderTeacherDashboard } = await import('../public/js/views/dashboard.js');
+const { renderStudentRoster } = await import('../public/js/views/studentRoster.js');
 const { createScoresTable } = await import('../public/js/views/scoresTable.js');
 const { renderTeams } = await import('../public/js/views/teams.js');
 const { renderStudentDashboard } = await import('../public/js/views/student/dashboard.js');
@@ -296,7 +297,7 @@ describe('student progress chart', () => {
 });
 
 describe('teacher dashboard', () => {
-  it('renders the league selector and the eighteen tool tiles', async () => {
+  it('renders the league selector and the twenty tool tiles', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/leagues') {
         return Promise.resolve({
@@ -315,7 +316,7 @@ describe('teacher dashboard', () => {
     await renderTeacherDashboard();
 
     const tiles = document.querySelectorAll('#view .tile');
-    expect(tiles).toHaveLength(19);
+    expect(tiles).toHaveLength(20);
     expect(document.querySelector('#view').textContent).toContain('کلاس ششم الف');
     expect(document.querySelector('#view').textContent).toContain('لیگ انفرادی');
     expect(document.querySelector('#view').textContent).toContain('انضباط');
@@ -323,6 +324,7 @@ describe('teacher dashboard', () => {
     expect(document.querySelector('#view').textContent).toContain('جای‌گیری');
     expect(document.querySelector('#view').textContent).toContain('شماره‌ها');
     expect(document.querySelector('#view').textContent).toContain('گزارش روزانه');
+    expect(document.querySelector('#view').textContent).toContain('مدیریت دانش‌آموزان');
     expect(document.querySelector('#view').textContent).toContain('سرگرمی');
     expect(state.leagueId).toBe(3);
   });
@@ -361,8 +363,102 @@ describe('teacher dashboard', () => {
 
     // no manual refresh and no second call to renderTeacherDashboard
     await vi.waitFor(() => expect(document.querySelector('#view').textContent).toContain('لیگ تازه'));
-    expect(document.querySelectorAll('#view .tile')).toHaveLength(19);
+    expect(document.querySelectorAll('#view .tile')).toHaveLength(20);
     expect(api.get).toHaveBeenCalledWith('/leagues/7');
+  });
+
+  it('suggests the completed roster when creating the next league', async () => {
+    let created = false;
+    const source = { id: 3, name: 'لیگ قبلی', status: 'completed', studentCount: 22, teamCount: 0, createdAt: '2026-08-01T00:00:00.000Z' };
+    const target = { id: 8, name: 'لیگ بعدی', status: 'active', studentCount: 22, teamCount: 0, createdAt: '2026-11-01T00:00:00.000Z' };
+    api.get.mockImplementation((url) => {
+      if (url === '/leagues') return Promise.resolve({ items: created ? [target, source] : [source] });
+      if (url === '/leagues/3') {
+        return Promise.resolve({
+          league: source,
+          summary: { studentCount: 22, presentToday: 0, absentToday: 0, lateToday: 0, averageScore: 0, teamCount: 0, columnCount: 8 },
+        });
+      }
+      if (url === '/leagues/8') {
+        return Promise.resolve({
+          league: target,
+          summary: { studentCount: 22, presentToday: 0, absentToday: 0, lateToday: 0, averageScore: 0, teamCount: 0, columnCount: 8 },
+        });
+      }
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+    api.post.mockImplementation((url, body) => {
+      expect(url).toBe('/leagues');
+      expect(body).toEqual({ name: 'لیگ بعدی', sourceLeagueId: 3 });
+      created = true;
+      return Promise.resolve({ league: target, transfer: { imported: 22 } });
+    });
+
+    await renderTeacherDashboard();
+    [...document.querySelectorAll('#view button')]
+      .find((node) => node.textContent.includes('ساخت لیگ جدید')).click();
+    await vi.waitFor(() => expect(document.querySelector('#f-sourceLeagueId')).not.toBeNull());
+    expect(document.querySelector('#f-sourceLeagueId').value).toBe('3');
+    document.querySelector('#f-name').value = 'لیگ بعدی';
+    [...document.querySelectorAll('#modal-root button')]
+      .find((node) => node.textContent.includes('ساخت لیگ')).click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalled());
+    await vi.waitFor(() => expect(document.querySelector('#view').textContent).toContain('لیگ بعدی'));
+    expect(state.leagueId).toBe(8);
+  });
+});
+
+describe('teacher-wide student roster', () => {
+  it('shows persistent profiles and transfers them from a completed league', async () => {
+    const roster = {
+      items: [{
+        id: 1,
+        name: 'آرش آزمون',
+        parentPhone: '09123456789',
+        hasLogin: true,
+        username: 'student-a',
+        memberships: [{
+          studentId: 10,
+          leagueId: 1,
+          leagueName: 'لیگ قبلی',
+          leagueStatus: 'completed',
+          currentLogin: true,
+        }],
+      }],
+    };
+    const leagues = {
+      items: [
+        { id: 2, name: 'لیگ جدید', status: 'active', studentCount: 0 },
+        { id: 1, name: 'لیگ قبلی', status: 'completed', studentCount: 1 },
+      ],
+    };
+    api.get.mockImplementation((url) => {
+      if (url === '/students/roster') return Promise.resolve(roster);
+      if (url === '/leagues') return Promise.resolve(leagues);
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
+    api.post.mockResolvedValue({ result: { imported: 1, skipped: 0 } });
+
+    await renderStudentRoster();
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('فهرست ثابت دانش‌آموزان');
+    expect(view.textContent).toContain('آرش آزمون');
+    expect(view.textContent).toContain('لیگ قبلی');
+    expect(view.querySelector('select[aria-label="لیگ مقصد"]').value).toBe('2');
+    expect(view.querySelector('select[aria-label="لیگ مبدأ"]').value).toBe('1');
+    expect(view.querySelector('table').classList.contains('grid-table--stack')).toBe(true);
+
+    [...view.querySelectorAll('button')]
+      .find((node) => node.textContent.includes('انتقال دانش‌آموزان')).click();
+    await vi.waitFor(() => expect(document.querySelector('#modal-root .modal')).not.toBeNull());
+    [...document.querySelectorAll('#modal-root button')]
+      .find((node) => node.textContent.trim() === 'انتقال').click();
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/leagues/2/students/import', {
+      sourceLeagueId: 1,
+    }));
+    expect(state.leagueId).toBe(2);
   });
 });
 

@@ -9,6 +9,7 @@ import { confirmDialog, emptyState, formDialog, notify, openModal } from '../ui.
 import { button, card, fa, faDate, grid, loadingNode, pageHead, statCard, tile } from './common.js';
 
 const TOOLS = [
+  { href: 'teacher/students', icon: '🧑‍🎓', label: 'مدیریت دانش‌آموزان', perm: '', ownerOnly: true },
   { suffix: '', icon: '🏆', label: 'لیگ انفرادی', perm: 'scores' },
   { suffix: 'teams', icon: '🛡️', label: 'لیگ تیمی', perm: 'teams' },
   { suffix: 'attendance', icon: '🗓️', label: 'حضور و غیاب', perm: 'attendance' },
@@ -65,18 +66,54 @@ function subscriptionSummaryCard(payload) {
   ]);
 }
 
-async function createLeague() {
+async function createLeague(knownLeagues = null) {
+  let leagues = knownLeagues;
+  if (!Array.isArray(leagues)) {
+    try {
+      leagues = (await api.get('/leagues'))?.items ?? [];
+    } catch {
+      leagues = [];
+    }
+  }
+  const sources = leagues.filter((league) => Number(league.studentCount) > 0);
+  const suggested = sources.find((league) => league.status === 'completed') ?? sources[0] ?? null;
+  const fields = [
+    { name: 'name', label: 'نام لیگ', type: 'text', required: true, placeholder: 'مثلاً کلاس ششم الف' },
+  ];
+  if (sources.length) {
+    fields.push({
+      name: 'sourceLeagueId',
+      label: 'دانش‌آموزان لیگ قبلی',
+      type: 'select',
+      value: suggested?.id ?? '',
+      options: [
+        { value: '', label: 'بدون انتقال دانش‌آموز' },
+        ...sources.map((league) => ({
+          value: league.id,
+          label: `${league.name} · ${fa(league.studentCount)} دانش‌آموز${league.status === 'completed' ? ' · پایان‌یافته' : ''}`,
+        })),
+      ],
+      hint: 'حساب و اطلاعات تماس منتقل می‌شود؛ امتیازها و سوابق لیگ قبلی همان‌جا می‌ماند.',
+    });
+  }
   const values = await formDialog({
     title: 'ساخت لیگ جدید',
-    description: 'برای لیگ جدید ستون‌های پیش‌فرض امتیاز ساخته می‌شود.',
+    description: sources.length
+      ? 'می‌توانید دانش‌آموزان لیگ قبلی را هم‌زمان به لیگ تازه منتقل کنید.'
+      : 'برای لیگ جدید ستون‌های پیش‌فرض امتیاز ساخته می‌شود.',
     submitLabel: 'ساخت لیگ',
-    fields: [{ name: 'name', label: 'نام لیگ', type: 'text', required: true, placeholder: 'مثلاً کلاس ششم الف' }],
+    fields,
   });
   if (!values) return;
   try {
-    const payload = await api.post('/leagues', { name: values.name.trim() });
+    const request = { name: values.name.trim() };
+    if (values.sourceLeagueId) request.sourceLeagueId = Number(values.sourceLeagueId);
+    const payload = await api.post('/leagues', request);
     setLeagueId(payload?.league?.id ?? null);
-    notify.ok('لیگ با موفقیت ساخته شد');
+    const imported = payload?.transfer?.imported ?? 0;
+    notify.ok(imported > 0
+      ? `لیگ ساخته شد و ${fa(imported)} دانش‌آموز انتقال یافت`
+      : 'لیگ با موفقیت ساخته شد');
     // Re-render immediately: on a fresh account the dashboard previously kept
     // showing the empty state until a manual page refresh.
     await renderTeacherDashboard();
@@ -164,7 +201,7 @@ function leagueSwitcher(leagues, activeId) {
       },
     }));
   }
-  row.appendChild(button('لیگ جدید', { kind: 'soft', icon: '➕', onClick: createLeague }));
+  row.appendChild(button('لیگ جدید', { kind: 'soft', icon: '➕', onClick: () => createLeague(leagues) }));
   return card({ title: 'لیگ‌های من', icon: '🗂️' }, [
     leagues.length ? row : el('p.muted.small', { text: 'هنوز لیگی نساخته‌اید.' }),
   ]);
@@ -208,7 +245,7 @@ export async function renderTeacherDashboard() {
     icon: '🏫',
     title: assistant ? 'میزکار همیار' : 'میزکار معلم',
     subtitle: assistant ? 'بخش‌هایی که معلم برای شما فعال کرده است' : 'لیگ، امتیاز، تیم، حضور و ابزارهای کلاس',
-    actions: assistant ? [] : [button('ساخت لیگ جدید', { icon: '➕', onClick: createLeague })],
+    actions: assistant ? [] : [button('ساخت لیگ جدید', { icon: '➕', onClick: () => createLeague() })],
   });
   renderView([head, body]);
   body.appendChild(loadingNode());
@@ -274,7 +311,7 @@ export async function renderTeacherDashboard() {
 
   const base = `teacher/league/${active.id}`;
   const tiles = TOOLS
-    .filter((tool) => !tool.perm || can(tool.perm))
+    .filter((tool) => (!tool.ownerOnly || !assistant) && (!tool.perm || can(tool.perm)))
     .map((tool) => tile({
       icon: tool.icon,
       label: tool.label,

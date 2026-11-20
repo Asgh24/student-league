@@ -24,6 +24,18 @@ function openBeforeHomeworkUpgrade() {
   return db;
 }
 
+/** Opens a database immediately before persistent student profiles existed. */
+function openBeforeStudentRoster() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scl-roster-migration-'));
+  const db = openDatabase(path.join(dir, 'league.db'));
+  runMigrations(db, migrations.filter((migration) => migration.id < '028_student_roster'));
+  cleanups.push(() => {
+    closeDatabase(db);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  return db;
+}
+
 describe('025 homework penalties and column', () => {
   it('backfills the applied column and accepts the new not_brought status', () => {
     const db = openBeforeHomeworkUpgrade();
@@ -55,5 +67,37 @@ describe('025 homework penalties and column', () => {
     // Existing assignments keep the legacy zero penalty and default column.
     const row = db.prepare('SELECT penalty_points, column_id FROM homework WHERE id = ?').get(homeworkId);
     expect(row).toEqual({ penalty_points: 0, column_id: null });
+  });
+});
+
+describe('028 persistent student roster', () => {
+  it('backfills profiles without changing old league rows, contacts or accounts', () => {
+    const db = openBeforeStudentRoster();
+    const fixture = buildFixture(db);
+    const student = fixture.studentsA[0];
+    db.prepare(`
+      UPDATE students
+      SET parent_phone = '09123456789', student_phone = '09121112222',
+          shad_pv_url = 'https://web.shad.ir/#/pv/example', credentials_from_parent = 1
+      WHERE id = ?
+    `).run(student.id);
+
+    runMigrations(db, migrations);
+
+    expect(db.prepare('SELECT COUNT(*) AS n FROM students').get().n).toBe(4);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM student_profiles').get().n).toBe(4);
+    const membership = db.prepare('SELECT * FROM students WHERE id = ?').get(student.id);
+    const profile = db.prepare('SELECT * FROM student_profiles WHERE id = ?').get(membership.profile_id);
+    expect(profile).toMatchObject({
+      teacher_id: fixture.teacherA.id,
+      user_id: fixture.studentUserA.id,
+      name: student.name,
+      parent_phone: '09123456789',
+      student_phone: '09121112222',
+      shad_pv_url: 'https://web.shad.ir/#/pv/example',
+      credentials_from_parent: 1,
+    });
+    expect(membership.league_id).toBe(fixture.leagueA.id);
+    expect(membership.user_id).toBe(fixture.studentUserA.id);
   });
 });

@@ -83,6 +83,7 @@ function teacherNav() {
     : [
       { group: 'میزکار' },
       { label: 'میزکار معلم', icon: '🏠', href: 'teacher', active: active === 'teacher' },
+      { label: 'مدیریت دانش‌آموزان', icon: '🧑‍🎓', href: 'teacher/students', active: active === 'teacher/students' },
     ];
   if (state.leagueId) {
     items.push({ group: 'لیگ فعال' });
@@ -204,6 +205,7 @@ const routes = [
     view: () => homePath(),
   },
   { path: 'teacher', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/dashboard.js'), 'renderTeacherDashboard') },
+  { path: 'teacher/students', guard: () => (isTeacher() && !isAssistant() ? undefined : 'teacher'), view: loadView(() => import('./views/studentRoster.js'), 'renderStudentRoster') },
   { path: 'teacher/settings', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/settings.js'), 'renderSettings') },
   { path: 'teacher/messages', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/messages.js'), 'renderTeacherMessages') },
   { path: 'teacher/support', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/support.js'), 'renderSupport') },

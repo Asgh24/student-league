@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { conflict, forbidden } from '../lib/errors.js';
-import { asyncHandler, isoNow } from '../lib/http.js';
+import { asyncHandler } from '../lib/http.js';
 import { matchesFa } from '../lib/normalize.js';
 import { schemas, validate } from '../lib/validate.js';
 import { createUser, findByUsername, findById, updatePassword, updateUsername } from '../repositories/users.js';
-import { requireTeacher, loadOwnedLeague, requirePermission, requireOwnerTeacher } from '../middleware/auth.js';
+import { requireTeacher, loadOwnedLeague, requirePermission, requireOwnerTeacher, teacherId } from '../middleware/auth.js';
 import { ownedStudent } from '../middleware/ownership.js';
 import {
   addChampionship,
@@ -20,6 +20,12 @@ import { getColumns, requireLeague } from '../repositories/leagues.js';
 import { studentAttendance } from '../services/attendance.js';
 import { studentTeam } from '../services/teams.js';
 import { disableParentCredentials, syncCredentialsFromParent } from '../services/studentCredentials.js';
+import {
+  createRosterStudent,
+  rosterForTeacher,
+  syncStudentProfile,
+  transferRosterStudents,
+} from '../services/studentRoster.js';
 
 export function createLeagueStudentsRouter({ db }) {
   const router = Router({ mergeParams: true });
@@ -30,6 +36,15 @@ export function createLeagueStudentsRouter({ db }) {
     let rows = scoresMatrix(db, req.league.id);
     if (search.trim()) rows = rows.filter((row) => matchesFa(row.name, search));
     res.json({ items: rows, total: rows.length });
+  });
+
+  router.post('/import', requireOwnerTeacher, validate({ body: schemas.studentRosterTransfer }), (req, res) => {
+    const result = transferRosterStudents(db, {
+      teacherId: req.user.id,
+      sourceLeagueId: req.body.sourceLeagueId,
+      targetLeagueId: req.league.id,
+    });
+    res.json({ result });
   });
 
   router.post('/', requirePermission('scores'), validate({ body: schemas.studentCreate }), asyncHandler(async (req, res) => {
@@ -46,9 +61,12 @@ export function createLeagueStudentsRouter({ db }) {
         const user = createUser(db, { username, password, role: 'student', displayName: name });
         userId = user.id;
       }
-      const info = db.prepare('INSERT INTO students (league_id, user_id, name, created_at) VALUES (?, ?, ?, ?)')
-        .run(req.league.id, userId, String(name).trim(), isoNow());
-      return Number(info.lastInsertRowid);
+      return createRosterStudent(db, {
+        teacherId: req.league.teacher_id,
+        leagueId: req.league.id,
+        userId,
+        name,
+      }).studentId;
     });
     const studentId = create();
     const row = scoresMatrix(db, req.league.id).find((item) => item.id === studentId);
@@ -61,6 +79,10 @@ export function createLeagueStudentsRouter({ db }) {
 export function createStudentsRouter({ db }) {
   const router = Router();
   const owned = [requireTeacher, ownedStudent(db)];
+
+  router.get('/roster', requireTeacher, requireOwnerTeacher, (req, res) => {
+    res.json({ items: rosterForTeacher(db, teacherId(req)) });
+  });
 
   router.get('/:id', ...owned, (req, res) => {
     const student = req.student;
@@ -104,10 +126,14 @@ export function createStudentsRouter({ db }) {
   });
 
   router.patch('/:id', ...owned, requirePermission('scores'), validate({ body: schemas.studentUpdate }), (req, res) => {
-    db.prepare('UPDATE students SET name = ? WHERE id = ?').run(req.body.name.trim(), req.student.id);
-    if (req.student.user_id) {
-      db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(req.body.name.trim(), req.student.user_id);
-    }
+    const run = db.transaction(() => {
+      db.prepare('UPDATE students SET name = ? WHERE id = ?').run(req.body.name.trim(), req.student.id);
+      if (req.student.user_id) {
+        db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(req.body.name.trim(), req.student.user_id);
+      }
+      syncStudentProfile(db, req.student.id);
+    });
+    run();
     res.json({ ok: true, student: { id: req.student.id, name: req.body.name.trim() } });
   });
 
@@ -125,6 +151,7 @@ export function createStudentsRouter({ db }) {
     const run = db.transaction(() => {
       updatePassword(db, req.student.user_id, req.body.password);
       disableParentCredentials(db, req.student.id);
+      syncStudentProfile(db, req.student.id);
     });
     run();
     res.json({ ok: true });
@@ -162,6 +189,7 @@ export function createStudentsRouter({ db }) {
       const create = db.transaction(() => {
         const user = createUser(db, { username, password, role: 'student', displayName: req.student.name });
         db.prepare('UPDATE students SET user_id = ?, credentials_from_parent = 0 WHERE id = ?').run(user.id, req.student.id);
+        syncStudentProfile(db, req.student.id);
         return user;
       });
       const user = create();
@@ -177,6 +205,7 @@ export function createStudentsRouter({ db }) {
       if (username && username !== account.username) updateUsername(db, account.id, username);
       if (password) updatePassword(db, account.id, password);
       disableParentCredentials(db, req.student.id);
+      syncStudentProfile(db, req.student.id);
     });
     run();
     res.json({

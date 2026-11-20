@@ -17,6 +17,7 @@ import { requireTeacher, loadOwnedLeague, requirePermission, requireOwnerTeacher
 import { rankingForLeague, titleForPoints } from '../services/scoring.js';
 import { todayCounters } from '../services/attendance.js';
 import { teamStandings } from '../services/teams.js';
+import { transferRosterStudents } from '../services/studentRoster.js';
 
 function serializeSettings(settings) {
   return {
@@ -79,8 +80,23 @@ export function createLeaguesRouter({ db }) {
   });
 
   router.post('/', requireTeacher, requireOwnerTeacher, validate({ body: schemas.leagueCreate }), (req, res) => {
-    const league = createLeague(db, req.user.id, req.body.name);
-    res.status(201).json({ league: { id: league.id, name: league.name, status: league.status, createdAt: league.created_at }, settings: serializeSettings(readSettings(db, league.id)) });
+    const create = db.transaction(() => {
+      const league = createLeague(db, req.user.id, req.body.name);
+      const transfer = req.body.sourceLeagueId
+        ? transferRosterStudents(db, {
+          teacherId: req.user.id,
+          sourceLeagueId: req.body.sourceLeagueId,
+          targetLeagueId: league.id,
+        })
+        : null;
+      return { league, transfer };
+    });
+    const { league, transfer } = create();
+    res.status(201).json({
+      league: { id: league.id, name: league.name, status: league.status, createdAt: league.created_at },
+      settings: serializeSettings(readSettings(db, league.id)),
+      transfer,
+    });
   });
 
   router.get('/:id', ...owned, (req, res) => {

@@ -236,6 +236,7 @@ export const schemas = {
 
   leagueCreate: z.object({
     name: z.string().trim().min(1, 'نام لیگ الزامی است').max(80),
+    sourceLeagueId: z.coerce.number().int().positive().optional(),
   }),
 
   leagueUpdate: z.object({
@@ -323,6 +324,10 @@ export const schemas = {
     name: z.string().trim().min(1, 'نام دانش‌آموز الزامی است').max(80),
     username: z.string().trim().min(3).max(64).optional(),
     password: z.string().min(6).max(200).optional(),
+  }),
+
+  studentRosterTransfer: z.object({
+    sourceLeagueId: z.coerce.number().int().positive(),
   }),
 
   studentUpdate: z.object({

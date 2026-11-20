@@ -4,6 +4,7 @@ import { badRequest, notFound } from '../lib/errors.js';
 import { normalizeMobile } from '../lib/phone.js';
 import { normalizeHttpUrl } from '../lib/url.js';
 import { syncCredentialsFromParent } from './studentCredentials.js';
+import { syncStudentProfile } from './studentRoster.js';
 
 export const PHONE_FIELDS = ['parentPhone', 'studentPhone'];
 
@@ -78,6 +79,7 @@ export function saveContact(db, leagueId, studentId, input) {
     if (student.credentialsFromParent) {
       syncCredentialsFromParent(db, student.id, next.parentPhone);
     }
+    syncStudentProfile(db, student.id);
   });
   save();
 

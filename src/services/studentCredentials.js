@@ -4,6 +4,7 @@ import { findAdminByUsername } from '../repositories/admins.js';
 import { createUser, findById, findByUsername, updatePassword, updateUsername } from '../repositories/users.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { normalizeMobile } from '../lib/phone.js';
+import { syncStudentProfile } from './studentRoster.js';
 
 function requireStudent(db, studentId) {
   const student = db.prepare('SELECT * FROM students WHERE id = ?').get(studentId);
@@ -47,6 +48,7 @@ export function syncCredentialsFromParent(db, studentId, parentPhone = null) {
       SET user_id = ?, credentials_from_parent = 1
       WHERE id = ?
     `).run(user.id, student.id);
+    syncStudentProfile(db, student.id);
   });
   apply();
   return {
@@ -60,4 +62,5 @@ export function syncCredentialsFromParent(db, studentId, parentPhone = null) {
 /** Disables future parent-phone synchronization without changing the login. */
 export function disableParentCredentials(db, studentId) {
   db.prepare('UPDATE students SET credentials_from_parent = 0 WHERE id = ?').run(studentId);
+  syncStudentProfile(db, studentId);
 }

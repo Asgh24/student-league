@@ -428,6 +428,25 @@ textarea:focus {
   .update-banner { animation: none; }
 }
 
+/* ----------------------------------------------- persistent student roster */
+.student-transfer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.student-transfer-grid .field {
+  margin: 0;
+}
+.student-transfer-grid select {
+  width: 100%;
+}
+@media (max-width: 620px) {
+  .student-transfer-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---------------------------------------------------------------- tables */
 .table-wrap {
   overflow-x: auto;

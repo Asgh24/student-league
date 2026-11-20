@@ -57,6 +57,7 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | Area | What it does |
 | --- | --- |
 | ثبت‌نام معلم | Self-service signup on the login screen; every new teacher starts a configurable **14-day trial** with all tools unlocked |
+| مدیریت دانش‌آموزان | A teacher-wide persistent roster independent of individual leagues. Starting a league can copy names, logins, phones and Shad links from a previous league while scores, attendance, teams and competition history stay isolated in their original league |
 | اشتراک من | Trial/subscription banner, remaining days, admin-editable plans, Zarinpal checkout and payment history; an expired teacher is redirected here instead of seeing a broken dashboard |
 | پنل مدیر | Separate site-owner login: teacher search/filter, manual subscription grants, plan CRUD, revenue and payment ledger, inbox/SMS health, and a backup/restore console. The «حذف منقضی‌ها» tab lists teachers whose trial and paid subscription have both ended and lets the owner permanently delete an account after typing its username; leagues, students, linked student logins, scores, uploads and payment history are removed with it |
 | بکاپ و بازیابی | Owner-only manual GitHub backup, consistent local DB download, remote snapshot list, staged restore with checksum verification and cancel; auto-restores an empty/schema-only DB on boot |
@@ -864,8 +865,8 @@ npm run lint    # eslint .
 Latest run on this machine (Windows, Node 26.3.0):
 
 ```
- Test Files  48 passed (48)
-      Tests  587 passed (587)
+ Test Files  49 passed (49)
+      Tests  598 passed (598)
 ```
 
 | Suite | Tests | Covers |
@@ -896,7 +897,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `smsSettings.test.js` | 6 | Per-teacher encrypted sms.ir key/line, write-only API, teacher isolation, teacher credential precedence, incomplete-settings fallback block, validation and sample message |
 | `aiQuestionFormat.test.js` | 11 | Prompt template contents/league name, fenced and bare-array parsing, field aliases, Persian digits, 1-based fallback, points clamping, duplicate/invalid skipping, ten-question cap and error messages |
 | `aiAssistantFrontend.test.js` | 7 | Provider-free importer: copyable template, no API key, paste parsing with preview, alias/Persian-digit input, invalid JSON and out-of-range answers, per-question points, selection and bulk-save hand-off |
-| `frontend.test.js` | 96 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (17 tiles), staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters + monthly placeholder button, weekly schedule rows/columns, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill and descriptive max hiding, student evaluation cards, MCQ option editor, student MCQ/text answering, merged add-student dialog, student credential dialog, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, custom parent-message box with confirmation and send, modal focus/footer lifecycle |
+| `frontend.test.js` | 98 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (20 tiles), persistent student roster and transfer UI, automatic roster suggestion for the next league, staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters + monthly placeholder button, weekly schedule rows/columns, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill and descriptive max hiding, student evaluation cards, MCQ option editor, student MCQ/text answering, merged add-student dialog, student credential dialog, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, custom parent-message box with confirmation and send, modal focus/footer lifecycle |
 | `frontendPlatform.test.js` | 24 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, expired-user deletion section, teacher file storage card, shared inbox thread/composer, admin settings label, landing feature showcase below the plans with its signup call-to-action |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 3 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not), and every lazily loaded route view exists and exports the expected renderer |
@@ -908,6 +909,8 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `frontendRepresentative.test.js` | 5 | Representative hero/progress/status/history render, animated draw updates the winner, name search filters only the status list, copy-ready announcement, and projector board render |
 | `bootstrap.test.js` | 7 | First teacher account: creation, password verification, skip when accounts exist, `--force` reset, refusal of short/demo-default passwords, production-vs-development default |
 | `hardening.test.js` | 18 | Anonymous requests create no session row, logout clears the configured cookie, login performs a bcrypt comparison for unknown users, `/healthz` integrity scan is cached, expired sessions are swept, app JS/CSS revalidate after deployment, Chart.js stays on demand, `TRUST_PROXY` fails closed |
+| `studentRoster.test.js` | 8 | New-league roster transfer, zeroed competition data, login/contact/parent-credential preservation, duplicate safety, old-league deletion, ownership isolation and atomic rollback |
+| `migrations.test.js` | 2 | Legacy homework upgrade plus backfilling persistent student profiles without changing old memberships, contacts or accounts |
 | `version.test.js` | 2 | Automatic frontend content fingerprint, uncached lightweight release endpoint and release metadata |
 | `updateNotifier.test.js` | 2 | Update notice stays hidden on the current release, appears after a deployment and applies the newly detected release |
 
