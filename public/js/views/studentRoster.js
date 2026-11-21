@@ -6,7 +6,7 @@ import { errorMessage } from '../format.js';
 import { renderView, setLeaguePill, setTopbarTitle } from '../shell.js';
 import { setLeagueId, state } from '../store.js';
 import { confirmDialog, emptyState, notify } from '../ui.js';
-import { button, card, chip, fa, loadingNode, pageHead, tableWrap } from './common.js';
+import { backToWorkbench, button, card, chip, fa, loadingNode, pageHead, tableWrap } from './common.js';
 
 function option(select, league, suffix = '') {
   select.appendChild(el('option', {
@@ -144,6 +144,7 @@ export async function renderStudentRoster() {
       icon: '🧑‍🎓',
       title: 'مدیریت دانش‌آموزان',
       subtitle: 'فهرست ثابت دانش‌آموزان شما، مستقل از پایان هر لیگ',
+      actions: [backToWorkbench()],
     }),
     body,
   ]);

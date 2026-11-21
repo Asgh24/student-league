@@ -866,7 +866,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 
 ```
  Test Files  49 passed (49)
-      Tests  598 passed (598)
+      Tests  599 passed (599)
 ```
 
 | Suite | Tests | Covers |
@@ -897,7 +897,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `smsSettings.test.js` | 6 | Per-teacher encrypted sms.ir key/line, write-only API, teacher isolation, teacher credential precedence, incomplete-settings fallback block, validation and sample message |
 | `aiQuestionFormat.test.js` | 11 | Prompt template contents/league name, fenced and bare-array parsing, field aliases, Persian digits, 1-based fallback, points clamping, duplicate/invalid skipping, ten-question cap and error messages |
 | `aiAssistantFrontend.test.js` | 7 | Provider-free importer: copyable template, no API key, paste parsing with preview, alias/Persian-digit input, invalid JSON and out-of-range answers, per-question points, selection and bulk-save hand-off |
-| `frontend.test.js` | 98 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (20 tiles), persistent student roster and transfer UI, automatic roster suggestion for the next league, staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters + monthly placeholder button, weekly schedule rows/columns, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill and descriptive max hiding, student evaluation cards, MCQ option editor, student MCQ/text answering, merged add-student dialog, student credential dialog, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, custom parent-message box with confirmation and send, modal focus/footer lifecycle |
+| `frontend.test.js` | 99 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (20 tiles), persistent student roster and transfer UI, automatic roster suggestion for the next league, staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters + monthly placeholder button, weekly schedule rows/columns, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill and descriptive max hiding, student evaluation cards, MCQ option editor, student MCQ/text answering, merged add-student dialog, student credential dialog, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, custom parent-message box with confirmation and send, modal focus/footer lifecycle, desktop paint layer on the scrolling score table |
 | `frontendPlatform.test.js` | 24 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, expired-user deletion section, teacher file storage card, shared inbox thread/composer, admin settings label, landing feature showcase below the plans with its signup call-to-action |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 3 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not), and every lazily loaded route view exists and exports the expected renderer |

@@ -456,6 +456,16 @@ textarea:focus {
   background: var(--surface);
   max-width: 100%;
 }
+/* Desktop only: the wrapper is a scroller holding the pinned cells, so a page
+   scroll used to re-rasterise its whole contents — every table button carries a
+   14px-blur `--shadow-sm`, and a 34-student grid has hundreds of them. Own
+   layer => the raster is reused while the page moves (measured frame p90 45ms
+   -> 7ms). Phones show stacked cards instead and need no extra layer. */
+@media (min-width: 701px) {
+  .table-wrap {
+    transform: translateZ(0);
+  }
+}
 table.grid-table {
   /* width of the pinned operations rail; also its sticky offset */
   --rail-actions: 64px;

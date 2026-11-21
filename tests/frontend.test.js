@@ -443,6 +443,7 @@ describe('teacher-wide student roster', () => {
     await renderStudentRoster();
     const view = document.querySelector('#view');
     expect(view.textContent).toContain('فهرست ثابت دانش‌آموزان');
+    expect(view.querySelector('a[href="#/teacher"]')?.textContent).toContain('بازگشت به میزکار');
     expect(view.textContent).toContain('آرش آزمون');
     expect(view.textContent).toContain('لیگ قبلی');
     expect(view.querySelector('select[aria-label="لیگ مقصد"]').value).toBe('2');
@@ -595,6 +596,14 @@ describe('staged score editing', () => {
     expect(staged).not.toBeNull();
     expect(staged.textContent).toBe('۵۰');
     expect(staged.dataset.delta).toBe('+۲۵');
+  });
+
+  it('keeps the scrolling table on its own paint layer on desktop', () => {
+    const css = fs.readFileSync(path.join(rootDir, 'public', 'css', 'components.css'), 'utf8');
+    // Pinned cells make the wrapper a main-thread scroller, so without a layer
+    // every blur shadow inside the grid is rasterised again on each scroll.
+    expect(css).toMatch(/@media \(min-width: 701px\) \{\s*\.table-wrap \{\s*transform: translateZ\(0\);/);
+    expect(css).toContain('position: sticky');
   });
 });
 
