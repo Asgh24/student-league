@@ -66,13 +66,18 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | دستیار هوش مصنوعی | In the Q&A page, a provider-free importer: copy the ready-made prompt into any AI chat, append your multiple-choice questions, and paste the JSON answer back. The site parses it locally, shows a reviewable preview and bulk-saves only the selected questions; no API key or provider account is needed |
 | پرداخت‌ها | Zarinpal v4 request/verify (Rial conversion, sandbox support) and a local `mock` gateway for development before a merchant ID exists |
 
-**Student area** – tabs: میزکار, کارنامه, ارزشیابی, حضور و غیاب, برنامه هفتگی, تیم من, تاریخچه, رده‌بندی, لایک, سوال و پاسخ, پیام‌ها, تنظیمات.
+**Student area** – tabs: میزکار, سوابق لیگها, کارنامه, ارزشیابی, حضور و غیاب, برنامه هفتگی, تیم من, تاریخچه, رده‌بندی, لایک, سوال و پاسخ, پیام‌ها, تنظیمات.
 The کارنامه tab carries a profile band, subject + date-range filters, one line per
 recorded score session (subject, teacher topic, date, points, derived quality) and
 the per-subject totals table + chart. It also shows the «کارنامه ماهانه» button; the
 monthly report itself is intentionally a placeholder until its basis is decided.
 The برنامه هفتگی tab renders the class schedule read-only with one row per weekday
 and one column per period, so it stays readable on a phone.
+The سوابق لیگها tab lists every league the account has belonged to, including
+completed leagues after a roster transfer, and lets the student switch between
+teacher-style league chips. Each selection shows read-only old totals, per-subject
+scores, sessions, the saved final ranking, medals and published report cards; no
+editing is exposed. The tab is also linked from the dashboard.
 The dashboard greets the student, shows points / rank / championships, and draws a
 points-over-time Chart.js line chart built from the append-only score history using
 Jalali date labels.
@@ -614,6 +619,8 @@ mapping described above (and only when it is enabled).
 | --- | --- | --- | --- |
 | GET | `/student/me` | — | `{ user, student{ id, name, leagueId, leagueName, leagueStatus }, settings }` |
 | GET | `/student/dashboard` | — | `{ studentId, name, leagueId, leagueName, leagueStatus, points, rank, totalStudents, championships, completedLeagues, title, bestChampionship, medals, team, series{ start, points } }` |
+| GET | `/student/leagues` | — | `{ items[{ studentId, leagueId, leagueName, leagueStatus, leagueCreatedAt, completedAt, isCurrent, rank, totalStudents, total }] }` — every league this account has belonged to, including completed ones after a transfer |
+| GET | `/student/leagues/:leagueId/results` | — | Read-only report-card payload plus `{ leagueStatus, completedAt, isCurrent, ranking[{ studentId, name, total, rank, isMe, title }], medals[], reportCards[] }`; `404` for a league the caller never belonged to |
 | GET | `/student/report-card` | auth | Optional `columnId`, `from`, `to` (Gregorian `YYYY-MM-DD`), `limit` (≤500, default 200). Returns `{ studentId, name, leagueId, leagueName, grade, items[{ columnId, name, step, value }], total, rank, totalStudents, title, columns[], filters, sessions[{ id, columnId, columnName, topic, delta, actorName, totalAfter, createdAt, quality{ key, label, icon } }], sessionCount }` |
 | GET | `/student/attendance` | `?page=&limit=` | `{ items[{ day, status, updatedAt }], total, summary{ recorded, present, late, absent, attended } }` |
 | GET | `/student/team` | — | `{ team{ id, name, label, finalPoints, memberAverage, basePoints } \| null, members[{ studentId, name }], rank, totalTeams }` |
@@ -865,8 +872,8 @@ npm run lint    # eslint .
 Latest run on this machine (Windows, Node 26.3.0):
 
 ```
- Test Files  49 passed (49)
-      Tests  599 passed (599)
+ Test Files  50 passed (50)
+      Tests  606 passed (606)
 ```
 
 | Suite | Tests | Covers |
@@ -897,7 +904,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `smsSettings.test.js` | 6 | Per-teacher encrypted sms.ir key/line, write-only API, teacher isolation, teacher credential precedence, incomplete-settings fallback block, validation and sample message |
 | `aiQuestionFormat.test.js` | 11 | Prompt template contents/league name, fenced and bare-array parsing, field aliases, Persian digits, 1-based fallback, points clamping, duplicate/invalid skipping, ten-question cap and error messages |
 | `aiAssistantFrontend.test.js` | 7 | Provider-free importer: copyable template, no API key, paste parsing with preview, alias/Persian-digit input, invalid JSON and out-of-range answers, per-question points, selection and bulk-save hand-off |
-| `frontend.test.js` | 99 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (20 tiles), persistent student roster and transfer UI, automatic roster suggestion for the next league, staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters + monthly placeholder button, weekly schedule rows/columns, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill and descriptive max hiding, student evaluation cards, MCQ option editor, student MCQ/text answering, merged add-student dialog, student credential dialog, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, custom parent-message box with confirmation and send, modal focus/footer lifecycle, desktop paint layer on the scrolling score table |
+| `frontend.test.js` | 103 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (20 tiles), persistent student roster and transfer UI, automatic roster suggestion for the next league, staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters + monthly placeholder button, weekly schedule rows/columns, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill and descriptive max hiding, student evaluation cards, MCQ option editor, student MCQ/text answering, merged add-student dialog, student credential dialog, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, custom parent-message box with confirmation and send, modal focus/footer lifecycle, desktop paint layer on the scrolling score table, read-only student league history cards with exact old score/rank/session/medal values, league chip switching, aria-pressed state and scoped failure fallback |
 | `frontendPlatform.test.js` | 24 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, expired-user deletion section, teacher file storage card, shared inbox thread/composer, admin settings label, landing feature showcase below the plans with its signup call-to-action |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 3 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not), and every lazily loaded route view exists and exports the expected renderer |
@@ -910,6 +917,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `bootstrap.test.js` | 7 | First teacher account: creation, password verification, skip when accounts exist, `--force` reset, refusal of short/demo-default passwords, production-vs-development default |
 | `hardening.test.js` | 18 | Anonymous requests create no session row, logout clears the configured cookie, login performs a bcrypt comparison for unknown users, `/healthz` integrity scan is cached, expired sessions are swept, app JS/CSS revalidate after deployment, Chart.js stays on demand, `TRUST_PROXY` fails closed |
 | `studentRoster.test.js` | 8 | New-league roster transfer, zeroed competition data, login/contact/parent-credential preservation, duplicate safety, old-league deletion, ownership isolation and atomic rollback |
+| `studentLeagueHistory.test.js` | 3 | Student-scoped league list across transfers, read-only old scores/sessions/final ranking/medals/report cards, and 404 isolation from other students and teachers |
 | `migrations.test.js` | 2 | Legacy homework upgrade plus backfilling persistent student profiles without changing old memberships, contacts or accounts |
 | `version.test.js` | 2 | Automatic frontend content fingerprint, uncached lightweight release endpoint and release metadata |
 | `updateNotifier.test.js` | 2 | Update notice stays hidden on the current release, appears after a deployment and applies the newly detected release |

@@ -50,6 +50,7 @@ const { renderStudentRoster } = await import('../public/js/views/studentRoster.j
 const { createScoresTable } = await import('../public/js/views/scoresTable.js');
 const { renderTeams } = await import('../public/js/views/teams.js');
 const { renderStudentDashboard } = await import('../public/js/views/student/dashboard.js');
+const { renderStudentLeagueHistory } = await import('../public/js/views/student/leagueHistory.js');
 const { renderReportCard } = await import('../public/js/views/student/reportcard.js');
 const { renderStudentReportCard: renderManualStudentReportCard } = await import('../public/js/views/student/reportcard-manual.js');
 const { renderStudentSchedule } = await import('../public/js/views/student/schedule.js');
@@ -856,6 +857,160 @@ describe('student dashboard', () => {
     const view = document.querySelector('#view');
     expect(view.querySelector('canvas')).toBeNull();
     expect(view.textContent).toContain('هنوز امتیازی ثبت نشده است');
+  });
+});
+
+describe('student league history', () => {
+  const listPayload = {
+    items: [
+      { studentId: 4, leagueId: 7, leagueName: 'لیگ هفتم', leagueStatus: 'active', isCurrent: true, rank: 2, totalStudents: 10, total: 40 },
+      { studentId: 1, leagueId: 3, leagueName: 'لیگ سوم', leagueStatus: 'completed', isCurrent: false, rank: 1, totalStudents: 8, total: 120, completedAt: '2026-08-01T10:00:00.000Z' },
+    ],
+  };
+  const result = (leagueId) => ({
+    leagueId,
+    leagueName: leagueId === 3 ? 'لیگ سوم' : 'لیگ هفتم',
+    leagueStatus: leagueId === 3 ? 'completed' : 'active',
+    isCurrent: leagueId !== 3,
+    total: leagueId === 3 ? 120 : 40,
+    rank: 1,
+    totalStudents: 8,
+    grade: 'پنجم',
+    title: { title: 'قهرمان لیگ', icon: '🏆' },
+    items: [{ columnId: 1, name: 'ریاضی', value: leagueId === 3 ? 120 : 40 }],
+    sessions: [{
+      id: 9, columnId: 1, columnName: 'ریاضی', topic: 'آزمون پایانی', delta: 120,
+      actorName: 'معلم', totalAfter: 120, createdAt: '2026-08-01T10:00:00.000Z',
+      quality: { key: 'excellent', label: 'عالی', icon: '🌟' },
+    }],
+    sessionCount: 1,
+    ranking: [{ studentId: 4, name: 'زهرا محمدی', total: 120, rank: 1, isMe: true, title: 'قهرمان لیگ' }],
+    medals: [{ id: 1, title: 'قهرمان لیگ', rank: 1, source: 'league_completed', createdAt: '2026-08-01T10:00:00.000Z' }],
+    reportCards: [{ id: 2, semester: 'نوبت اول', totalPercent: 90, level: { label: 'عالی' }, updatedAt: '2026-08-01T10:00:00.000Z' }],
+  });
+
+  it('shows every league and opens the completed league result sheet', async () => {
+    api.get.mockImplementation((url) => Promise.resolve(
+      url === '/student/leagues' ? listPayload : result(Number(url.split('/')[3])),
+    ));
+
+    await renderStudentLeagueHistory();
+
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('سوابق لیگهای من');
+    expect(view.textContent).toContain('لیگ سوم');
+    expect(view.textContent).toContain('پایان‌یافته');
+    expect(view.textContent).toContain('آزمون پایانی');
+    expect(view.textContent).toContain('قهرمان لیگ');
+    expect(view.textContent).toContain('نتایج لیگهای پیشین فقط خواندنیاند');
+    expect(api.get).toHaveBeenCalledWith('/student/leagues/3/results');
+    expect(view.querySelector('a[href="#/student"]').textContent).toContain('بازگشت به میزکار');
+
+    const switcher = [...view.querySelectorAll('.chip--button')];
+    expect(switcher).toHaveLength(2);
+    switcher.find((node) => node.textContent.includes('لیگ هفتم')).click();
+    await vi.waitFor(() => expect(api.get).toHaveBeenCalledWith('/student/leagues/7/results'));
+    await vi.waitFor(() => expect(document.querySelector('#view').textContent).toContain('لیگ هفتم'));
+  });
+
+  it('strictly renders every read-only result card with exact values', async () => {
+    api.get.mockImplementation((url) => Promise.resolve(
+      url === '/student/leagues' ? listPayload : result(Number(url.split('/')[3])),
+    ));
+
+    await renderStudentLeagueHistory();
+
+    const view = () => document.querySelector('#view');
+    const cardByTitle = (title) => [...view().querySelectorAll('section.card')]
+      .find((node) => node.querySelector('.card__title')?.textContent.includes(title));
+    const rowsOf = (section) => [...section.querySelectorAll('table.grid-table tbody tr')].map((row) => ({
+      cells: [...row.querySelectorAll('td')].map((cell) => cell.textContent),
+      isMe: row.classList.contains('is-me'),
+    }));
+
+    expect([...view().querySelectorAll('.grid--stats .stat')].map((node) => ({
+      value: node.querySelector('.stat__value').textContent,
+      label: node.querySelector('.stat__label').textContent,
+    }))).toEqual([
+      { value: '۱۲۰', label: '⭐ امتیاز کل' },
+      { value: '۱ از ۸', label: '🏆 رتبه' },
+      { value: '۱', label: '🥇 مدالهای این لیگ' },
+      { value: '۱', label: '🗂️ ثبتهای امتیاز' },
+    ]);
+
+    expect(rowsOf(cardByTitle('نمرات به تفکیک درس'))).toEqual([
+      { cells: ['ریاضی', '۱۲۰'], isMe: false },
+    ]);
+    expect(rowsOf(cardByTitle('نتیجه نهایی لیگ'))).toEqual([
+      { cells: ['۱', 'زهرا محمدی', '۱۲۰', 'قهرمان لیگ'], isMe: true },
+    ]);
+
+    const session = view().querySelector('.session-card');
+    expect(session.querySelector('.session-card__title').textContent).toBe('ریاضی — آزمون پایانی');
+    expect(session.querySelector('.session-card__points').textContent).toBe('+۱۲۰');
+    expect(session.textContent).toContain('🎓 پایه پنجم');
+    expect(session.textContent).toContain('🌟 عالی');
+    expect(session.textContent).toContain('🧑‍🏫 معلم');
+
+    const manualCard = cardByTitle('کارنامههای دستی منتشرشده');
+    expect(manualCard.querySelector('.timeline-item strong').textContent).toBe('نوبت اول');
+    expect(manualCard.textContent).toContain('عالی');
+    expect(manualCard.textContent).toContain('درصد کل: ۹۰');
+
+    const medals = cardByTitle('مدالهای کسبشده');
+    expect(medals.querySelectorAll('.timeline-item')).toHaveLength(1);
+    expect(medals.textContent).toContain('🥇');
+    expect(medals.textContent).toContain('قهرمان لیگ');
+
+    expect(view().textContent).toContain('نتایج لیگهای پیشین فقط خواندنیاند');
+    expect(view().querySelectorAll('input, select, textarea')).toHaveLength(0);
+    const chips = () => [...view().querySelectorAll('button.chip--button')];
+    expect([...view().querySelectorAll('button')].every((node) => node.classList.contains('chip--button'))).toBe(true);
+    expect(chips().map((node) => [node.textContent, node.getAttribute('aria-pressed')])).toEqual([
+      ['لیگ هفتم · فعال · فعلی', 'false'],
+      ['لیگ سوم · پایان‌یافته', 'true'],
+    ]);
+
+    chips().find((node) => node.textContent.includes('لیگ هفتم')).click();
+    await vi.waitFor(() => expect(api.get).toHaveBeenCalledWith('/student/leagues/7/results'));
+    await vi.waitFor(() => expect(view().querySelector('.stat__value').textContent).toBe('۴۰'));
+    expect(chips().map((node) => [node.textContent, node.getAttribute('aria-pressed')])).toEqual([
+      ['لیگ هفتم · فعال · فعلی', 'true'],
+      ['لیگ سوم · پایان‌یافته', 'false'],
+    ]);
+    expect(cardByTitle('ردهبندی فعلی')).toBeDefined();
+    expect(cardByTitle('نتیجه نهایی لیگ')).toBeUndefined();
+    expect(view().querySelectorAll('input, select, textarea')).toHaveLength(0);
+  });
+
+  it('keeps the switcher usable when one league result fails', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/student/leagues') return Promise.resolve(listPayload);
+      if (url === '/student/leagues/3/results') return Promise.reject(new Error('دسترسی محدود'));
+      return Promise.resolve(result(Number(url.split('/')[3])));
+    });
+
+    await renderStudentLeagueHistory();
+
+    const view = () => document.querySelector('#view');
+    await vi.waitFor(() => expect(view().textContent).toContain('دریافت نتیجه لیگ ناموفق بود'));
+    expect(view().textContent).toContain('دسترسی محدود');
+    expect(view().querySelectorAll('.chip--button')).toHaveLength(2);
+
+    view().querySelector('.chip--button').click();
+    await vi.waitFor(() => expect(view().querySelectorAll('.stat')).toHaveLength(4));
+    expect(view().querySelector('.stat__value').textContent).toBe('۴۰');
+    expect(view().textContent).not.toContain('دریافت نتیجه لیگ ناموفق بود');
+  });
+
+  it('offers a shortcut from the student dashboard', async () => {
+    api.get.mockResolvedValue({
+      studentId: 4, name: 'زهرا', leagueName: 'کلاس ششم الف', leagueStatus: 'active',
+      points: 0, rank: 1, totalStudents: 1, championships: 0, medals: [], team: null,
+      title: { title: 'نوآموز', icon: '🌱' }, series: { start: 0, points: [] },
+    });
+    await renderStudentDashboard();
+    expect(document.querySelector('#view a[href="#/student/leagues"]').textContent).toContain('سوابق لیگهای من');
   });
 });
 

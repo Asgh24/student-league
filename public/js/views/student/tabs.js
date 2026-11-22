@@ -13,6 +13,7 @@ export const STUDENT_TABS = [
   ['student/team', '🛡️', 'تیم من'],
   ['student/history', '📜', 'تاریخچه'],
   ['student/ranking', '🏅', 'رده‌بندی'],
+  ['student/leagues', '🏆', 'سوابق لیگها'],
   ['student/likes', '💜', 'لایک'],
   ['student/exams', '🧪', 'آزمون‌ها'],
   ['student/questions', '❓', 'پرسش و پاسخ'],

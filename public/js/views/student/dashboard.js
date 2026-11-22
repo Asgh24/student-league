@@ -55,6 +55,7 @@ export async function renderStudentDashboard() {
       icon: '👋',
       title: `سلام ${firstName(data.name)}!`,
       subtitle: `${data.leagueName} · ${data.leagueStatus === 'completed' ? 'لیگ پایان‌یافته' : 'لیگ فعال'}`,
+      actions: [el('a.btn.btn--ghost', { href: '#/student/leagues', text: '🏆 سوابق لیگهای من' })],
     }),
     studentTabs('student'),
     grid('grid--stats', [

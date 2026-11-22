@@ -11,6 +11,7 @@ import { listForStudent } from '../services/evaluations.js';
 import { getPublishedReportCard, listPublishedReportCards } from '../services/reports.js';
 import { parseStoredOptions, serializeQuestion } from '../services/questions.js';
 import { getStudentAttempt, listStudentExams, saveAttemptAnswer, startAttempt, submitAttempt } from '../services/exams.js';
+import { listStudentLeagues, studentLeagueResult } from '../services/studentLeagueHistory.js';
 import { activeUploadCutoff, uploadExpiresAt } from '../services/storage.js';
 import { readSchedule } from './schedule.js';
 import {
@@ -50,6 +51,17 @@ export function createStudentPortalRouter({ db }) {
 
   router.get('/dashboard', (req, res) => {
     res.json(dashboard(db, contextOf(db, req)));
+  });
+
+  /** Read-only league history: all memberships of this account's profile. */
+  router.get('/leagues', (req, res) => {
+    res.json(listStudentLeagues(db, req.user.id));
+  });
+
+  router.get('/leagues/:leagueId/results', (req, res) => {
+    const leagueId = Number.parseInt(req.params.leagueId, 10);
+    if (!Number.isFinite(leagueId)) throw notFound('لیگ یافت نشد');
+    res.json(studentLeagueResult(db, req.user.id, leagueId));
   });
 
   router.get('/report-card', validate({ query: schemas.reportCardQuery }), (req, res) => {
