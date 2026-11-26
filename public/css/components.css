@@ -4376,3 +4376,27 @@ body.quiz-open {
 .pill--palette {
   padding-inline: 10px;
 }
+
+/* ------------------------------------------- add to home screen (PWA) */
+.install-steps {
+  margin: 12px 0 0;
+  padding-inline-start: 22px;
+  display: grid;
+  gap: 8px;
+  line-height: 1.9;
+  list-style-type: persian;
+}
+.install-steps li {
+  color: var(--ink-soft);
+}
+.install-steps li::marker {
+  color: var(--brand);
+  font-weight: 800;
+}
+.install-hint {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--brand-soft);
+  color: var(--ink-soft);
+}

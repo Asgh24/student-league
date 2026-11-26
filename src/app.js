@@ -30,6 +30,9 @@ const REVALIDATE_CACHE = 'no-cache';
 export function staticCacheControl(filePath, isProd = config.isProd) {
   const normalized = String(filePath).replaceAll('\\', '/');
   if (normalized.endsWith('.html')) return 'no-store';
+  // The manifest names the start URL and icons. A stale copy keeps an old app
+  // shell around after a deploy, so it revalidates like application code.
+  if (normalized.endsWith('.webmanifest')) return REVALIDATE_CACHE;
   if (/\/public\/(?:js|css)\/.*\.(?:m?js|css)$/i.test(normalized)) return REVALIDATE_CACHE;
   return isProd ? LONG_CACHE : REVALIDATE_CACHE;
 }

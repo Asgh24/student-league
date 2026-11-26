@@ -16,6 +16,7 @@ import {
   showTopbar,
 } from './shell.js';
 import { homePath, can, isAdmin, isAssistant, isStudent, isTeacher, setLeagueId, setMeta, setUser, state, storedLeagueId, subscribe } from './store.js';
+import { initInstallPrompt } from './installApp.js';
 import { initPalette, openPaletteDialog } from './theme.js';
 import { startUpdateNotifier } from './updateNotifier.js';
 import { notify } from './ui.js';
@@ -321,6 +322,7 @@ function paintFooterYear() {
 }
 
 async function boot() {
+  initInstallPrompt();
   initPalette();
   paintFooterYear();
 

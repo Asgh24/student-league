@@ -3,11 +3,13 @@
 import { api } from '../api.js';
 import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
+import { installSnapshot, subscribeInstall } from '../installApp.js';
 import { renderView, setTopbarTitle } from '../shell.js';
 import { isStudent, setPersianDigits, state } from '../store.js';
 import { paletteSwatches } from '../theme.js';
 import { notify } from '../ui.js';
 import { button, card, field, pageHead } from './common.js';
+import { startInstall } from './installDialog.js';
 
 function passwordCard() {
   const current = el('input', { id: 'pw-current', type: 'password', autocomplete: 'current-password', required: 'true' });
@@ -68,9 +70,53 @@ function paletteCard() {
   ]);
 }
 
+/**
+ * «افزودن به صفحهٔ اصلی»: a shortcut that opens the site like an app. Chrome
+ * and Edge fire a native prompt; iOS needs the Safari share sheet, so the same
+ * button falls back to written steps.
+ */
+function installCard() {
+  const statusLine = el('p.small.muted.install-card__status');
+  const action = button('افزودن به صفحهٔ اصلی گوشی', {
+    icon: '📲',
+    kind: 'primary',
+    onClick: () => void startInstall(),
+  });
+  const row = el('div.row', {}, [action]);
+
+  function paint(snapshot = installSnapshot()) {
+    if (snapshot.installed) {
+      statusLine.textContent = '✓ این سایت از قبل روی صفحهٔ اصلی نصب شده است.';
+      statusLine.hidden = false;
+      row.hidden = true;
+      return;
+    }
+    row.hidden = false;
+    statusLine.hidden = !snapshot.ios;
+    statusLine.textContent = snapshot.ios
+      ? 'در آیفون و آیپد، افزودن میانبر فقط از مرورگر Safari ممکن است؛ راهنمای گام‌به‌گام باز می‌شود.'
+      : '';
+  }
+  paint();
+
+  const unsubscribe = subscribeInstall((snapshot) => {
+    if (!statusLine.isConnected) {
+      unsubscribe();
+      return;
+    }
+    paint(snapshot);
+  });
+
+  return card({ title: 'افزودن به صفحهٔ اصلی گوشی', icon: '📲' }, [
+    el('p.small.muted', { text: 'تیچ لینک را مثل یک برنامه روی صفحهٔ اصلی گوشی داشته باشید؛ با همان حساب کاربری باز می‌شود.' }),
+    statusLine,
+    row,
+  ]);
+}
+
 export function renderSettings() {
   setTopbarTitle('تنظیمات');
-  const cards = [paletteCard(), passwordCard()];
+  const cards = [installCard(), paletteCard(), passwordCard()];
   if (isStudent()) cards.push(digitsCard());
   if (state.user) {
     cards.push(card({ title: 'حساب کاربری', icon: '🪪' }, [

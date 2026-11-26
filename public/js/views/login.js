@@ -8,6 +8,7 @@ import { homePath, setUser, state } from '../store.js';
 import { notify } from '../ui.js';
 import { planPrice } from './common.js';
 import { openGuestSupportDialog } from './guestSupport.js';
+import { startInstall } from './installDialog.js';
 
 function money(value) {
   try {
@@ -199,6 +200,17 @@ function supportButton() {
   ]);
 }
 
+/** Guests can pin the site to their home screen before signing in. */
+function installButton() {
+  return el('button.btn.btn--ghost.btn--sm', {
+    type: 'button',
+    onclick: () => void startInstall(),
+  }, [
+    el('span', { text: '📲', 'aria-hidden': 'true' }),
+    el('span', { text: 'افزودن به صفحهٔ اصلی گوشی' }),
+  ]);
+}
+
 export function renderLogin({ navigate }) {
   setTopbarTitle(state.meta.appName);
   // A previous visit may still have an observer attached to detached cards.
@@ -316,7 +328,7 @@ export function renderLogin({ navigate }) {
     errorBox,
     submit,
     el('p.muted.small', { style: { textAlign: 'center' }, text: 'دانش‌آموزان از حساب ساخته‌شده توسط معلم وارد می‌شوند. مدیر سامانه هم از همین صفحه وارد می‌شود.' }),
-    el('div.row', { style: { justifyContent: 'center', marginTop: '10px' } }, [supportButton()]),
+    el('div.row', { style: { justifyContent: 'center', marginTop: '10px' } }, [installButton(), supportButton()]),
   ]);
 
   form.addEventListener('submit', (event) => {

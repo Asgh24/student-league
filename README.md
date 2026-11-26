@@ -87,6 +87,14 @@ account bootstrapped into an empty production database, and scheduled off-site
 snapshots pushed to a **private GitHub repository**, restored automatically when a
 PaaS recreates the container filesystem (`DEPLOY-PARSPACK.md`).
 
+Installable on phones: the login page and `#/settings` both offer
+«افزودن به صفحهٔ اصلی گوشی». `public/manifest.webmanifest` (standalone, RTL, ember
+theme colour) plus the generated icons in `public/img/pwa/` let Chrome, Edge and
+Samsung Internet install the site as a home-screen shortcut; the login session and
+all data stay the same. iOS Safari never fires `beforeinstallprompt`, so the same
+button opens step-by-step share-sheet instructions instead. Regenerate the icons
+after a palette change with `node scripts/generate-pwa-icons.mjs`.
+
 Other properties: multiple leagues per teacher (create, rename, complete → final
 ranking + titles, reactivate), per-league countdown timer, Persian-aware search
 (`ي`=`ی`, `ك`=`ک`, ZWNJ-insensitive), optional Persian digits, fully responsive
@@ -267,7 +275,7 @@ on a fresh volume.
 ## Project structure
 
 ```
-├── public/                     # static frontend (served as-is, no build step)
+├── public/                     # static frontend + web manifest and phone icons (served as-is, no build step)
 │   ├── css/                    # base.css (layout/RTL), components.css (UI kit)
 │   ├── js/
 │   │   ├── views/              # teacher + student screens, one module per screen
@@ -285,7 +293,7 @@ on a fresh volume.
 │   │   ├── store.js            # shared session state
 │   │   └── ui.js               # toasts, modals, confirm/form dialogs
 │   └── vendor/                 # Chart.js bundle + Vazirmatn woff2 (committed)
-├── scripts/                    # migrate / seed / bootstrap / backup / vendor CLIs
+├── scripts/                    # migrate / seed / bootstrap / backup / vendor CLIs, generate-pwa-icons
 ├── src/
 │   ├── lib/                    # errors, http helpers, jalali, normalize, random, zod schemas, github API client
 │   ├── middleware/             # session, auth, ownership, csrf, rateLimit, errorHandler
@@ -873,7 +881,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 
 ```
  Test Files  50 passed (50)
-      Tests  606 passed (606)
+      Tests  613 passed (613)
 ```
 
 | Suite | Tests | Covers |
@@ -904,7 +912,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `smsSettings.test.js` | 6 | Per-teacher encrypted sms.ir key/line, write-only API, teacher isolation, teacher credential precedence, incomplete-settings fallback block, validation and sample message |
 | `aiQuestionFormat.test.js` | 11 | Prompt template contents/league name, fenced and bare-array parsing, field aliases, Persian digits, 1-based fallback, points clamping, duplicate/invalid skipping, ten-question cap and error messages |
 | `aiAssistantFrontend.test.js` | 7 | Provider-free importer: copyable template, no API key, paste parsing with preview, alias/Persian-digit input, invalid JSON and out-of-range answers, per-question points, selection and bulk-save hand-off |
-| `frontend.test.js` | 103 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (20 tiles), persistent student roster and transfer UI, automatic roster suggestion for the next league, staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters + monthly placeholder button, weekly schedule rows/columns, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill and descriptive max hiding, student evaluation cards, MCQ option editor, student MCQ/text answering, merged add-student dialog, student credential dialog, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, custom parent-message box with confirmation and send, modal focus/footer lifecycle, desktop paint layer on the scrolling score table, read-only student league history cards with exact old score/rank/session/medal values, league chip switching, aria-pressed state and scoped failure fallback |
+| `frontend.test.js` | 109 | jsdom: RTL attributes, no external/CDN assets, XSS-safe rendering, Persian normalization, digit formatting, router, chart config, teacher dashboard (20 tiles), persistent student roster and transfer UI, automatic roster suggestion for the next league, staged score commit, team chip assignment, student dashboard + chart, report card bands/session cards/filters + monthly placeholder button, weekly schedule rows/columns, evaluation vocabulary parity, teacher evaluation form/mark sheet/quick-fill and descriptive max hiding, student evaluation cards, MCQ option editor, student MCQ/text answering, merged add-student dialog, student credential dialog, teacher sms.ir settings card + sample, SMS setup guide modal with screenshots, custom parent-message box with confirmation and send, modal focus/footer lifecycle, desktop paint layer on the scrolling score table, read-only student league history cards with exact old score/rank/session/medal values, league chip switching, aria-pressed state and scoped failure fallback, home-screen manifest/icons at their declared sizes, theme-color link and install-prompt state |
 | `frontendPlatform.test.js` | 24 | Login inputs remain visible and submit, credits footer, teacher signup and demo notice, subscription storefront/history, admin dashboard and teacher renewal, expired-user deletion section, teacher file storage card, shared inbox thread/composer, admin settings label, landing feature showcase below the plans with its signup call-to-action |
 | `frontendApi.test.js` | 4 | Client CSRF lifecycle: token warm-up, single retry after `INVALID_CSRF`, no retry on plain permission errors, network error mapping |
 | `moduleLinks.test.js` | 3 | Static link check over `public/js`: every relative named import resolves to a real export (the browser loads these modules natively, so a typo breaks the app — Vite's jsdom transform does not), and every lazily loaded route view exists and exports the expected renderer |
@@ -915,7 +923,7 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `frontendBackup.test.js` | 2 | Backup page renders missing-env guidance, disables manual backup, lists remote snapshots and the local download link |
 | `frontendRepresentative.test.js` | 5 | Representative hero/progress/status/history render, animated draw updates the winner, name search filters only the status list, copy-ready announcement, and projector board render |
 | `bootstrap.test.js` | 7 | First teacher account: creation, password verification, skip when accounts exist, `--force` reset, refusal of short/demo-default passwords, production-vs-development default |
-| `hardening.test.js` | 18 | Anonymous requests create no session row, logout clears the configured cookie, login performs a bcrypt comparison for unknown users, `/healthz` integrity scan is cached, expired sessions are swept, app JS/CSS revalidate after deployment, Chart.js stays on demand, `TRUST_PROXY` fails closed |
+| `hardening.test.js` | 19 | Web-app manifest is revalidated, served as `application/manifest+json` and lists 192/512 icons; anonymous requests create no session row, logout clears the configured cookie, login performs a bcrypt comparison for unknown users, `/healthz` integrity scan is cached, expired sessions are swept, app JS/CSS revalidate after deployment, Chart.js stays on demand, `TRUST_PROXY` fails closed |
 | `studentRoster.test.js` | 8 | New-league roster transfer, zeroed competition data, login/contact/parent-credential preservation, duplicate safety, old-league deletion, ownership isolation and atomic rollback |
 | `studentLeagueHistory.test.js` | 3 | Student-scoped league list across transfers, read-only old scores/sessions/final ranking/medals/report cards, and 404 isolation from other students and teachers |
 | `migrations.test.js` | 2 | Legacy homework upgrade plus backfilling persistent student profiles without changing old memberships, contacts or accounts |
@@ -973,6 +981,9 @@ Executed against a live server (`NODE_ENV=development`, fresh `DATA_DIR`, seeded
 | Restore on an empty container | ✅ deleted the volume, started with `NODE_ENV=production` → `database restored from GitHub` (sha256 matched the upload) and **no** migration line (the schema came with the snapshot); the restored file had 2 users, 22 students, league «لیگ نمونه», 301 history rows, and its `users` rows were byte-identical to the live database |
 | Scheduled backup in-process | ✅ production boot 2 s later → `backup pushed to GitHub` + `scheduled GitHub backup complete`, with a new snapshot pruned at the retention limit |
 | GitHub API client against production GitHub | ✅ read-only checks on `api.github.com`: `getRepo` → `private:false, default_branch:main`; `getContents` file → base64 decoded with a matching size; directory listing → array; missing path → `GithubError 404`; the token never appears in an error message |
+| Home-screen shortcut | ✅ `Page.getAppManifest` parsed with no errors (name/short_name/standalone/`start_url`), `/manifest.webmanifest` → `application/manifest+json` + `no-cache`, all three PNG icons → `200 image/png` at their declared 192/512 sizes |
+| Install option on a phone | ✅ the settings card and the guest login button both render at 360 px and 390 px with no horizontal overflow; with no native prompt the dialog shows the manual steps; the installed state hides the button and the status line says it is already on the home screen |
+| Status-bar colour | ✅ `meta[name="theme-color"]` starts at `#ea580c` and follows the palette (`#0284c7` after switching to ocean) |
 
 ---
 

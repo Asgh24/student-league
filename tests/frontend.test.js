@@ -128,6 +128,103 @@ describe('shell markup', () => {
   });
 });
 
+describe('home screen shortcut', () => {
+  const readPublic = (...parts) => fs.readFileSync(path.join(rootDir, 'public', ...parts));
+
+  it('ships a manifest with everything a phone needs', () => {
+    const manifest = JSON.parse(readPublic('manifest.webmanifest').toString('utf8'));
+    expect(manifest.name).toContain('تیچ لینک');
+    expect(manifest.short_name).toBe('تیچ لینک');
+    expect(manifest.lang).toBe('fa');
+    expect(manifest.dir).toBe('rtl');
+    expect(manifest.start_url).toBe('/?source=pwa');
+    expect(manifest.scope).toBe('/');
+    expect(manifest.display).toBe('standalone');
+    expect(manifest.theme_color.toLowerCase()).toBe('#ea580c');
+
+    const sizes = manifest.icons.map((icon) => icon.sizes);
+    expect(sizes).toContain('192x192');
+    expect(sizes).toContain('512x512');
+    expect(manifest.icons.some((icon) => (icon.purpose ?? '').includes('maskable'))).toBe(true);
+  });
+
+  it('ships every icon at the size the manifest declares', () => {
+    const manifest = JSON.parse(readPublic('manifest.webmanifest').toString('utf8'));
+    for (const icon of manifest.icons) {
+      expect(icon.src.startsWith('/')).toBe(true);
+      const file = path.join(rootDir, 'public', icon.src);
+      expect(fs.existsSync(file), icon.src).toBe(true);
+      const bytes = fs.readFileSync(file);
+      expect(bytes.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+      const [width, height] = icon.sizes.split('x').map(Number);
+      expect(bytes.readUInt32BE(16)).toBe(width);
+      expect(bytes.readUInt32BE(20)).toBe(height);
+    }
+    // iOS ignores manifest icons and reads the apple-touch-icon file.
+    const apple = readPublic('img', 'pwa', 'apple-touch-icon.png');
+    expect(apple.readUInt32BE(16)).toBe(180);
+    expect(apple.readUInt32BE(20)).toBe(180);
+  });
+
+  it('links the manifest, theme colour and apple icon from index.html', () => {
+    const doc = new JSDOM(shellHtml).window.document;
+    expect(doc.querySelector('link[rel="manifest"]').getAttribute('href')).toBe('/manifest.webmanifest');
+    expect(doc.querySelector('meta[name="theme-color"]').getAttribute('content')).toBe('#ea580c');
+    expect(doc.querySelector('link[rel="apple-touch-icon"]').getAttribute('href')).toBe('/img/pwa/apple-touch-icon.png');
+    expect(doc.querySelector('meta[name="apple-mobile-web-app-capable"]').getAttribute('content')).toBe('yes');
+  });
+
+  it('captures the browser install prompt and reports the choice', async () => {
+    vi.resetModules();
+    const install = await import('../public/js/installApp.js');
+    install.initInstallPrompt();
+    expect(install.installSnapshot()).toMatchObject({ canPrompt: false, installed: false });
+    expect(install.subscribeInstall(() => {})).toBeTypeOf('function');
+
+    const event = new window.Event('beforeinstallprompt', { cancelable: true });
+    event.prompt = vi.fn().mockResolvedValue(undefined);
+    event.userChoice = Promise.resolve({ outcome: 'accepted' });
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(install.installSnapshot().canPrompt).toBe(true);
+
+    await expect(install.promptInstall()).resolves.toEqual({ outcome: 'accepted' });
+    expect(event.prompt).toHaveBeenCalledTimes(1);
+    expect(install.installSnapshot().canPrompt).toBe(false);
+
+    window.dispatchEvent(new window.Event('appinstalled'));
+    expect(install.installSnapshot().installed).toBe(true);
+    await expect(install.promptInstall()).resolves.toEqual({ outcome: 'unavailable' });
+  });
+
+  it('knows an iPhone from a desktop, including iPadOS desktop agents', async () => {
+    vi.resetModules();
+    const { isIos } = await import('../public/js/installApp.js');
+    expect(isIos({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' })).toBe(true);
+    expect(isIos({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', maxTouchPoints: 5 })).toBe(true);
+    expect(isIos({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', maxTouchPoints: 0 })).toBe(false);
+  });
+
+  it('offers the option in settings and explains the manual steps', () => {
+    setUser({ id: 1, role: 'teacher', username: 'teacher-a', displayName: 'معلم', persianDigits: true });
+    renderSettings();
+
+    const view = document.querySelector('#view');
+    expect(view.textContent).toContain('افزودن به صفحهٔ اصلی گوشی');
+    const trigger = [...view.querySelectorAll('button')]
+      .find((node) => node.textContent.includes('افزودن به صفحهٔ اصلی گوشی'));
+    expect(trigger).not.toBeUndefined();
+
+    trigger.click();
+    const modal = document.querySelector('#modal-root .modal');
+    expect(modal).not.toBeNull();
+    expect(modal.textContent).toContain('افزودن به صفحهٔ اصلی گوشی');
+    expect(modal.textContent).toContain('منوی مرورگر');
+    expect(modal.textContent).toContain('با همان حساب کاربری');
+  });
+});
+
 describe('Jalali parity between client and server', () => {
   it('converts the same Gregorian dates identically', () => {
     const start = Date.UTC(2019, 0, 1);

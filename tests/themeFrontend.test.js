@@ -51,6 +51,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 function shell(html = '') {
   document.body.innerHTML = `
+    <meta name="theme-color" content="#ea580c" />
     <main class="view" id="view" tabindex="-1"></main>
     <div id="modal-root"></div>
     ${html}
@@ -100,10 +101,12 @@ describe('palette state', () => {
     expect(document.documentElement.dataset.palette).toBe('ocean');
     expect(localStorage.getItem(PALETTE_STORAGE_KEY)).toBe('ocean');
     expect(storedPalette()).toBe('ocean');
+    expect(document.querySelector('meta[name="theme-color"]').getAttribute('content')).toBe('#0284c7');
 
     applyPalette('not-a-palette');
     expect(document.documentElement.dataset.palette).toBe('ember');
     expect(localStorage.getItem(PALETTE_STORAGE_KEY)).toBe('ember');
+    expect(document.querySelector('meta[name="theme-color"]').getAttribute('content')).toBe('#ea580c');
   });
 
   it('restores the saved palette without overwriting storage', () => {

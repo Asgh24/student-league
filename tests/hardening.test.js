@@ -180,6 +180,21 @@ describe('static asset caching', () => {
     expect(staticCacheControl('/srv/app/public/vendor/chart.umd.js', false)).toBe('no-cache');
   });
 
+  it('revalidates the web app manifest and serves it as a manifest', async () => {
+    expect(staticCacheControl('/srv/app/public/manifest.webmanifest', true)).toBe('no-cache');
+
+    const client = createClient(ctx.db);
+    const res = await request(client.app).get('/manifest.webmanifest');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('manifest');
+    expect(res.headers['cache-control']).toBe('no-cache');
+    const manifest = JSON.parse(res.text);
+    expect(manifest.display).toBe('standalone');
+    expect(manifest.dir).toBe('rtl');
+    expect(manifest.icons.some((icon) => icon.sizes === '192x192')).toBe(true);
+    expect(manifest.icons.some((icon) => icon.sizes === '512x512')).toBe(true);
+  });
+
   it('compresses text assets when the client accepts gzip', async () => {
     const client = createClient(ctx.db);
     const res = await request(client.app)

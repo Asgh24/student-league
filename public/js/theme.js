@@ -19,18 +19,21 @@ export const PALETTES = [
     label: 'نارنجی و مشکی',
     hint: 'پیش‌فرض',
     colors: ['#ea580c', '#f59e0b', '#1c1917'],
+    themeColor: '#ea580c',
   },
   {
     id: 'violet',
     label: 'بنفش و صورتی',
     hint: 'تم قبلی',
     colors: ['#7c3aed', '#a855f7', '#ec4899'],
+    themeColor: '#7c3aed',
   },
   {
     id: 'ocean',
     label: 'آبی و فیروزه‌ای',
     hint: 'خنک و آرام',
     colors: ['#0284c7', '#0ea5e9', '#0f172a'],
+    themeColor: '#0284c7',
   },
 ];
 
@@ -79,6 +82,15 @@ export function currentPalette() {
   return normalizePalette(document.documentElement?.dataset?.palette);
 }
 
+/** Keeps the phone status bar (and installed app title bar) in the new colour. */
+function syncThemeColor(paletteId) {
+  if (typeof document === 'undefined') return;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const entry = PALETTES.find((item) => item.id === paletteId);
+  if (entry?.themeColor) meta.setAttribute('content', entry.themeColor);
+}
+
 /**
  * Applies a palette to the root element and remembers it. Invalid ids fall back
  * to the default palette. Pass `persist: false` when restoring on startup.
@@ -96,6 +108,7 @@ export function applyPalette(id, { persist = true, storage = null } = {}) {
       }
     }
   }
+  syncThemeColor(palette);
   syncAllSwatches();
   return palette;
 }

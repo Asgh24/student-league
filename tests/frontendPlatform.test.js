@@ -239,7 +239,9 @@ describe('landing page plans', () => {
     api.post.mockResolvedValueOnce({ message: { id: 1 } });
     renderLogin({ navigate: vi.fn() });
 
-    document.querySelector('form.login-card .row button').click();
+    const supportButton = [...document.querySelectorAll('form.login-card .row button')]
+      .find((node) => node.textContent.includes('ارتباط با پشتیبانی سایت'));
+    supportButton.click();
     expect(document.querySelector('.modal').textContent).toContain('ارتباط با پشتیبانی سایت');
 
     document.getElementById('guest-name').value = 'مهمان نمونه';
