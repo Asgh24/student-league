@@ -393,6 +393,37 @@ Nothing else is needed: there is no build step, no asset pipeline and no cache t
 Browser assets are covered by `helmet`'s CSP and versioned by the app itself, so a hard
 refresh is never required for correctness.
 
+A **docs-only** commit (README, `AGENTS.md`, this file) does not change the running
+image, so it does not need a redeploy. Skipping it also avoids a needless rollout.
+
+### 6.1 A redeploy stuck on the persistent disk (`Multi-Attach`)
+
+The persistent disk is a **ReadWriteOnce** volume: only one node may attach it at a time.
+A rolling update starts the new pod *before* the old one is gone. When the scheduler puts
+the new pod on a different node, it waits for the disk while the old pod still holds it,
+and the rollout deadlocks:
+
+```
+FailedAttachVolume: AttachVolume.Attach failed for volume "pvc-…":
+  timed out waiting for external-attacher of csi.vsphere.vmware.com
+Multi-Attach error for volume "pvc-…": Volume is already exclusively attached
+  to one node and can't be attached to another
+```
+
+The application did **not** crash; the new pod never started. Recover in this order:
+
+1. In the panel, **stop** the app (or scale it to 0) and wait until the pod is gone and
+   the volume is detached. Do not launch a second deploy meanwhile — two rollouts in a
+   row are the usual trigger.
+2. Start the app again (or redeploy once). The new pod attaches the disk normally.
+3. If the volume still reports "already attached" with no pod using it, the vSphere
+   attachment is stale: ask Parspack support to detach that `pvc-…` (or restart the node).
+4. Verify `/healthz` and one real login before telling users it is back.
+
+To prevent it: keep **replicas = 1** and use the deployment strategy **Recreate**
+(or `maxSurge: 0`, `maxUnavailable: 1`) for this app. Never redeploy while a rollout is
+still in progress.
+
 ---
 
 ## 7. Scaling, so you do not lose data
@@ -417,6 +448,7 @@ refresh is never required for correctness.
 | `502` right after deploy | The app binds a different port than the panel proxies | Leave `PORT` unset so the injected value is used; keep `HOST=0.0.0.0` |
 | Boot fails with `EACCES`/`EROFS` on `mkdir '/data'` (or any `DATA_DIR`) | The path is not a mounted volume and the non-root container user cannot create it | Set `DATA_DIR` to the volume's mount path, or leave it unset until the disk is attached |
 | Data disappears after a redeploy | `DATA_DIR` is not on the persistent disk (signature: `migration applied` for `001_core`… and the bootstrap line repeat on every deploy; `dataDir` in the `server listening` line is `/opt/app-root/src/data`) | Mount the volume and set `DATA_DIR` to that path |
+| Redeploy hangs on `FailedAttachVolume` / `Multi-Attach error for volume "pvc-…"` | The ReadWriteOnce disk is still attached to the old pod/node while the new pod started on another node | Stop/scale to 0, wait for the detach, start again; keep replicas 1 and the `Recreate` strategy (see 6.1) |
 | `GitHub backup is enabled but not configured` | `BACKUP_GITHUB_REPO` and `BACKUP_GITHUB_TOKEN` are not both set | Set both, or set `BACKUP_GITHUB_ENABLED=false` |
 | `refusing to back up to the public repository "…"` | The guard against publishing student data | Point `BACKUP_GITHUB_REPO` at a private repo (or set `BACKUP_GITHUB_ALLOW_PUBLIC=true` deliberately) |
 | `GitHub repository "…" was not found` | Wrong `owner/name`, or the token lacks `Contents` access | Check the name and the token's repository selection |

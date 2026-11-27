@@ -463,6 +463,13 @@ Keep the counts in README identical to the actual `npm test` output.
     and only sections the owner granted.
 17. **Route additions need matching nav/guard/badge changes** and a module-link
     check (lazy import export names must exist).
+18. **ReadWriteOnce disk + rolling update** — the production PVC can attach to one
+    node only. A Deployment rollout that starts the new pod before the old one is
+    gone deadlocks with `FailedAttachVolume` / `Multi-Attach` when the pods land on
+    different nodes. The app did not crash; the new pod never started. Keep
+    replicas 1 with the `Recreate` strategy, never trigger two rollouts in a row,
+    and do not redeploy a docs-only commit. Recovery steps are in
+    `DEPLOY-PARSPACK.md` §6.1.
 
 ---
 
