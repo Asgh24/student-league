@@ -55,7 +55,9 @@ export function decodeUploadFilename(name) {
 
 /** Strips directories, control characters and bidi marks from a client filename. */
 export function sanitizeFilename(name) {
-  const base = path.basename(String(name ?? 'file'));
+  // Split on both separators instead of path.basename so a Windows-style name
+  // behaves the same on Linux (the production platform) and in the tests.
+  const base = String(name ?? 'file').split(/[\\/]/).pop() || 'file';
   return base
     .replace(/[\u0000-\u001F\u007F]/g, '')
     .replace(/[\u200E\u200F\u202A-\u202E]/g, '')
