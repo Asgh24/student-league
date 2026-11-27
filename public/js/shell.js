@@ -103,7 +103,8 @@ export function renderDrawerNav(items) {
     if (item.badge !== undefined) {
       const badge = document.createElement('span');
       badge.className = 'nav-badge';
-      badge.dataset.adminPending = '';
+      if (item.badgeKind === 'notifications') badge.dataset.notifyBadge = '';
+      else badge.dataset.adminPending = '';
       badge.textContent = item.badge > 0 ? number(item.badge, state.persianDigits) : '';
       badge.hidden = !item.badge;
       link.appendChild(badge);

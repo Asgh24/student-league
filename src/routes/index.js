@@ -13,6 +13,7 @@ import { createFilesRouter, createLeagueFilesRouter } from './files.js';
 import { createHomeworkRouter, createLeagueHomeworkRouter } from './homework.js';
 import { createLeaguesRouter } from './leagues.js';
 import { createMessagesRouter } from './messages.js';
+import { createLeagueNotificationsRouter, createNotificationsRouter } from './notifications.js';
 import { createSupportRouter } from './support.js';
 import { createMetaRouter } from './meta.js';
 import { createLeagueReportCardsRouter } from './reportCards.js';
@@ -36,12 +37,14 @@ export function createApiRouter(ctx) {
   router.use('/admin', createAdminRouter(ctx));
   router.use('/subscription', createSubscriptionRouter(ctx));
   router.use('/messages', createMessagesRouter(ctx));
+  router.use('/notifications', createNotificationsRouter(ctx));
   router.use('/support', createSupportRouter(ctx));
   router.use('/sms', createSmsSettingsRouter(ctx));
   router.use('/assistants', createAssistantsRouter(ctx));
 
   // Teacher resources scoped to a league the teacher owns.
   router.use('/leagues/:id/students', createLeagueStudentsRouter(ctx));
+  router.use('/leagues/:id/notifications', createLeagueNotificationsRouter(ctx));
   router.use('/leagues/:id/columns', createLeagueColumnsRouter(ctx));
   router.use('/leagues/:id/scores', createScoresRouter(ctx));
   router.use('/leagues/:id/teams', createLeagueTeamsRouter(ctx));

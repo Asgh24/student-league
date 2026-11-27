@@ -9,6 +9,7 @@ import { createUser, findByUsername, findById, publicUser } from '../repositorie
 import { requireAdmin } from '../middleware/auth.js';
 import { createAdminBackupRouter } from './adminBackup.js';
 import { createAdminSmsRouter } from './adminSms.js';
+import { createAdminNotificationsRouter } from './notifications.js';
 import { createAdminSupportRouter } from './support.js';
 import {
   approveCardPayment,
@@ -461,6 +462,7 @@ export function createAdminRouter({ db }) {
   });
 
   router.use('/sms', createAdminSmsRouter({ db }));
+  router.use('/notifications', createAdminNotificationsRouter({ db }));
   router.use('/backup', createAdminBackupRouter({ db }));
   router.use('/support', createAdminSupportRouter({ db }));
 

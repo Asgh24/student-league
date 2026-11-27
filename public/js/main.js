@@ -17,6 +17,7 @@ import {
 } from './shell.js';
 import { homePath, can, isAdmin, isAssistant, isStudent, isTeacher, setLeagueId, setMeta, setUser, state, storedLeagueId, subscribe } from './store.js';
 import { initInstallPrompt } from './installApp.js';
+import { startNotificationPolling, refreshNotificationsBadge, updateNotificationsBadge } from './notifications.js';
 import { initPalette, openPaletteDialog } from './theme.js';
 import { startUpdateNotifier } from './updateNotifier.js';
 import { notify } from './ui.js';
@@ -80,6 +81,7 @@ function teacherNav() {
     ? [
       { group: 'پنل همیار' },
       { label: 'میزکار همیار', icon: '🏠', href: 'teacher', active: active === 'teacher' },
+      { label: 'اعلان‌ها', icon: '🔔', href: 'teacher/notifications', active: active === 'teacher/notifications', badge: state.notificationsUnread, badgeKind: 'notifications' },
     ]
     : [
       { group: 'میزکار' },
@@ -92,6 +94,7 @@ function teacherNav() {
   }
   if (!isAssistant()) {
     items.push({ group: 'ارتباط و اشتراک' });
+    items.push({ label: 'اعلان‌ها', icon: '🔔', href: 'teacher/notifications', active: active === 'teacher/notifications', badge: state.notificationsUnread, badgeKind: 'notifications' });
     items.push({ label: 'پیام‌ها', icon: '💬', href: 'teacher/messages', active: active === 'teacher/messages' });
     items.push({ label: 'پشتیبانی', icon: '🛎️', href: 'teacher/support', active: active === 'teacher/support' });
     items.push({ label: 'اشتراک من', icon: '💳', href: 'teacher/subscription', active: active === 'teacher/subscription' });
@@ -115,6 +118,7 @@ function adminNav() {
     ['admin/payments', '🧾', 'پرداخت‌ها'],
     ['admin/payment-settings', '💳', 'کارت و پرداخت'],
     ['admin/sms', '📨', 'پنل پیامک'],
+    ['admin/notifications', '🔔', 'اعلان‌ها'],
     ['admin/support', '🛎️', 'پشتیبانی'],
     ['admin/backup', '🗄️', 'بکاپ و بازیابی'],
     ['admin/settings', '⚙️', 'تنظیمات'],
@@ -126,7 +130,12 @@ function adminNav() {
       icon,
       href,
       active: active === href,
-      badge: href === 'admin/payments' ? state.adminPendingPayments : undefined,
+      badge: href === 'admin/payments'
+        ? state.adminPendingPayments
+        : href === 'admin/notifications'
+          ? state.notificationsUnread
+          : undefined,
+      badgeKind: href === 'admin/notifications' ? 'notifications' : undefined,
     })),
   ];
 }
@@ -135,6 +144,7 @@ function studentNav() {
   const active = currentPath();
   const tabs = [
     ['student', '🏠', 'میزکار'],
+    ['student/notifications', '🔔', 'اعلان‌ها'],
     ['student/report-card', '📄', 'کارنامه'],
     ['student/report-cards', '📊', 'کارنامه دستی'],
     ['student/evaluations', '📝', 'ارزشیابی'],
@@ -153,7 +163,14 @@ function studentNav() {
     ['student/settings', '⚙️', 'تنظیمات'],
     ['fun', '🎮', 'سرگرمی'],
   ];
-  return tabs.map(([href, icon, label]) => ({ label, icon, href, active: active === href }));
+  return tabs.map(([href, icon, label]) => ({
+    label,
+    icon,
+    href,
+    active: active === href,
+    badge: href === 'student/notifications' ? state.notificationsUnread : undefined,
+    badgeKind: href === 'student/notifications' ? 'notifications' : undefined,
+  }));
 }
 
 function logoutButton() {
@@ -174,6 +191,7 @@ async function doLogout() {
   setCsrfToken(null);
   setUser(null);
   setLeagueId(null);
+  updateNotificationsBadge(0);
   closeDrawer();
   window.location.hash = '#/login';
   notify.info('از حساب خود خارج شدید');
@@ -182,6 +200,8 @@ async function doLogout() {
 function renderShell() {
   const loggedIn = Boolean(state.user);
   showTopbar(loggedIn);
+  const notifButton = document.getElementById('notif-btn');
+  if (notifButton) notifButton.hidden = !loggedIn;
   setUserPill();
   setDrawerTitle(state.meta.appName);
   if (!loggedIn) {
@@ -191,6 +211,9 @@ function renderShell() {
     closeDrawer();
     return;
   }
+  // Paint the bell from the fresh session immediately; polling then keeps it
+  // current. Without this the first badge only appeared at the next tick.
+  void refreshNotificationsBadge();
   if (!isTeacher()) setLeaguePill(null);
   renderDrawerNav(isAdmin() ? adminNav() : isTeacher() ? teacherNav() : studentNav());
   renderDrawerFoot(logoutButton());
@@ -210,6 +233,8 @@ const routes = [
   { path: 'teacher/students', guard: () => (isTeacher() && !isAssistant() ? undefined : 'teacher'), view: loadView(() => import('./views/studentRoster.js'), 'renderStudentRoster') },
   { path: 'teacher/settings', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/settings.js'), 'renderSettings') },
   { path: 'teacher/messages', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/messages.js'), 'renderTeacherMessages') },
+  { path: 'teacher/notifications', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/notifications.js'), 'renderNotifications') },
+  { path: 'teacher/notifications/new', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/notificationsCompose.js'), 'renderNotificationsCompose') },
   { path: 'teacher/support', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/support.js'), 'renderSupport') },
   { path: 'teacher/subscription', guard: () => (isTeacher() ? undefined : 'login'), view: loadView(() => import('./views/subscription.js'), 'renderSubscription') },
   { path: 'teacher/assistants', guard: () => (isTeacher() && !isAssistant() ? undefined : 'teacher'), view: loadView(() => import('./views/assistants.js'), 'renderAssistants') },
@@ -240,11 +265,14 @@ const routes = [
   { path: 'admin/payments', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/admin/payments.js'), 'renderAdminPayments') },
   { path: 'admin/payment-settings', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/admin/paymentSettings.js'), 'renderAdminPaymentSettings') },
   { path: 'admin/sms', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/admin/sms.js'), 'renderAdminSms') },
+  { path: 'admin/notifications', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/notifications.js'), 'renderNotifications') },
+  { path: 'admin/notifications/new', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/notificationsCompose.js'), 'renderNotificationsCompose') },
   { path: 'admin/support', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/admin/support.js'), 'renderAdminSupport') },
   { path: 'admin/backup', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/admin/backup.js'), 'renderAdminBackup') },
   { path: 'admin/settings', guard: () => (isAdmin() ? undefined : 'login'), view: loadView(() => import('./views/settings.js'), 'renderSettings') },
   { path: 'fun', guard: () => (state.user ? undefined : 'login'), view: loadView(() => import('./views/fun.js'), 'renderFun') },
   { path: 'student', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/dashboard.js'), 'renderStudentDashboard') },
+  { path: 'student/notifications', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/notifications.js'), 'renderNotifications') },
   { path: 'student/report-card', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/reportcard.js'), 'renderReportCard') },
   { path: 'student/evaluations', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/evaluations.js'), 'renderStudentEvaluations') },
   { path: 'student/attendance', guard: () => (isStudent() ? undefined : 'login'), view: loadView(() => import('./views/student/attendance.js'), 'renderStudentAttendance') },
@@ -304,6 +332,12 @@ document.getElementById('palette-btn')?.addEventListener('click', () => {
   closeDrawer();
   openPaletteDialog();
 });
+document.getElementById('notif-btn')?.addEventListener('click', () => {
+  closeDrawer();
+  if (isAdmin()) void router.navigate('admin/notifications');
+  else if (isTeacher()) void router.navigate('teacher/notifications');
+  else if (isStudent()) void router.navigate('student/notifications');
+});
 
 bindShellHandlers({
   onLeaguePill: () => {
@@ -350,6 +384,7 @@ async function boot() {
   renderShell();
   startUpdateNotifier({ currentRelease: metaResult.status === 'fulfilled' ? metaResult.value?.release : null });
   startAdminBadgePolling();
+  startNotificationPolling();
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason;
     if (reason && reason.name === 'ApiError' && reason.status !== 0) return;

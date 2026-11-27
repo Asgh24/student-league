@@ -4,6 +4,12 @@ import { api } from '../api.js';
 import { el } from '../dom.js';
 import { errorMessage } from '../format.js';
 import { installSnapshot, subscribeInstall } from '../installApp.js';
+import {
+  canUseDesktopNotifications,
+  desktopNotificationsEnabled,
+  requestDesktopNotifications,
+  setDesktopNotificationsEnabled,
+} from '../notifications.js';
 import { renderView, setTopbarTitle } from '../shell.js';
 import { isStudent, setPersianDigits, state } from '../store.js';
 import { paletteSwatches } from '../theme.js';
@@ -114,9 +120,64 @@ function installCard() {
   ]);
 }
 
+/**
+ * Opt-in browser notifications. The bell inside the site always works; this
+ * only adds a system notification while the tab is open (the site has no push
+ * service worker, so a fully closed app is not covered here).
+ */
+function notificationCard() {
+  if (!canUseDesktopNotifications()) {
+    return card({ title: 'اعلان‌های مرورگر', icon: '🔔' }, [
+      el('p.muted.small', { text: 'مرورگر شما اعلان سیستمی را پشتیبانی نمی‌کند؛ اعلان‌ها داخل خود سایت نمایش داده می‌شوند.' }),
+    ]);
+  }
+  const toggle = el('input', { id: 'desktop-notifications', type: 'checkbox' });
+  toggle.checked = desktopNotificationsEnabled() && window.Notification.permission === 'granted';
+  const status = el('p.muted.small');
+
+  function paint() {
+    if (window.Notification.permission === 'denied') {
+      toggle.checked = false;
+      toggle.disabled = true;
+      status.textContent = 'اجازهٔ اعلان در تنظیمات مرورگر مسدود شده است؛ از آنجا می‌توانید اجازه دهید.';
+      return;
+    }
+    status.textContent = toggle.checked
+      ? 'فعال است: وقتی سایت باز باشد، اعلان‌های تازه در سیستم هم نمایش داده می‌شوند.'
+      : 'خاموش است؛ اعلان‌ها فقط داخل صندوق سایت دیده می‌شوند.';
+  }
+  paint();
+
+  toggle.addEventListener('change', async () => {
+    if (!toggle.checked) {
+      setDesktopNotificationsEnabled(false);
+      paint();
+      return;
+    }
+    const result = await requestDesktopNotifications();
+    if (result === 'granted') {
+      toggle.checked = true;
+      notify.ok('اعلان مرورگر فعال شد');
+    } else {
+      toggle.checked = false;
+      setDesktopNotificationsEnabled(false);
+      notify.warn(result === 'denied'
+        ? 'مرورگر اجازهٔ اعلان را نداد'
+        : 'فعال‌سازی اعلان مرورگر انجام نشد');
+    }
+    paint();
+  });
+
+  return card({ title: 'اعلان‌های مرورگر', icon: '🔔' }, [
+    el('p.small.muted', { text: 'اعلان‌های معلم و مدیر همیشه در صندوق سایت و روی زنگ بالای صفحه دیده می‌شوند. با فعال‌کردن این گزینه، تا وقتی سایت باز است اعلان تازه در سیستم هم نشان داده می‌شود.' }),
+    el('label.checkbox', { for: 'desktop-notifications' }, [toggle, el('span', { text: 'نمایش اعلان سیستمی مرورگر' })]),
+    status,
+  ]);
+}
+
 export function renderSettings() {
   setTopbarTitle('تنظیمات');
-  const cards = [installCard(), paletteCard(), passwordCard()];
+  const cards = [installCard(), notificationCard(), paletteCard(), passwordCard()];
   if (isStudent()) cards.push(digitsCard());
   if (state.user) {
     cards.push(card({ title: 'حساب کاربری', icon: '🪪' }, [

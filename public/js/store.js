@@ -18,6 +18,7 @@ export const state = {
   leagueId: null,
   persianDigits: true,
   adminPendingPayments: 0,
+  notificationsUnread: 0,
 };
 
 export function subscribe(listener) {
@@ -56,6 +57,7 @@ export function setAdminPendingPayments(value) {
 export function setUser(user) {
   state.user = user ?? null;
   if (user?.role !== 'admin') state.adminPendingPayments = 0;
+  state.notificationsUnread = 0;
   state.persianDigits = user ? user.persianDigits !== false : true;
   if (user?.role !== 'teacher' && user?.role !== 'student') state.leagueId = null;
   // An assistant only ever sees the one league assigned by the owner.

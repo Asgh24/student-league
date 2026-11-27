@@ -198,6 +198,39 @@ export const schemas = {
     body: z.string().trim().min(1, 'متن پیام خالی است').max(4000),
   }),
 
+  /** In-app notification centre: list query, teacher compose and admin broadcast. */
+  notificationList: z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    unread: z.preprocess(
+      (value) => value === true || value === '1' || value === 'true',
+      z.boolean(),
+    ).optional().default(false),
+  }),
+
+  notificationCompose: z.object({
+    title: z.string().trim().min(2, 'عنوان اعلان الزامی است').max(120, 'عنوان حداکثر ۱۲۰ نویسه است'),
+    body: z.string().trim().min(2, 'متن اعلان الزامی است').max(2000, 'متن اعلان حداکثر ۲۰۰۰ نویسه است'),
+    category: z.enum(['info', 'success', 'warning', 'urgent']).optional().default('info'),
+    audience: z.enum(['all', 'selected']).optional().default('all'),
+    studentIds: z.array(z.coerce.number().int().positive()).max(300).optional().default([]),
+    link: z.string().trim().max(200).optional().default(''),
+    pinned: z.boolean().optional().default(false),
+    sendSms: z.boolean().optional().default(false),
+  }).refine((value) => value.audience !== 'selected' || value.studentIds.length > 0, {
+    message: 'حداقل یک دانش‌آموز انتخاب کنید',
+    path: ['studentIds'],
+  }),
+
+  adminNotification: z.object({
+    title: z.string().trim().min(2, 'عنوان اعلان الزامی است').max(120, 'عنوان حداکثر ۱۲۰ نویسه است'),
+    body: z.string().trim().min(2, 'متن اعلان الزامی است').max(2000, 'متن اعلان حداکثر ۲۰۰۰ نویسه است'),
+    category: z.enum(['info', 'success', 'warning', 'urgent']).optional().default('info'),
+    audience: z.enum(['all', 'teachers', 'students']).optional().default('all'),
+    link: z.string().trim().max(200).optional().default(''),
+    pinned: z.boolean().optional().default(false),
+  }),
+
   /**
    * Per-teacher sms.ir settings. Empty API key means "keep the saved key";
    * `clearApiKey` is the explicit way to remove it. The line number can be
