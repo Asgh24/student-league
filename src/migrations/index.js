@@ -25,7 +25,6 @@ import * as homeworkPenaltiesAndColumn from './025_homework_penalties_and_column
 import * as disciplineSheet from './026_discipline_sheet.js';
 import * as exams from './027_exams.js';
 import * as studentRoster from './028_student_roster.js';
-import * as notifications from './029_notifications.js';
 
 /** Ordered list of migrations applied automatically on boot. */
 export const migrations = [
@@ -56,5 +55,4 @@ export const migrations = [
   disciplineSheet,
   exams,
   studentRoster,
-  notifications,
 ];

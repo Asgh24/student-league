@@ -62,7 +62,6 @@ no telemetry), and stores all data in a single SQLite file inside a persistent
 | پنل مدیر | Separate site-owner login: teacher search/filter, manual subscription grants, plan CRUD, revenue and payment ledger, inbox/SMS health, and a backup/restore console. The «حذف منقضی‌ها» tab lists teachers whose trial and paid subscription have both ended and lets the owner permanently delete an account after typing its username; leagues, students, linked student logins, scores, uploads and payment history are removed with it |
 | بکاپ و بازیابی | Owner-only manual GitHub backup, consistent local DB download, remote snapshot list, staged restore with checksum verification and cancel; auto-restores an empty/schema-only DB on boot |
 | پیام‌ها | Ticket-like teacher↔student inbox with threads, unread counters, read receipts and polling; both sides can reply from the same shared view |
-| اعلان‌ها و اطلاع‌رسانی | In-site notification centre shared by teachers, students and the site owner: a topbar bell with a live unread badge (45-second visibility-aware polling), a persistent inbox with all/unread tabs, per-user read state and delete, and pinned notices. A teacher sends a notice to every student of one owned league or a hand-picked subset, optionally queuing the same text as a parent SMS; the site owner broadcasts to all users, all teachers or all students. Categories (اطلاعیه/خبر خوب/هشدار/فوری), an optional safe internal link, and a sent history with recipient/read counts. Assistants see the section only when the owner grants the new `notifications` permission. Opt-in browser notifications can add a system alert while the tab is open (no service worker; closed-app delivery is covered by the SMS) |
 | پنل پیامک | Per-teacher sms.ir API key + line number in the teacher's own panel (encrypted, write-only), a built-in «راهنمایی راه‌اندازی سامانه پیامکی» guide with annotated screenshots, credit/lines, test and bulk sends, the daily parent report, a free-text «پیام دلخواه به والدین» box for notices such as a student's misbehavior, league-report outbox and admin campaign retry; without credentials everything stays queued instead of being lost. The daily report also supports **Shad**: the teacher saves each parent's PV link, toggles SMS/Shad on or off for the whole dashboard, and one click opens the link in a new tab while copying that student's exact report for pasting into the Shad app |
 | دستیار هوش مصنوعی | In the Q&A page, a provider-free importer: copy the ready-made prompt into any AI chat, append your multiple-choice questions, and paste the JSON answer back. The site parses it locally, shows a reviewable preview and bulk-saves only the selected questions; no API key or provider account is needed |
 | پرداخت‌ها | Zarinpal v4 request/verify (Rial conversion, sandbox support) and a local `mock` gateway for development before a merchant ID exists |
@@ -334,8 +333,6 @@ Created and upgraded by versioned migrations on boot (`src/migrations/`).
 | `payment_settings` | Single row with the admin-published destination card number/holder/bank/instructions |
 | `conversations` | One teacher↔student thread (`UNIQUE(teacher_id, student_id)`) with subject and last-message time |
 | `messages` | Thread messages with sender role and `read_at` for unread counts |
-| `notifications` | One row per sent notice: teacher (league-scoped) or admin source, sender, audience label, title/body, category, optional internal link, pinned flag and the SMS delivery summary |
-| `notification_recipients` | Materialised fan-out: one row per receiver with its own `read_at`, so the inbox, unread badge and delete are a cheap indexed lookup |
 | `sms_campaigns` | Admin test/bulk SMS rows (queued/sent/failed), kept separately from league-report outbox rows |
 | `leagues` | One or more per teacher; status `active`/`completed`, final ranking JSON |
 | `students` | League members, optional link to a `users` row for login |
@@ -795,34 +792,6 @@ number are returned as `skipped` rather than being silently dropped.
 | POST | `/leagues/:id/reports/daily/send` | `{ date, studentIds[] }` | `{ results, counts{ sent, queued, failed, skipped }, smsConfigured }` — rejected with `SMS_DISABLED` while the SMS channel is off |
 | POST | `/leagues/:id/reports/custom/send` | `{ studentIds[], message }` | `{ results, counts{ sent, queued, failed, skipped }, smsConfigured, message }` — a blank message is rejected with `VALIDATION_ERROR` |
 
-### Notifications (teacher, student and site owner)
-
-The in-site notification centre stores a notice once and materialises one
-`notification_recipients` row per receiver, so the inbox, unread badge and
-"delete for me" are cheap indexed lookups. Teachers send to a league they own;
-the site owner broadcasts site-wide. Polling the tiny `/notifications/unread`
-endpoint keeps the topbar bell fresh (every 45 seconds, visibility-aware).
-
-| Method | Path | Body / query | Response |
-| --- | --- | --- | --- |
-| GET | `/notifications` | `?page=&limit=&unread=` | the signed-in user's inbox (pinned first, newest first) with `unreadTotal` |
-| GET | `/notifications/unread` | — | `{ count, latest }` — the bell badge plus the newest unread item |
-| POST | `/notifications/:id/read` | — | `{ ok, unreadTotal }` |
-| POST | `/notifications/read-all` | — | `{ ok, unreadTotal: 0 }` |
-| DELETE | `/notifications/:id` | — | remove only this user's copy (`{ ok, unreadTotal }`) |
-| GET | `/leagues/:id/notifications` | — | sent notices for that league with `recipientCount`/`readCount` |
-| GET | `/leagues/:id/notifications/audience` | — | league students plus which have a login / parent number |
-| POST | `/leagues/:id/notifications` | `{ title, body, category?, audience, studentIds?, link?, pinned?, sendSms? }` | `201 { notification, recipients{ students, accounts, parents }, sms }` |
-| GET | `/admin/notifications` | — | sent site-wide broadcasts with counts |
-| POST | `/admin/notifications` | `{ title, body, category?, audience, link?, pinned? }` | `201 { notification, recipients{ users } }` |
-
-A teacher notice reaches every student of the league or a hand-picked subset;
-students without a login still count for the optional parent SMS (queued through
-the same sms.ir outbox as daily reports). `link` must be a safe internal hash
-path. A teacher composing through an assistant account needs the `notifications`
-permission, and the assistant may only target their assigned league. Sending with
-no in-app recipient and no SMS is rejected with `NO_RECIPIENTS`.
-
 ### Shad delivery (manual, no API key)
 
 Each student row in «شماره‌ها» also accepts a **Shad PV link** (`https://…`,
@@ -911,8 +880,8 @@ npm run lint    # eslint .
 Latest run on this machine (Windows, Node 26.3.0):
 
 ```
- Test Files  52 passed (52)
-      Tests  643 passed (643)
+ Test Files  50 passed (50)
+      Tests  613 passed (613)
 ```
 
 | Suite | Tests | Covers |
@@ -957,8 +926,6 @@ Latest run on this machine (Windows, Node 26.3.0):
 | `hardening.test.js` | 19 | Web-app manifest is revalidated, served as `application/manifest+json` and lists 192/512 icons; anonymous requests create no session row, logout clears the configured cookie, login performs a bcrypt comparison for unknown users, `/healthz` integrity scan is cached, expired sessions are swept, app JS/CSS revalidate after deployment, Chart.js stays on demand, `TRUST_PROXY` fails closed |
 | `studentRoster.test.js` | 8 | New-league roster transfer, zeroed competition data, login/contact/parent-credential preservation, duplicate safety, old-league deletion, ownership isolation and atomic rollback |
 | `studentLeagueHistory.test.js` | 3 | Student-scoped league list across transfers, read-only old scores/sessions/final ranking/medals/report cards, and 404 isolation from other students and teachers |
-| `notifications.test.js` | 11 | League fan-out and unread badge, selected-only recipients, cross-league/foreign-teacher isolation, parent SMS dedupe/queue/skip paths, link/text validation, admin broadcast to all/teachers/students, per-user inbox privacy (no cross-read/delete), read-all, signed-in requirement, and the assistant `notifications` permission gate |
-| `notificationsFrontend.test.js` | 19 | jsdom: bell badge paint/cap/hide, unread refresh only for a signed-in user, no alert for the initial backlog, start/stop polling, browser-notification opt-in and permission, inbox role gating (student/teacher/admin/assistant), list/read/delete/mark-all flows, linked-notice navigation, and teacher/admin compose payloads + validation |
 | `migrations.test.js` | 2 | Legacy homework upgrade plus backfilling persistent student profiles without changing old memberships, contacts or accounts |
 | `version.test.js` | 2 | Automatic frontend content fingerprint, uncached lightweight release endpoint and release metadata |
 | `updateNotifier.test.js` | 2 | Update notice stays hidden on the current release, appears after a deployment and applies the newly detected release |
@@ -1004,7 +971,6 @@ Executed against a live server (`NODE_ENV=development`, fresh `DATA_DIR`, seeded
 | Admin teachers / plans / payments / SMS | ✅ all four views render from the live API with no console errors; plans show the three seeded prices, payments filter and SMS console are usable |
 | Mock subscription purchase | ✅ plan card → local gateway → «پرداخت موفق» → banner switches to «اشتراک فعال», 30 days added, `MOCK-1` appears in the history |
 | Teacher → student message | ✅ teacher creates a thread, sends a message; student sees unread `۱`, opens it, replies, and the message is stored with the thread |
-| In-site notifications | ✅ teacher composed «آزمون ریاضی فردا» in the real UI (`✅ برای ۱ حساب دانش‌آموزی ثبت شد`), the student login then showed the bell badge `۱`, the inbox listed the unread notice and opening it cleared the badge; 0 console errors and 0 horizontal overflow at 360 px and 390 px |
 | Footer credits | ✅ every page shows «تهیه‌کنندگان: محمدجواد ابراهیمی - علی طاهری» and the copyright line with the current Jalali year |
 | Privacy probes from a student session | ✅ `/leagues`, `/leagues/1/scores`, `/leagues/1/attendance`, `/leagues/1/evaluations` → `403 FORBIDDEN`; another student's data unreachable |
 | Drawer geometry (RTL) | ✅ open = flush to the right edge, closed = fully off-screen (`x ≥ viewport`) |

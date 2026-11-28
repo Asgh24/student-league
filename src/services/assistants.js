@@ -23,7 +23,6 @@ export const ASSISTANT_PERMISSIONS = [
   { key: 'seating', label: 'جای‌گیری', icon: '🪑' },
   { key: 'contacts', label: 'شماره‌ها', icon: '📱' },
   { key: 'reports', label: 'گزارش روزانه', icon: '📨' },
-  { key: 'notifications', label: 'اعلان‌ها و اطلاع‌رسانی', icon: '🔔' },
 ];
 
 const PERMISSION_KEYS = new Set(ASSISTANT_PERMISSIONS.map((item) => item.key));
